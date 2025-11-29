@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ワイドレンジ・シンセサイザー</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .panel {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .control-panel {
+            width: 320px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .synth-panel {
+            width: 450px;
+        }
+
+        h1, h2 {
+            color: #1a237e;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+
+        /* 波形表示エリア */
+        #waveform-canvas {
+            background-color: #1a237e;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+            width: 100%;
+            height: 200px;
+        }
+
+        /* 設定エリア */
+        .settings {
+            margin-top: 25px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            text-align: left;
+            gap: 8px;
+        }
+        
+        .setting-item label {
+            font-weight: bold;
+            font-size: 1em;
+            margin-left: 5px;
+        }
+
+        .setting-item input[type="number"], .setting-item select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+        
+        .hidden { display: none; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 10px 0; }
+
+        /* 音階リスト */
+        .notes-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0 0;
+            max-height: 50vh; /* 高さを画面の半分程度に制限 */
+            overflow-y: auto; /* スクロール可能にする */
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .note-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid #eee; }
+        .note-item:last-child { border-bottom: none; }
+        .note-name { font-size: 1.1em; font-weight: 500; min-width: 50px; text-align: left; }
+        
+        /* トグルスイッチ */
+        .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .switch input { display: none; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 28px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #3f51b5; }
+        input:checked + .slider:before { transform: translateX(22px); }
+    </style>
+</head>
+<body>
+
+    <div class="panel control-panel">
+        <h2>コントロール</h2>
+        <div class="settings">
+            <div class="setting-item">
+                <label for="a4-pitch">基準ピッチ A4 (Hz)</label>
+                <input type="number" id="a4-pitch" value="440" step="1">
+            </div>
+            <div class="setting-item">
+                <label for="wave-type">波形</label>
+                <select id="wave-type">
+                    <option value="triangle" selected>三角波</option>
+                    <option value="pulse">パルス波</option>
+                    <option value="sine">サイン波</option>
+                    <option value="square">矩形波</option>
+                    <option value="sawtooth">ノコギリ波</option>
+                </select>
+            </div>
+            <div id="duty-cycle-container" class="setting-item hidden">
+                <label for="duty-cycle-slider">パルス幅: <span id="duty-cycle-value">50</span>%</label>
+                <input type="range" id="duty-cycle-slider" min="1" max="99" value="50" step="1">
+            </div>
+            <hr>
+            <div class="setting-item">
+                <label for="vibrato-rate-slider">ビブラート Rate: <span id="vibrato-rate-value">0</span> Hz</label>
+                <input type="range" id="vibrato-rate-slider" min="0" max="20" value="0" step="0.1">
+            </div>
+            <div class="setting-item">
+                <label for="vibrato-depth-slider">ビブラート Depth: <span id="vibrato-depth-value">0</span> Hz</label>
+                <input type="range" id="vibrato-depth-slider" min="0" max="25" value="0" step="0.5">
+            </div>
+            <hr>
+            <div class="setting-item">
+                <label for="tremolo-rate-slider">トレモロ Rate: <span id="tremolo-rate-value">0</span> Hz</label>
+                <input type="range" id="tremolo-rate-slider" min="0" max="20" value="0" step="0.1">
+            </div>
+            <div class="setting-item">
+                <label for="tremolo-depth-slider">トレモロ Depth: <span id="tremolo-depth-value">0</span> %</label>
+                <input type="range" id="tremolo-depth-slider" min="0" max="100" value="0" step="1">
+            </div>
+        </div>
+    </div>
+
+    <div class="panel synth-panel">
+        <h1>シンセサイザー</h1>
+        <canvas id="waveform-canvas"></canvas>
+        <ul class="notes-list">
+            <!-- 音階リストはJSで生成 -->
+        </ul>
+    </div>
+
+    <script>
+        // --- UI要素 ---
+        const ui = {
+            a4Pitch: document.getElementById('a4-pitch'),
+            waveType: document.getElementById('wave-type'),
+            dutyCycle: {
+                container: document.getElementById('duty-cycle-container'),
+                slider: document.getElementById('duty-cycle-slider'),
+                value: document.getElementById('duty-cycle-value'),
+            },
+            vibrato: {
+                rateSlider: document.getElementById('vibrato-rate-slider'),
+                rateValue: document.getElementById('vibrato-rate-value'),
+                depthSlider: document.getElementById('vibrato-depth-slider'),
+                depthValue: document.getElementById('vibrato-depth-value'),
+            },
+            tremolo: {
+                rateSlider: document.getElementById('tremolo-rate-slider'),
+                rateValue: document.getElementById('tremolo-rate-value'),
+                depthSlider: document.getElementById('tremolo-depth-slider'),
+                depthValue: document.getElementById('tremolo-depth-value'),
+            },
+            notesList: document.querySelector('.notes-list'),
+            canvas: document.getElementById('waveform-canvas'),
+        };
+        const canvasCtx = ui.canvas.getContext('2d');
+
+        // --- Web Audio API ---
+        let audioCtx, analyser, masterGain;
+        const activeOscillators = {};
+        let pulseWaveCache = null;
+        let animationFrameId = null;
+        const mainGainLevel = 0.5;
+
+        function initAudio() {
+            if (audioCtx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            masterGain = audioCtx.createGain();
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 2048;
+            masterGain.connect(analyser).connect(audioCtx.destination);
+        }
+
+        // MIDI番号から音名を取得 (例: 60 -> "C4")
+        function getNoteNameFromMidi(midi) {
+            const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const octave = Math.floor(midi / 12) - 1;
+            const noteIndex = midi % 12;
+            return `${noteNames[noteIndex]}${octave}`;
+        }
+
+        function getFrequency(midi) {
+            return (parseFloat(ui.a4Pitch.value) || 440) * Math.pow(2, (midi - 69) / 12);
+        }
+
+        function createPulseWave(dutyCycle) {
+            const real = new Float32Array(4096), imag = new Float32Array(4096);
+            for (let n = 1; n < 4096; n++) {
+                const c = n * Math.PI;
+                imag[n] = (1 / c) * (1 - Math.cos(2 * c * dutyCycle));
+                real[n] = (1 / c) * Math.sin(2 * c * dutyCycle);
+            }
+            return audioCtx.createPeriodicWave(real, imag, { disableNormalization: true });
+        }
+
+        function playNote(midi) {
+            if (activeOscillators[midi]) return;
+            const oscillator = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(mainGainLevel, audioCtx.currentTime + 0.05);
+
+            const lfoVibrato = audioCtx.createOscillator(), lfoVibratoGain = audioCtx.createGain();
+            lfoVibrato.type = 'sine';
+            lfoVibrato.frequency.value = parseFloat(ui.vibrato.rateSlider.value);
+            lfoVibratoGain.gain.value = parseFloat(ui.vibrato.depthSlider.value);
+            
+            const lfoTremolo = audioCtx.createOscillator(), lfoTremoloGain = audioCtx.createGain();
+            lfoTremolo.type = 'sine';
+            lfoTremolo.frequency.value = parseFloat(ui.tremolo.rateSlider.value);
+            lfoTremoloGain.gain.value = (parseFloat(ui.tremolo.depthSlider.value) / 100) * mainGainLevel;
+            
+            lfoVibrato.connect(lfoVibratoGain).connect(oscillator.frequency);
+            lfoTremolo.connect(lfoTremoloGain).connect(gainNode.gain);
+            oscillator.connect(gainNode).connect(masterGain);
+            
+            const waveType = ui.waveType.value;
+            if (waveType === 'pulse') {
+                if (!pulseWaveCache) pulseWaveCache = createPulseWave(parseFloat(ui.dutyCycle.slider.value) / 100);
+                oscillator.setPeriodicWave(pulseWaveCache);
+            } else {
+                oscillator.type = waveType;
+            }
+            oscillator.frequency.setValueAtTime(getFrequency(midi), audioCtx.currentTime);
+
+            lfoVibrato.start(); lfoTremolo.start(); oscillator.start();
+            activeOscillators[midi] = { oscillator, gainNode, lfoVibrato, lfoVibratoGain, lfoTremolo, lfoTremoloGain };
+            if (!animationFrameId) startVisualization();
+        }
+
+        function stopNote(midi) {
+            const nodes = activeOscillators[midi];
+            if (nodes) {
+                const { oscillator, gainNode, lfoVibrato, lfoTremolo } = nodes;
+                const releaseTime = 0.2;
+                gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + releaseTime);
+                oscillator.stop(audioCtx.currentTime + releaseTime);
+                lfoVibrato.stop(audioCtx.currentTime + releaseTime);
+                lfoTremolo.stop(audioCtx.currentTime + releaseTime);
+                delete activeOscillators[midi];
+                if (Object.keys(activeOscillators).length === 0) stopVisualization();
+            }
+        }
+        
+        function startVisualization() {
+            const bufferLength = analyser.frequencyBinCount, dataArray = new Uint8Array(bufferLength);
+            function draw() {
+                animationFrameId = requestAnimationFrame(draw);
+                analyser.getByteTimeDomainData(dataArray);
+                canvasCtx.fillStyle = '#1a237e'; canvasCtx.fillRect(0, 0, ui.canvas.width, ui.canvas.height);
+                canvasCtx.lineWidth = 2; canvasCtx.strokeStyle = '#81d4fa'; canvasCtx.beginPath();
+                const sliceWidth = ui.canvas.width * 1.0 / bufferLength; let x = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0, y = v * ui.canvas.height / 2;
+                    if (i === 0) canvasCtx.moveTo(x, y); else canvasCtx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                canvasCtx.lineTo(ui.canvas.width, ui.canvas.height / 2); canvasCtx.stroke();
+            }
+            draw();
+        }
+        function stopVisualization() { if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; setTimeout(drawStaticLine, 50); } }
+        function drawStaticLine() {
+            canvasCtx.fillStyle = '#1a237e'; canvasCtx.fillRect(0, 0, ui.canvas.width, ui.canvas.height);
+            canvasCtx.lineWidth = 2; canvasCtx.strokeStyle = '#81d4fa'; canvasCtx.beginPath();
+            canvasCtx.moveTo(0, ui.canvas.height / 2); canvasCtx.lineTo(ui.canvas.width, ui.canvas.height / 2); canvasCtx.stroke();
+        }
+
+        function createNotesList() {
+            const minMidi = 12; // C0
+            const maxMidi = 132; // C10
+
+            const fragment = document.createDocumentFragment();
+            for (let midi = maxMidi; midi >= minMidi; midi--) { // 高い音からリストに追加
+                const noteName = getNoteNameFromMidi(midi);
+                const item = document.createElement('li'); item.className = 'note-item';
+                const name = document.createElement('span'); name.className = 'note-name'; name.textContent = noteName;
+                const switchLabel = document.createElement('label'); switchLabel.className = 'switch';
+                const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.dataset.midi = midi;
+                const slider = document.createElement('span'); slider.className = 'slider';
+
+                checkbox.addEventListener('change', (e) => {
+                    initAudio(); if (audioCtx.state === 'suspended') audioCtx.resume();
+                    const currentMidi = parseInt(e.target.dataset.midi, 10);
+                    if (e.target.checked) playNote(currentMidi); else stopNote(currentMidi);
+                });
+                switchLabel.append(checkbox, slider);
+                item.append(name, switchLabel);
+                fragment.appendChild(item);
+            }
+            ui.notesList.appendChild(fragment);
+        }
+        
+        function setupEventListeners() {
+            const updateSoundParameters = () => {
+                if (!audioCtx) return;
+                pulseWaveCache = null;
+                Object.entries(activeOscillators).forEach(([midi, nodes]) => {
+                    const { oscillator, lfoVibrato, lfoVibratoGain, lfoTremolo, lfoTremoloGain } = nodes;
+                    const waveType = ui.waveType.value;
+                    if (waveType === 'pulse') { stopNote(midi); playNote(midi); } else { oscillator.type = waveType; }
+                    oscillator.frequency.setTargetAtTime(getFrequency(midi), audioCtx.currentTime, 0.01);
+                    lfoVibrato.frequency.setTargetAtTime(parseFloat(ui.vibrato.rateSlider.value), audioCtx.currentTime, 0.01);
+                    lfoVibratoGain.gain.setTargetAtTime(parseFloat(ui.vibrato.depthSlider.value), audioCtx.currentTime, 0.01);
+                    lfoTremolo.frequency.setTargetAtTime(parseFloat(ui.tremolo.rateSlider.value), audioCtx.currentTime, 0.01);
+                    lfoTremoloGain.gain.setTargetAtTime((parseFloat(ui.tremolo.depthSlider.value) / 100) * mainGainLevel, audioCtx.currentTime, 0.01);
+                });
+            };
+            ui.waveType.addEventListener('change', () => { ui.dutyCycle.container.classList.toggle('hidden', ui.waveType.value !== 'pulse'); updateSoundParameters(); });
+            ui.dutyCycle.slider.addEventListener('input', () => { ui.dutyCycle.value.textContent = ui.dutyCycle.slider.value; updateSoundParameters(); });
+            ui.a4Pitch.addEventListener('change', updateSoundParameters);
+            ui.vibrato.rateSlider.addEventListener('input', () => { ui.vibrato.rateValue.textContent = ui.vibrato.rateSlider.value; updateSoundParameters(); });
+            ui.vibrato.depthSlider.addEventListener('input', () => { ui.vibrato.depthValue.textContent = ui.vibrato.depthSlider.value; updateSoundParameters(); });
+            ui.tremolo.rateSlider.addEventListener('input', () => { ui.tremolo.rateValue.textContent = ui.tremolo.rateSlider.value; updateSoundParameters(); });
+            ui.tremolo.depthSlider.addEventListener('input', () => { ui.tremolo.depthValue.textContent = ui.tremolo.depthSlider.value; updateSoundParameters(); });
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            createNotesList();
+            drawStaticLine();
+            setupEventListeners();
+        });
+    </script>
+</body>
+</html>
