@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数式サウンドジェネレーター v10 (自動判定修正版)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #34495e;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 650px;
+        }
+        h1 { margin-top: 0; font-size: 1.5rem; color: #fff; text-align: center; margin-bottom: 20px;}
+        .control-group { margin-bottom: 1.2rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; color: #bdc3c7; }
+        
+        input[type="text"], input[type="number"], select, textarea {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            border: 1px solid #546e7a;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            background: #2c3e50;
+            color: #ecf0f1;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #3498db;
+            background: #233140;
+        }
+
+        .mode-selector {
+            background: #233140;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid #e67e22;
+            margin-bottom: 20px;
+        }
+
+        .advanced-settings {
+            border: 1px solid #455a64;
+            background: #3e5061;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+        }
+        .advanced-settings summary { cursor: pointer; color: #bdc3c7; font-weight: bold; outline: none; }
+        
+        .buttons { display: flex; gap: 10px; margin-top: 1.5rem; }
+        button {
+            flex: 1;
+            padding: 12px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+            color: white;
+        }
+        #btn-play { background-color: #2980b9; }
+        #btn-play:hover { background-color: #3498db; }
+        #btn-play:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+        
+        #btn-stop { background-color: #c0392b; }
+        #btn-stop:hover { background-color: #e74c3c; }
+        
+        #btn-download { background-color: #27ae60; }
+        #btn-download:hover { background-color: #2ecc71; }
+        #btn-download:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+        
+        .status { margin-top: 10px; font-weight: bold; min-height: 1.2em; font-size: 0.9rem; text-align: right;}
+        .status.generating { color: #f39c12; }
+        .status.playing { color: #2ecc71; }
+        .error { color: #e74c3c; font-size: 0.9rem; margin-top: 0.5rem; display: none; white-space: pre-wrap; background: rgba(231, 76, 60, 0.1); padding: 10px; border-radius: 4px;}
+        
+        .visualizer {
+            width: 100%;
+            height: 80px;
+            background: #233140;
+            margin-top: 1.5rem;
+            border-radius: 6px;
+            border: 1px solid #455a64;
+            position: relative;
+        }
+        .hint { font-size: 0.8rem; color: #95a5a6; margin-top: 4px; }
+        
+        .ch-legend {
+            position: absolute;
+            top: 5px; right: 5px;
+            font-size: 0.7rem;
+            display: flex; gap: 10px;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+        .legend-l { color: #3498db; }
+        .legend-r { color: #e74c3c; }
+/* ヒントボックス用のスタイル */
+        .hint-box {
+            background: #233140;
+            border: 1px solid #455a64;
+            border-radius: 6px;
+            padding: 0.8rem;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .hint-box summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: #3498db;
+            outline: none;
+        }
+        .hint-box summary:hover { text-decoration: underline; }
+        .hint-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .hint-table th, .hint-table td { border-bottom: 1px solid #455a64; padding: 6px; text-align: left; vertical-align: top; }
+        .hint-table th { color: #bdc3c7; width: 30%; }
+        .hint-table code { background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px; color: #e67e22; font-family: monospace; }
+        .copy-code { cursor: pointer; color: #2ecc71; font-size: 0.8em; margin-left: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>数式サウンドジェネレーター v10</h1>
+
+    <div class="mode-selector">
+        <label for="syntax-mode" style="color:#e67e22;">動作モード (ステレオ対応)</label>
+        <select id="syntax-mode">
+            <option value="standard" selected>Standard (t = 秒)</option>
+            <option value="bytebeat">ByteBeat (t = 整数)</option>
+        </select>
+        <div class="hint" id="mode-hint"><code>(() => { ... })()</code> のような即時関数も記述可能です。</div>
+    </div>
+<div class="control-group">
+        <label for="formula">数式 / コード</label>
+        <textarea id="formula" rows="5" style="width:100%; font-family:monospace; resize:vertical;" placeholder="">(() => {
+    const k = 220;
+    const s = 1 + Math.floor(t * 2) % 4;
+    const L = sin(t * k * s + sin(t * 800) * exp(-(t % 0.25) * 20) * 5) * exp(-(t % 0.25) * 5);
+    const R = sin(t * k * s * 1.01 + sin(t * 802) * exp(-(t % 0.33) * 20) * 5) * exp(-(t % 0.33) * 5);
+    return [L + sin(t * 55) * 0.2, R + sin(t * 54) * 0.2];
+})()</textarea>
+        <div id="error-msg" class="error"></div>
+
+        <!-- ここから追加: ヒントボックス -->
+        <details class="hint-box">
+            <summary>📚 ヒント・文法・サンプル集（クリックで開く）</summary>
+            
+            <p style="margin:0.5rem 0;">
+                <strong>変数 <code>t</code> の意味:</strong><br>
+                Standardモード: <code>t</code> = 経過時間(秒)<br>
+                ByteBeatモード: <code>t</code> = サンプルカウント(整数)
+            </p>
+
+            <table class="hint-table">
+                <tr>
+                    <th>使える省略関数</th>
+                    <td>
+                        <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>abs</code>(絶対値), <br>
+                        <code>pow</code>(乗数), <code>sqrt</code>(ルート), <code>log</code>, <code>exp</code>, <br>
+                        <code>min</code>, <code>max</code>, <code>ceil</code>, <code>floor</code>, <code>round</code>, <br>
+                        <code>PI</code>(円周率), <code>E</code>(自然対数), <br>
+                        <code>random()</code>(0~1乱数), <code>int</code>(floor別名)
+                    </td>
+                </tr>
+                <tr>
+                    <th>基本波形 (Standard)</th>
+                    <td>
+                        正弦波: <code>sin(t * 440 * 2 * PI)</code><br>
+                        矩形波: <code>sin(...) > 0 ? 1 : -1</code><br>
+                        ノコギリ波: <code>(t * 440 * 2) % 2 - 1</code><br>
+                        ノイズ: <code>random() * 2 - 1</code>
+                    </td>
+                </tr>
+                <tr>
+                    <th>ステレオ出力</th>
+                    <td>
+                        <code>[ 左の式, 右の式 ]</code> の配列を返す<br>
+                        例: <code>[sin(t*440), sin(t*442)]</code>
+                    </td>
+                </tr>
+                <tr>
+                    <th>高度なコード記述</th>
+                    <td>
+                        即時関数を使うと変数やif文が使えます。<br>
+                        <code>(() => { ... return 出力値; })()</code><br>
+                        ※この形式の場合、自動補正(2t→2*t)は無効になります。
+                    </td>
+                </tr>
+                <tr>
+                    <th>ByteBeat定番</th>
+                    <td>
+                        <code>t * ((t>>12|t>>8)&63&t>>4)</code><br>
+                        <code>(t>>10^t>>11)%5*t</code>
+                    </td>
+                </tr>
+            </table>
+        </details>
+        <!-- 追加ここまで -->
+    </div>
+
+    <div class="control-group" style="display: flex; gap: 1rem;">
+        <div style="flex: 1;">
+            <label for="duration">秒数</label>
+            <input type="number" id="duration" value="10" min="0.1" max="120" step="0.1">
+        </div>
+        <div style="flex: 1;">
+            <label for="sample-rate">サンプリングレート</label>
+            <select id="sample-rate">
+                <option value="8000">8000 Hz</option>
+                <option value="11025">11025 Hz</option>
+                <option value="22050">22050 Hz</option>
+                <option value="44100" selected>44100 Hz</option>
+                <option value="48000">48000 Hz</option>
+            </select>
+        </div>
+    </div>
+
+    <details class="advanced-settings" open>
+        <summary>詳細設定 (音色変化・出力)</summary>
+        
+        <div class="control-group" style="margin-top: 10px;">
+            <label for="overflow-mode">値の変換モード</label>
+            <select id="overflow-mode">
+                <option value="clip" selected>クリップ (通常)</option>
+                <option value="wrap">ラップ変換 (Modulo)</option>
+                <option value="sin">Sine変換</option>
+            </select>
+        </div>
+
+        <div class="control-group" style="display: flex; gap: 1rem;">
+            <div style="flex: 1;">
+                <label>時間スケール倍率</label>
+                <input type="number" id="time-scale" value="1" step="0.1">
+            </div>
+            <div style="flex: 1;">
+                <label>数値型シミュレーション</label>
+                <select id="num-type">
+                    <option value="float64" selected>Float64 (Standard)</option>
+                    <option value="float32">Float32</option>
+                    <option value="int16">Int16 (CD)</option>
+                    <option value="int8">Int8 (Lo-Fi)</option>
+                    <option value="uint8">Uint8</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="control-group" style="display: flex; gap: 1rem; margin-top:1rem;">
+            <div style="flex: 1;">
+                <label>音量</label>
+                <input type="number" id="volume" value="0.5" min="0" max="1" step="0.1">
+            </div>
+            <div style="flex: 1;">
+                <label>計算タイムアウト(秒)</label>
+                <input type="number" id="timeout-sec" value="5" min="1" max="60">
+            </div>
+        </div>
+    </details>
+
+    <div class="status" id="status-display"></div>
+
+    <div class="buttons">
+        <button id="btn-play">再生</button>
+        <button id="btn-stop">停止</button>
+        <button id="btn-download" disabled>WAV保存 (Stereo)</button>
+    </div>
+
+    <div class="visualizer-container" style="position:relative;">
+        <canvas id="viz" class="visualizer"></canvas>
+        <div class="ch-legend"><span class="legend-l">L: Blue</span> <span class="legend-r">R: Red</span></div>
+    </div>
+</div>
+
+<!-- Web Worker -->
+<script id="worker-code" type="javascript/worker">
+    self.onmessage = function(e) {
+        const { formula, duration, sampleRate, syntaxMode, numType, overflowMode, timeScale } = e.data;
+        
+        try {
+            const funcBodyHeader = `
+                const sin = Math.sin; const cos = Math.cos; const tan = Math.tan;
+                const abs = Math.abs; const pow = Math.pow; const sqrt = Math.sqrt;
+                const log = Math.log; const exp = Math.exp;
+                const min = Math.min; const max = Math.max;
+                const ceil = Math.ceil; const floor = Math.floor;
+                const round = Math.round;
+                const PI = Math.PI; const E = Math.E; const random = Math.random;
+                const int = Math.floor;
+            `;
+
+            let funcBody = funcBodyHeader + `return ${formula};`;
+            const userFunc = new Function('t', funcBody);
+            
+            const frameCount = sampleRate * duration;
+            const bufferL = new Float32Array(frameCount);
+            const bufferR = new Float32Array(frameCount);
+
+            const int8View = new Int8Array(1);
+            const uint8View = new Uint8Array(1);
+            const int16View = new Int16Array(1);
+
+            function processValue(val) {
+                if (!isFinite(val) || isNaN(val)) val = 0;
+
+                // 1. Overflow Mode
+                if (syntaxMode === 'standard') {
+                    if (overflowMode === 'wrap') {
+                        val = val % 2; 
+                        if (val > 1) val -= 2; else if (val < -1) val += 2;
+                    } else if (overflowMode === 'sin') {
+                        val = Math.sin(val);
+                    } else {
+                        if (val > 10) val = 10; if (val < -10) val = -10;
+                    }
+                } else {
+                    val = (val & 255); 
+                    val = (val / 127.5) - 1.0;
+                }
+
+                // 2. Num Type Simulation
+                switch (numType) {
+                    case 'int8':
+                        int8View[0] = val * 127; val = int8View[0] / 127; break;
+                    case 'uint8':
+                        uint8View[0] = (val + 1) * 127.5; val = (uint8View[0] / 127.5) - 1; break;
+                    case 'int16':
+                        int16View[0] = val * 32767; val = int16View[0] / 32767; break;
+                    case 'float32':
+                        val = Math.fround(val); break;
+                }
+                
+                if (val > 1) val = 1;
+                if (val < -1) val = -1;
+
+                return val;
+            }
+            
+            for (let i = 0; i < frameCount; i++) {
+                let t_input;
+                if (syntaxMode === 'bytebeat') {
+                    t_input = i;
+                } else {
+                    t_input = (i / sampleRate) * timeScale;
+                }
+                
+                let rawVal = userFunc(t_input);
+                
+                let valL, valR;
+                if (Array.isArray(rawVal)) {
+                    valL = Number(rawVal[0]);
+                    valR = Number(rawVal[1]);
+                } else {
+                    valL = Number(rawVal);
+                    valR = valL;
+                }
+
+                bufferL[i] = processValue(valL);
+                bufferR[i] = processValue(valR);
+            }
+
+            self.postMessage({ status: 'success', bufferL: bufferL, bufferR: bufferR }, [bufferL.buffer, bufferR.buffer]);
+
+        } catch (err) {
+            self.postMessage({ status: 'error', message: err.message });
+        }
+    };
+</script>
+
+<script>
+    let audioCtx;
+    let currentSource = null;
+    let worker = null;
+    let workerTimeout = null;
+    let lastGeneratedBufferL = null;
+    let lastGeneratedBufferR = null;
+    let lastGeneratedConfig = null;
+
+    const playBtn = document.getElementById('btn-play');
+    const stopBtn = document.getElementById('btn-stop');
+    const downloadBtn = document.getElementById('btn-download');
+    
+    const formulaInput = document.getElementById('formula');
+    const durationInput = document.getElementById('duration');
+    const sampleRateSelect = document.getElementById('sample-rate');
+    const syntaxModeSelect = document.getElementById('syntax-mode');
+    const modeHint = document.getElementById('mode-hint');
+    const numType = document.getElementById('num-type');
+    const overflowMode = document.getElementById('overflow-mode');
+    const timeScaleInput = document.getElementById('time-scale');
+    const timeoutInput = document.getElementById('timeout-sec');
+    const volumeInput = document.getElementById('volume');
+    
+    const errorMsg = document.getElementById('error-msg');
+    const statusDisplay = document.getElementById('status-display');
+    const canvas = document.getElementById('viz');
+    const ctx = canvas.getContext('2d');
+
+    const workerBlob = new Blob([document.getElementById('worker-code').textContent], { type: "text/javascript" });
+    const workerURL = URL.createObjectURL(workerBlob);
+
+    syntaxModeSelect.addEventListener('change', () => {
+        if (syntaxModeSelect.value === 'bytebeat') {
+            modeHint.innerHTML = 'ByteBeat: <code>t</code>=整数。<code>[L, R]</code>でステレオ。ラップ変換自動。';
+        } else {
+            modeHint.innerHTML = 'Standard: <code>t</code>=秒。<code>[sin(t), cos(t)]</code>でステレオ位相差。';
+        }
+    });
+
+    function preprocessFormula(input) {
+        // ★修正ポイント★
+        // ByteBeatモード、またはコードに「=>」「{」「;」が含まれる複雑なJSの場合は
+        // 自動変換(2t -> 2*t)を行わず、そのままパスする
+        if (syntaxModeSelect.value === 'bytebeat' || input.includes('=>') || input.includes('{') || input.includes(';')) {
+            return input;
+        }
+
+        let s = input;
+        s = s.replace(/\^/g, '**');
+        s = s.replace(/(\d)\s*([a-zA-Z(])/g, '$1 * $2');
+        s = s.replace(/\)\s*([a-zA-Z0-9(])/g, ') * $1');
+        s = s.replace(/(?<![a-z])t\s*\(/gi, 't * (');
+        return s;
+    }
+
+    function drawWaveform(dataL, dataR) {
+        ctx.fillStyle = '#233140';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const sliceWidth = canvas.width / 1000;
+        const startIdx = Math.floor(dataL.length / 2);
+        const drawLength = Math.min(1000, dataL.length - startIdx);
+
+        ctx.strokeStyle = '#3498db'; 
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let x = 0;
+        for (let i = 0; i < drawLength; i++) {
+            const v = dataL[startIdx + i];
+            const y = (1 - v) / 2 * canvas.height; 
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(231, 76, 60, 0.8)'; 
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        x = 0;
+        for (let i = 0; i < drawLength; i++) {
+            const v = dataR[startIdx + i];
+            const y = (1 - v) / 2 * canvas.height; 
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx.stroke();
+    }
+
+    function createStereoWavFile(bufferL, bufferR, typeSelection, sampleRate) {
+        const channels = 2;
+        const frameCount = bufferL.length;
+        let bitDepth = 16;
+        if (typeSelection.startsWith('float')) bitDepth = 32;
+        else if (typeSelection.includes('8')) bitDepth = 8;
+        
+        const blockAlign = channels * (bitDepth / 8);
+        const dataSize = frameCount * blockAlign;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+
+        let pos = 0;
+        const writeString = (s) => { for(let i=0; i<s.length; i++) view.setUint8(pos++, s.charCodeAt(i)); };
+        
+        writeString('RIFF');
+        view.setUint32(pos, 36 + dataSize, true); pos += 4;
+        writeString('WAVE');
+        writeString('fmt ');
+        view.setUint32(pos, 16, true); pos += 4;
+        view.setUint16(pos, (bitDepth === 32 ? 3 : 1), true); pos += 2; 
+        view.setUint16(pos, channels, true); pos += 2; 
+        view.setUint32(pos, sampleRate, true); pos += 4;
+        view.setUint32(pos, sampleRate * blockAlign, true); pos += 4;
+        view.setUint16(pos, blockAlign, true); pos += 2;
+        view.setUint16(pos, bitDepth, true); pos += 2;
+        writeString('data');
+        view.setUint32(pos, dataSize, true); pos += 4;
+
+        for (let i = 0; i < frameCount; i++) {
+            const samples = [bufferL[i], bufferR[i]];
+            for (let ch = 0; ch < 2; ch++) {
+                let s = samples[ch];
+                if (bitDepth === 32) {
+                    view.setFloat32(pos, s, true); pos += 4;
+                } else if (bitDepth === 16) {
+                    s = Math.max(-1, Math.min(1, s));
+                    s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    view.setInt16(pos, s, true); pos += 2;
+                } else if (bitDepth === 8) {
+                    s = Math.max(-1, Math.min(1, s));
+                    let val = (s + 1) * 127.5;
+                    view.setUint8(pos, val); pos += 1;
+                }
+            }
+        }
+        return new Blob([view.buffer], { type: 'audio/wav' });
+    }
+
+    async function startGeneration() {
+        errorMsg.style.display = 'none';
+        errorMsg.textContent = '';
+        statusDisplay.textContent = '計算中...';
+        statusDisplay.className = 'status generating';
+        playBtn.disabled = true;
+        downloadBtn.disabled = true;
+
+        if (currentSource) try { currentSource.stop(); } catch(e){}
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (worker) worker.terminate();
+        
+        worker = new Worker(workerURL);
+        
+        const rawFormula = formulaInput.value;
+        const processedFormula = preprocessFormula(rawFormula);
+        const selectedSampleRate = parseInt(sampleRateSelect.value);
+        
+        const params = {
+            formula: processedFormula,
+            duration: parseFloat(durationInput.value),
+            sampleRate: selectedSampleRate,
+            syntaxMode: syntaxModeSelect.value,
+            numType: numType.value,
+            overflowMode: overflowMode.value,
+            timeScale: parseFloat(timeScaleInput.value)
+        };
+
+        const timeoutSec = parseFloat(timeoutInput.value) || 5;
+        workerTimeout = setTimeout(() => {
+            if (worker) {
+                worker.terminate();
+                worker = null;
+                handleError(`タイムアウト (${timeoutSec}秒)`);
+            }
+        }, timeoutSec * 1000);
+
+        worker.postMessage(params);
+
+        worker.onmessage = function(e) {
+            clearTimeout(workerTimeout);
+            if (e.data.status === 'success') {
+                lastGeneratedBufferL = e.data.bufferL;
+                lastGeneratedBufferR = e.data.bufferR;
+                lastGeneratedConfig = {
+                    numType: numType.value,
+                    sampleRate: selectedSampleRate
+                };
+                playBuffer(e.data.bufferL, e.data.bufferR, selectedSampleRate);
+                downloadBtn.disabled = false;
+            } else {
+                handleError("式のエラー:\n" + e.data.message);
+            }
+        };
+        worker.onerror = function(e) {
+            clearTimeout(workerTimeout);
+            handleError("Workerエラー: " + e.message);
+        };
+    }
+
+    function playBuffer(dataL, dataR, sampleRate) {
+        try {
+            const buffer = audioCtx.createBuffer(2, dataL.length, sampleRate);
+            buffer.copyToChannel(dataL, 0);
+            buffer.copyToChannel(dataR, 1);
+            
+            drawWaveform(dataL, dataR);
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = parseFloat(volumeInput.value);
+
+            source.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            source.onended = () => {
+                statusDisplay.textContent = '';
+                statusDisplay.className = 'status';
+            };
+
+            source.start();
+            currentSource = source;
+
+            statusDisplay.textContent = '再生中';
+            statusDisplay.className = 'status playing';
+            playBtn.disabled = false;
+        } catch(e) {
+            handleError("再生エラー: " + e.message);
+        }
+    }
+
+    function handleError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.style.display = 'block';
+        statusDisplay.textContent = '';
+        playBtn.disabled = false;
+        if (worker) worker.terminate();
+    }
+
+    function downloadWav() {
+        if (!lastGeneratedBufferL || !lastGeneratedBufferR) return;
+        const blob = createStereoWavFile(
+            lastGeneratedBufferL, 
+            lastGeneratedBufferR, 
+            lastGeneratedConfig.numType, 
+            lastGeneratedConfig.sampleRate
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `math_stereo_${Date.now()}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    }
+
+    playBtn.addEventListener('click', startGeneration);
+    stopBtn.addEventListener('click', () => {
+        if (currentSource) { currentSource.stop(); currentSource = null; }
+        if (worker) { worker.terminate(); worker = null; }
+        clearTimeout(workerTimeout);
+        statusDisplay.textContent = '';
+        playBtn.disabled = false;
+    });
+    downloadBtn.addEventListener('click', downloadWav);
+</script>
+
+</body>
+</html>
