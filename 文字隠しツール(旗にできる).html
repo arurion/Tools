@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タグ文字変換ツール（完全版）</title>
+<style>
+    body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 0 20px; background: #f4f4f9; }
+    textarea { width: 100%; height: 80px; margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}
+    .output-area { background: #e8e8e8; color: #555; font-family: monospace; }
+    button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    .options { margin-bottom: 15px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+    .warning { color: #d9534f; font-size: 0.9em; margin-top: 5px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<h2>タグ文字変換 + 旗生成 (修正版)</h2>
+
+<p>入力 (例: inu mo neko mo):</p>
+<textarea id="inputText" placeholder="スペース入りの文章でもOK"></textarea>
+
+<div class="options">
+    <label>
+        <input type="checkbox" id="flagMode" checked>
+        <strong>旗シーケンスモード (🏴 〜 󠁿)</strong>
+    </label>
+    <div class="warning" id="flagNote">
+        ※旗モードをONにすると、仕様に合わせるため<br>
+        <b>「スペース・記号」はすべて自動削除</b>されます。<br>
+        (例: <code>inu mo</code> → <code>inumo</code> としてタグ化)
+    </div>
+</div>
+
+<p>変換結果:</p>
+<textarea id="outputText" class="output-area" readonly></textarea>
+<button onclick="copyToClipboard()">コピーする</button>
+
+<script>
+    const inputText = document.getElementById('inputText');
+    const outputText = document.getElementById('outputText');
+    const flagMode = document.getElementById('flagMode');
+    const flagNote = document.getElementById('flagNote');
+
+    function updateOutput() {
+        let str = inputText.value;
+        const isFlagMode = flagMode.checked;
+        
+        flagNote.style.display = isFlagMode ? 'block' : 'none';
+
+        if (isFlagMode) {
+            // 【修正点】旗モードでは英数字(a-z, 0-9)以外をすべて削除する
+            // これでスペースや記号が入っても旗が壊れなくなります
+            str = str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        }
+
+        let result = '';
+
+        // 1. 開始タグ (旗モードなら黒旗)
+        if (isFlagMode) result += String.fromCodePoint(0x1F3F4);
+
+        // 2. 中身の変換
+        for (const char of str) {
+            const code = char.codePointAt(0);
+            
+            // フラグモードのときは既にフィルタ済みなので全変換
+            // 通常モードのときはASCII範囲(32-126)のみ変換
+            if (isFlagMode || (code >= 32 && code <= 126)) {
+                // 通常モードでスペース(32)が来たら Tag Space (E0020) になる
+                result += String.fromCodePoint(code + 0xE0000);
+            } else {
+                result += char;
+            }
+        }
+
+        // 3. 終了タグ (旗モードならCancel Tag)
+        if (isFlagMode) result += String.fromCodePoint(0xE007F);
+
+        outputText.value = result;
+    }
+
+    inputText.addEventListener('input', updateOutput);
+    flagMode.addEventListener('change', updateOutput);
+    
+    // 初期実行
+    updateOutput();
+
+    function copyToClipboard() {
+        outputText.select();
+        document.execCommand('copy');
+        alert('コピーしました！');
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UTF-8 を Latin-1 (ISO-8859-1) として表示・コピー</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Kaku Gothic ProN',Meiryo, sans-serif}
+    body{max-width:900px;margin:32px auto;padding:24px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.08)}
+    h1{font-size:1.2rem;margin-bottom:12px}
+    label{display:block;margin-top:12px;font-size:.95rem}
+    textarea{width:100%;min-height:80px;padding:10px;margin-top:8px;border:1px solid #ddd;border-radius:6px;font-family:monospace;font-size:0.95rem;box-sizing:border-box}
+    .row{display:flex;gap:8px;margin-top:8px}
+    button{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fafafa;cursor:pointer}
+    button:active{transform:translateY(1px)}
+    .note{margin-top:10px;color:#444;font-size:.85rem}
+    .small{font-size:.85rem;color:#666}
+  </style>
+</head>
+<body>
+  <h1>UTF-8 を Latin-1 (ISO-8859-1) として誤解釈した表示を作るツール</h1><label for="input">入力（UTF-8 で正しく表示される文字列）</label>
+
+  <textarea id="input" placeholder="例: こんにちは">こんにちは</textarea>  <div class="row">
+    <button id="convert">変換</button>
+    <button id="autoToggle">リアルタイム: ON</button>
+    <button id="sample">サンプルを挿入</button>
+  </div><label for="output">表示（UTF-8 のバイト列を Latin-1 として解釈した文字列）</label>
+
+  <textarea id="output" readonly placeholder="ここに Mojibake が表示されます"></textarea>  <div class="row">
+    <button id="copy">コピー</button>
+    <button id="select">全選択</button>
+  </div>  <p class="note">このページは JavaScript で UTF-8 のバイト列を取得し、それぞれのバイトを 0x00–0xFF の文字として扱って表示しています。コピーすると、画面上に見えている“壊れた”文字列がクリップボードに格納されます。</p>  <script>
+    // UTF-8 のバイト列を取得して、各バイトを Latin-1 の文字に変換する
+    function utf8ToLatin1Mojibake(s){
+      // TextEncoder はページが UTF-8 であることを前提に UTF-8 バイト列を返す
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(s);
+      let out = '';
+      for (let i = 0; i < bytes.length; i++){
+        out += String.fromCharCode(bytes[i]);
+      }
+      return out;
+    }
+
+    const input = document.getElementById('input');
+    const output = document.getElementById('output');
+    const convertBtn = document.getElementById('convert');
+    const copyBtn = document.getElementById('copy');
+    const selectBtn = document.getElementById('select');
+    const autoToggle = document.getElementById('autoToggle');
+    const sampleBtn = document.getElementById('sample');
+
+    let auto = true;
+
+    function convert(){
+      const src = input.value || '';
+      output.value = utf8ToLatin1Mojibake(src);
+    }
+
+    convertBtn.addEventListener('click', convert);
+
+    input.addEventListener('input', ()=>{ if (auto) convert(); });
+
+    autoToggle.addEventListener('click', ()=>{
+      auto = !auto;
+      autoToggle.textContent = 'リアルタイム: ' + (auto? 'ON' : 'OFF');
+    });
+
+    sampleBtn.addEventListener('click', ()=>{ input.value = 'こんにちは'; convert(); });
+
+    copyBtn.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(output.value);
+        copyBtn.textContent = 'コピーしました';
+        setTimeout(()=>copyBtn.textContent = 'コピー',1200);
+      }catch(e){
+        // フォールバック: 選択して document.execCommand
+        output.select();
+        try{ document.execCommand('copy'); copyBtn.textContent = 'コピーしました'; setTimeout(()=>copyBtn.textContent = 'コピー',1200); }catch(_){ alert('クリップボードに書き込めませんでした。手動で選択してコピーしてください。'); }
+      }
+    });
+
+    selectBtn.addEventListener('click', ()=>{ output.select(); });
+
+    // 初期変換
+    convert();
+  </script></body>
+</html>
