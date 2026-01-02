@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>数式イメージジェネレーター v9.11 (Stable Fix)</title>
+    <title>数式イメージジェネレーター v9.10 (Blob Loader)</title>
     
     <!-- 
-      重要: MP4/WebM書き出しには coi-serviceworker.js が必須です。
-      これを配置しない場合、自動的に機能制限モード(GIF等のみ)になります。
+      重要: coi-serviceworker.js は必ずHTMLと同じディレクトリに配置してください。
+      これがないとSharedArrayBufferが機能せず、FFmpegが動作しません。
     -->
     <script src="coi-serviceworker.js"></script>
     
@@ -20,17 +20,6 @@
 
     <!-- JSZip -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
-    <!-- FFmpeg (ESM Loader) -->
-    <script type="module">
-        import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
-        import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
-
-        // グローバルに公開
-        window.FFmpeg = FFmpeg;
-        window.FFmpegUtil = { fetchFile, toBlobURL };
-        window.dispatchEvent(new Event('ffmpeg-ready'));
-    </script>
 
     <style>
         :root {
@@ -157,12 +146,17 @@
 <body>
 
 <div class="container">
-    <h1>数式イメージジェネレーター v9.11</h1>
+    <h1>数式イメージジェネレーター v9.10</h1>
     
     <!-- COI Warning -->
     <div id="coi-warning" class="warn-msg">
-        ⚠️ <strong>機能制限モード:</strong> COI設定 (SharedArrayBuffer) が無効です。<br>
+        ⚠️ <strong>機能制限モード:</strong> COI設定が無効です。<br>
         <small>FFmpeg (MP4/WebM) を使うには <code>coi-serviceworker.js</code> が必要です。現在はGIF/APNG/連番のみ動作します。</small>
+    </div>
+
+    <!-- Init Status -->
+    <div id="init-status" style="text-align:center; margin-bottom:10px; color:#888; display:none;">
+        Initializing System...
     </div>
 
     <div class="main-layout">
@@ -355,12 +349,11 @@
     </div>
 </div>
 
-<!-- Worker Code (Stable Version) -->
+<!-- Worker Code -->
 <script id="worker-code" type="javascript/worker">
     self.onmessage = function(e) {
         const { formula, width, height, t, timeScale, colorMode, frameId } = e.data;
         try {
-            // Restore verbose math header for stability
             const mathHeader = `
                 const sin=Math.sin; const cos=Math.cos; const tan=Math.tan;
                 const abs=Math.abs; const pow=Math.pow; const sqrt=Math.sqrt;
@@ -434,6 +427,7 @@
     let onFrameRendered = null;
     let lastFpsTime = performance.now(), fpsFrameCount = 0;
     let ffmpeg = null;
+    let ffmpegLoaded = false;
 
     // --- Presets ---
     const presets = {
@@ -466,7 +460,7 @@
                         fpsFrameCount++;
                         const now = performance.now();
                         if (now - lastFpsTime >= 1000) {
-                            document.getElementById('fps-display').textContent = `${Math.round((fpsFrameCount * 1000) / (now - lastFpsTime));} FPS`;
+                            document.getElementById('fps-display').textContent = `${Math.round((fpsFrameCount * 1000) / (now - lastFpsTime))} FPS`;
                             lastFpsTime = now; fpsFrameCount = 0;
                         }
                     }
@@ -511,6 +505,45 @@
     function stopAnimation() { isPlaying = false; updateUI(); }
     function togglePlay() { isPlaying ? stopAnimation() : startAnimation(); }
 
+    // --- Dynamic FFmpeg Loader (Blob Strategy) ---
+    // ここでライブラリごとローカル化して読み込む
+    async function loadFFmpegLibrary() {
+        const status = document.getElementById('init-status');
+        status.style.display = 'block';
+        status.textContent = 'Loading System Libraries...';
+
+        try {
+            // UMD版をFetchしてBlob URL化
+            const [ffmpegCode, utilCode] = await Promise.all([
+                fetch('https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js').then(r=>r.text()),
+                fetch('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js').then(r=>r.text())
+            ]);
+
+            const ffmpegBlob = new Blob([ffmpegCode], { type: 'text/javascript' });
+            const utilBlob = new Blob([utilCode], { type: 'text/javascript' });
+
+            await loadScript(URL.createObjectURL(ffmpegBlob));
+            await loadScript(URL.createObjectURL(utilBlob));
+
+            console.log("FFmpeg Libraries loaded via Blob.");
+            ffmpegLoaded = true;
+            status.style.display = 'none';
+        } catch (e) {
+            console.error("Lib Load Error:", e);
+            status.textContent = 'Lib Load Failed (Offline?)';
+        }
+    }
+
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    }
+
     // --- Video Encoding Logic ---
     async function startRender() {
         if(isRecording) return;
@@ -520,13 +553,16 @@
         const totalFrames = Math.ceil(dur * fps);
         const w = canvas.width, h = canvas.height;
 
-        // COI Check
         if((fmt === 'mp4' || fmt === 'webm')) {
             if(!window.crossOriginIsolated) {
-                alert("この環境では MP4/WebM は使用できません (COI未設定)。GIF/連番画像を使用してください。");
+                alert("エラー: 'coi-serviceworker.js' が動作していません。\nこの環境ではMP4/WebMは使用できません。\n(ローカルサーバーを使用するか、GIFを選択してください)");
                 return;
             }
-            if(!ffmpeg) await loadFFmpeg();
+            if(!ffmpegLoaded) {
+                alert("ライブラリの読み込みに失敗しています。");
+                return;
+            }
+            if(!ffmpeg) await loadFFmpegCore();
         }
 
         isRecording = true; isPlaying = false; updateUI(); clearError();
@@ -552,36 +588,28 @@
         setProgress(-1); isRecording = false; updateUI();
     }
 
-    async function loadFFmpeg() {
-        if(typeof window.FFmpeg === 'undefined') throw new Error("FFmpeg Module not loaded yet.");
+    async function loadFFmpegCore() {
         setStatus("Loading FFmpeg Core...");
+        // グローバルに読み込まれたクラスを使用
+        const { FFmpeg } = window.FFmpegWASM; 
+        const { fetchFile, toBlobURL } = window.FFmpegUtil;
+
+        ffmpeg = new FFmpeg();
         
-        ffmpeg = new window.FFmpeg();
-        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm';
-        const ffmpegBase = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm';
-        
-        // --- 修正箇所: worker.js の相対パスを絶対パスに書き換えて Blob 化する ---
-        const workerResp = await fetch(`${ffmpegBase}/worker.js`);
-        if (!workerResp.ok) throw new Error("Failed to fetch FFmpeg worker");
-        let workerScript = await workerResp.text();
-        
-        // './814.ffmpeg.js' のような相対パス import を CDN への絶対パスに置換
-        workerScript = workerScript.replace(/from\s*['"]\.\/(.*?)['"]/g, `from '${ffmpegBase}/$1'`);
-        
-        const workerBlobURL = URL.createObjectURL(new Blob([workerScript], { type: 'text/javascript' }));
+        // CoreファイルもBlob化して読み込む (重要)
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
+        const coreBlobURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+        const wasmBlobURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
 
         await ffmpeg.load({
-            coreURL: await window.FFmpegUtil.toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-            wasmURL: await window.FFmpegUtil.toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-            workerURL: workerBlobURL // パッチ済みWorkerを指定
+            coreURL: coreBlobURL,
+            wasmURL: wasmBlobURL
         });
         
         setStatus("FFmpeg Ready.");
     }
 
     async function encodeVideo(frames, fps, w, h, fmt) {
-        if(!ffmpeg) throw new Error("FFmpeg not loaded");
-        
         const rateMode = document.getElementById('video-rate-mode').value;
         const crf = document.getElementById('video-crf').value;
         const bitrate = document.getElementById('video-bitrate').value;
@@ -707,6 +735,7 @@
         if (!window.crossOriginIsolated) {
             document.getElementById('coi-warning').style.display = 'block';
             const fmtSelect = document.getElementById('rec-format');
+            // MP4/WebMを無効化
             for (let i = 0; i < fmtSelect.options.length; i++) {
                 const opt = fmtSelect.options[i];
                 if (opt.value === 'mp4' || opt.value === 'webm') {
@@ -739,16 +768,12 @@
     document.getElementById('btn-record').addEventListener('click', startRender);
 
     // Boot
+    loadFFmpegLibrary(); // ここでJS自体をBlob化して読み込む
     checkCapability();
     initWorker();
     applyPreset('xor_fractal');
     handleFormatChange();
     updateUI(); sendFrame(0);
-    
-    // ESM Loading check
-    window.addEventListener('ffmpeg-ready', () => {
-        console.log("FFmpeg ESM modules loaded.");
-    });
 </script>
 </body>
 </html>
