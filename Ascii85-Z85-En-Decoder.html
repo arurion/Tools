@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ascii85 / Z85 エンコーダー＆デコーダー</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --container-bg: #ffffff;
+            --text-color: #333;
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: var(--container-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #444;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 6px;
+            justify-content: center;
+        }
+
+        .radio-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.9em;
+        }
+
+        .io-area {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            position: relative; /* ボタン配置用 */
+        }
+
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+
+        /* メイン操作ボタン */
+        button.action-btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: white;
+        }
+
+        #btn-encode { background-color: #28a745; }
+        #btn-encode:hover { background-color: #218838; }
+
+        #btn-decode { background-color: #17a2b8; }
+        #btn-decode:hover { background-color: #138496; }
+
+        #btn-clear { background-color: #6c757d; }
+        #btn-clear:hover { background-color: #5a6268; }
+
+        /* コピーボタン（小さめ） */
+        .copy-btn {
+            padding: 4px 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .copy-btn:hover {
+            background-color: var(--primary-hover);
+        }
+        .copy-btn.copied {
+            background-color: #28a745; /* 成功時は緑 */
+        }
+
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .error { background-color: #f8d7da; color: #721c24; display: block !important; }
+        .success { background-color: #d4edda; color: #155724; display: block !important; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Ascii85 / Z85 Converter</h1>
+
+    <div class="controls">
+        <div class="radio-group">
+            <strong>モード:</strong>
+            <label><input type="radio" name="mode" value="ascii85" checked> Ascii85 (Adobe)</label>
+            <label><input type="radio" name="mode" value="z85"> Z85 (ZeroMQ)</label>
+        </div>
+        <div class="checkbox-group" id="ascii85-options">
+            <label><input type="checkbox" id="delimiter-check" checked> &lt;~ ~&gt; を付与 (Encode時)</label>
+        </div>
+    </div>
+
+    <div class="io-area">
+        <div class="input-group">
+            <div class="label-row">
+                <label for="input-text">入力</label>
+            </div>
+            <textarea id="input-text" placeholder="ここにテキストを入力 (テキスト または エンコードされた文字列)..."></textarea>
+        </div>
+
+        <div class="btn-group">
+            <button id="btn-encode" class="action-btn">エンコード (Encode)</button>
+            <button id="btn-decode" class="action-btn">デコード (Decode)</button>
+            <button id="btn-clear" class="action-btn">クリア</button>
+        </div>
+
+        <div class="input-group">
+            <div class="label-row">
+                <label for="output-text">結果</label>
+                <button id="btn-copy" class="copy-btn">結果をコピー</button>
+            </div>
+            <textarea id="output-text" readonly placeholder="結果がここに表示されます"></textarea>
+        </div>
+    </div>
+
+    <div id="status"></div>
+</div>
+
+<script>
+    // --- Utils ---
+    const TextEncoderObj = new TextEncoder();
+    const TextDecoderObj = new TextDecoder();
+
+    function showStatus(msg, type) {
+        const el = document.getElementById('status');
+        el.textContent = msg;
+        el.className = type;
+    }
+
+    function clearStatus() {
+        const el = document.getElementById('status');
+        el.textContent = '';
+        el.className = '';
+    }
+
+    // --- Ascii85 Implementation ---
+    const Ascii85 = {
+        encode: function(str, useDelimiters) {
+            const data = TextEncoderObj.encode(str);
+            let result = "";
+            let i = 0;
+            
+            while (i < data.length) {
+                let val = 0;
+                let count = 0;
+                for (let j = 0; j < 4; j++) {
+                    val = val * 256;
+                    if (i + j < data.length) {
+                        val += data[i + j];
+                        count++;
+                    }
+                }
+
+                if (count === 4 && val === 0) {
+                    result += "z";
+                    i += 4;
+                    continue;
+                }
+
+                let chunk = "";
+                for (let j = 0; j < 5; j++) {
+                    chunk = String.fromCharCode((val % 85) + 33) + chunk;
+                    val = Math.floor(val / 85);
+                }
+
+                if (count < 4) {
+                    const padding = 4 - count;
+                    chunk = chunk.substring(0, 5 - padding);
+                }
+
+                result += chunk;
+                i += 4;
+            }
+
+            if (useDelimiters) {
+                return "<~" + result + "~>";
+            }
+            return result;
+        },
+
+        decode: function(str) {
+            let cleanStr = str.replace(/<~/g, "").replace(/~>/g, "").replace(/\s/g, "");
+            
+            let expanded = "";
+            for (let char of cleanStr) {
+                if (char === 'z') {
+                    expanded += "!!!!!";
+                } else {
+                    expanded += char;
+                }
+            }
+            cleanStr = expanded;
+
+            const bytes = [];
+            let i = 0;
+
+            while (i < cleanStr.length) {
+                let val = 0;
+                let count = 0;
+                
+                for (let j = 0; j < 5; j++) {
+                    if (i + j < cleanStr.length) {
+                        const code = cleanStr.charCodeAt(i + j) - 33;
+                        if (code < 0 || code > 84) {
+                            throw new Error("Invalid character in Ascii85 string.");
+                        }
+                        val = val * 85 + code;
+                        count++;
+                    } else {
+                        val = val * 85 + 84;
+                    }
+                }
+
+                let divisor = 16777216;
+                for (let j = 0; j < 4; j++) {
+                    if (count > j + 1) {
+                        bytes.push(Math.floor(val / divisor) % 256);
+                    }
+                    divisor /= 256;
+                }
+                
+                i += 5;
+            }
+
+            return TextDecoderObj.decode(new Uint8Array(bytes));
+        }
+    };
+
+    // --- Z85 Implementation ---
+    const Z85 = {
+        chars: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#",
+        
+        getMap: function() {
+            if (this.decodeMap) return this.decodeMap;
+            this.decodeMap = {};
+            for (let i = 0; i < this.chars.length; i++) {
+                this.decodeMap[this.chars[i]] = i;
+            }
+            return this.decodeMap;
+        },
+
+        encode: function(str) {
+            const data = TextEncoderObj.encode(str);
+            const len = data.length;
+            
+            let result = "";
+            let i = 0;
+
+            while (i < len) {
+                let val = 0;
+                let count = 0;
+                
+                for (let j = 0; j < 4; j++) {
+                    val = val * 256;
+                    if (i + j < len) {
+                        val += data[i + j];
+                        count++;
+                    }
+                }
+
+                let chunk = "";
+                let divisor = 52200625;
+                let tempVal = val;
+
+                for (let j = 0; j < 5; j++) {
+                    const idx = Math.floor(tempVal / divisor) % 85;
+                    chunk += this.chars[idx];
+                    divisor /= 85;
+                }
+
+                if (count < 4) {
+                    const padding = 4 - count;
+                    chunk = chunk.substring(0, 5 - padding);
+                }
+
+                result += chunk;
+                i += 4;
+            }
+            return result;
+        },
+
+        decode: function(str) {
+            const cleanStr = str.replace(/\s/g, ""); 
+            const map = this.getMap();
+            const bytes = [];
+            let i = 0;
+
+            while (i < cleanStr.length) {
+                let val = 0;
+                let count = 0;
+
+                for (let j = 0; j < 5; j++) {
+                    if (i + j < cleanStr.length) {
+                        const char = cleanStr[i + j];
+                        if (map[char] === undefined) {
+                            throw new Error("Invalid character in Z85 string: " + char);
+                        }
+                        val = val * 85 + map[char];
+                        count++;
+                    } else {
+                        val = val * 85 + 84;
+                    }
+                }
+
+                let divisor = 16777216;
+                for (let j = 0; j < 4; j++) {
+                    if (count > j + 1) { 
+                        bytes.push(Math.floor(val / divisor) % 256);
+                    }
+                    divisor /= 256;
+                }
+                i += 5;
+            }
+
+            return TextDecoderObj.decode(new Uint8Array(bytes));
+        }
+    };
+
+    // --- Event Listeners ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const inputEl = document.getElementById('input-text');
+        const outputEl = document.getElementById('output-text');
+        const asciiOptions = document.getElementById('ascii85-options');
+        const radios = document.getElementsByName('mode');
+        const btnCopy = document.getElementById('btn-copy');
+
+        // Toggle options visibility
+        radios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'ascii85') {
+                    asciiOptions.style.display = 'flex';
+                } else {
+                    asciiOptions.style.display = 'none';
+                }
+            });
+        });
+
+        document.getElementById('btn-encode').addEventListener('click', () => {
+            clearStatus();
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            const text = inputEl.value;
+
+            if (!text) {
+                showStatus("入力欄が空です", "error");
+                return;
+            }
+
+            try {
+                let result = "";
+                if (mode === 'ascii85') {
+                    const useDelim = document.getElementById('delimiter-check').checked;
+                    result = Ascii85.encode(text, useDelim);
+                } else {
+                    result = Z85.encode(text);
+                }
+                outputEl.value = result;
+                showStatus("エンコード成功", "success");
+            } catch (e) {
+                showStatus("エラー: " + e.message, "error");
+            }
+        });
+
+        document.getElementById('btn-decode').addEventListener('click', () => {
+            clearStatus();
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            const text = inputEl.value;
+
+            if (!text) {
+                showStatus("入力欄が空です", "error");
+                return;
+            }
+
+            try {
+                let result = "";
+                if (mode === 'ascii85') {
+                    result = Ascii85.decode(text);
+                } else {
+                    result = Z85.decode(text);
+                }
+                outputEl.value = result;
+                showStatus("デコード成功", "success");
+            } catch (e) {
+                showStatus("デコードエラー: 不正な形式または文字が含まれています。\n" + e.message, "error");
+            }
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            inputEl.value = "";
+            outputEl.value = "";
+            clearStatus();
+        });
+
+        // コピー機能
+        btnCopy.addEventListener('click', () => {
+            const textToCopy = outputEl.value;
+            if (!textToCopy) return;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // 成功時のUIフィードバック
+                const originalText = btnCopy.textContent;
+                btnCopy.textContent = "コピーしました！";
+                btnCopy.classList.add('copied');
+                
+                setTimeout(() => {
+                    btnCopy.textContent = originalText;
+                    btnCopy.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('コピーに失敗しました', err);
+                // フォールバック（念のため）
+                outputEl.select();
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+            });
+        });
+    });
+
+</script>
+
+</body>
+</html>

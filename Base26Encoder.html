@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base26 エンコーダー/デコーダー (Pure Base26)</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --text-color: #333;
+            --card-bg: #fff;
+            --primary-color: #4a90e2;
+            --btn-hover: #357abd;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 0;
+            color: #2c3e50;
+        }
+
+        p.desc {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .converter-box {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1rem;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: background-color 0.2s;
+            min-width: 120px;
+        }
+
+        button:hover {
+            background-color: var(--btn-hover);
+        }
+
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .info {
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: #eef2f7;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .error-msg {
+            color: #e74c3c;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            min-height: 1.2em;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Base26 Converter</h1>
+    <p class="desc">
+        テキスト(UTF-8)を純粋な26進数 (A-Z) に変換します。<br>
+        (0=A, 1=B, ..., 25=Z)
+    </p>
+
+    <div class="converter-box">
+        <div class="input-group">
+            <label for="inputText">プレーンテキスト (入力)</label>
+            <textarea id="inputText" placeholder="ここにテキストを入力 (例: Hello World)"></textarea>
+        </div>
+
+        <div class="controls">
+            <button onclick="encodeBase26()">↓ エンコード</button>
+            <button class="secondary" onclick="decodeBase26()">↑ デコード</button>
+        </div>
+
+        <div class="input-group">
+            <label for="outputText">Base26 エンコード結果 (出力) <span id="charCount" style="font-weight:normal; color:#888;"></span></label>
+            <textarea id="outputText" placeholder="結果がここに表示されます (例: B...)"></textarea>
+            <div id="errorDisplay" class="error-msg"></div>
+        </div>
+    </div>
+
+    <div class="info">
+        <strong>仕様メモ:</strong><br>
+        <ul>
+            <li><strong>アルファベット:</strong> A-Z (26文字)。</li>
+            <li><strong>方式:</strong> 入力バイト列を巨大な整数(BigInt)として扱い、26で割った余りをマッピングします。</li>
+            <li><strong>ゼロの扱い:</strong> 先頭の Nullバイト (0x00) は、文字 'A' として出力の先頭に付与されます (Base58と同様のロジック)。</li>
+            <li>Base64やAscii85と同様にバイナリセーフな変換として機能します。</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+    const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const BASE = 26n;
+
+    // 文字列をUint8Arrayに変換
+    function stringToBytes(str) {
+        return new TextEncoder().encode(str);
+    }
+
+    // Uint8Arrayを文字列に変換
+    function bytesToString(bytes) {
+        return new TextDecoder().decode(bytes);
+    }
+
+    // Base26 エンコード
+    function encodeBase26() {
+        const input = document.getElementById('inputText').value;
+        const errorDisplay = document.getElementById('errorDisplay');
+        errorDisplay.textContent = "";
+
+        if (!input) {
+            document.getElementById('outputText').value = "";
+            return;
+        }
+
+        try {
+            const bytes = stringToBytes(input);
+            
+            // 1. 先頭のゼロ(0x00)を数える
+            let zeros = 0;
+            while (zeros < bytes.length && bytes[zeros] === 0) {
+                zeros++;
+            }
+
+            // 2. 残りのバイトをBigIntに変換
+            // Hex文字列経由でBigIntにするのが確実
+            const bRest = bytes.slice(zeros);
+            let size = bRest.length;
+            let hex = "";
+            
+            for(let i=0; i<size; i++) {
+                hex += bRest[i].toString(16).padStart(2, '0');
+            }
+
+            let num = (hex === "") ? 0n : BigInt('0x' + hex);
+            
+            // 3. BigIntをBase26文字列に変換
+            let encoded = "";
+            // numが0になるまで割る
+            while (num > 0n) {
+                const remainder = num % BASE;
+                num = num / BASE;
+                encoded = ALPHABET[Number(remainder)] + encoded;
+            }
+
+            // 4. 先頭のゼロの数だけ 'A' (Base26の0) を付与
+            // 注意: 純粋な数値変換だと0は"A"になりますが、
+            // バイト列エンコーディング(Base58方式)では、
+            // 「値としての0」ではなく「先行するNullバイト」を表現するために特定の文字(ここではA)を使います。
+            // ※もし変換対象の値自体が0(空ではないが値が0)の場合の処理は、
+            // 上記ループ条件(num > 0n)により空文字になり、ここでAが付くことで整合性が取れます。
+            
+            const result = ALPHABET[0].repeat(zeros) + encoded;
+            
+            document.getElementById('outputText').value = result;
+            updateCount(result);
+
+        } catch (e) {
+            console.error(e);
+            errorDisplay.textContent = "エンコードエラー: " + e.message;
+        }
+    }
+
+    // Base26 デコード
+    function decodeBase26() {
+        const input = document.getElementById('outputText').value.trim(); // 空白除去
+        const errorDisplay = document.getElementById('errorDisplay');
+        errorDisplay.textContent = "";
+
+        if (!input) {
+            document.getElementById('inputText').value = "";
+            return;
+        }
+
+        // 文字種チェック
+        if (!/^[A-Z]+$/.test(input)) {
+            errorDisplay.textContent = "エラー: 入力にA-Z以外の文字が含まれています。";
+            return;
+        }
+
+        try {
+            // 1. 先頭の 'A' を数える
+            let zeros = 0;
+            while (zeros < input.length && input[zeros] === ALPHABET[0]) {
+                zeros++;
+            }
+
+            // 2. 残りの文字列をBigIntに変換
+            const remaining = input.substring(zeros);
+            let num = 0n;
+            
+            for (const char of remaining) {
+                const idx = ALPHABET.indexOf(char);
+                num = num * BASE + BigInt(idx);
+            }
+
+            // 3. BigIntをバイト列に変換
+            // BigInt -> Hex -> Uint8Array
+            let hex = num.toString(16);
+            if (hex.length % 2 !== 0) {
+                hex = '0' + hex;
+            }
+            
+            // numが0の場合、hexは"0"になるためbyteは[0]になるが、
+            // remainingが空だった場合(入力が"AAA"など)は、数値部分は空であるべき。
+            let bytesFromNum;
+            if (remaining === "") {
+                bytesFromNum = new Uint8Array(0);
+            } else {
+                const len = hex.length / 2;
+                bytesFromNum = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytesFromNum[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+                }
+            }
+
+            // 4. 先頭のゼロと結合
+            const finalBytes = new Uint8Array(zeros + bytesFromNum.length);
+            // fill 0 is default but explicit is safe
+            finalBytes.fill(0, 0, zeros); 
+            finalBytes.set(bytesFromNum, zeros);
+
+            const result = bytesToString(finalBytes);
+            document.getElementById('inputText').value = result;
+
+        } catch (e) {
+            console.error(e);
+            errorDisplay.textContent = "デコードエラー: 変換できないデータです。";
+        }
+    }
+    
+    function updateCount(str) {
+        document.getElementById('charCount').textContent = `(${str.length} 文字)`;
+    }
+</script>
+
+</body>
+</html>

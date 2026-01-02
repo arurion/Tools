@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>元素記号 相互変換ステーション</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --accent-color: #e67e22;
+            --bg-color: #f0f4f8;
+            --card-bg: #ffffff;
+            --text-main: #2c3e50;
+            --text-sub: #7f8c8d;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 900px;
+            overflow: hidden;
+            border: 1px solid #dfe6e9;
+        }
+
+        /* ヘッダーとタブ */
+        .header {
+            background: #2c3e50;
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+        .header h1 { margin: 0; font-size: 24px; letter-spacing: 0.05em; }
+        .header p { margin: 5px 0 0; color: #bdc3c7; font-size: 0.9em; }
+
+        .tabs {
+            display: flex;
+            background: #ecf0f1;
+            border-bottom: 1px solid #bdc3c7;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            font-weight: bold;
+            color: #7f8c8d;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .tab-btn:hover { background: #dfe6e9; color: #2c3e50; }
+        .tab-btn.active {
+            color: var(--primary-color);
+            background: white;
+        }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--primary-color);
+        }
+        /* Decoderタブのアクティブ色 */
+        .tab-btn#btn-decoder.active { color: var(--accent-color); }
+        .tab-btn#btn-decoder.active::after { background: var(--accent-color); }
+
+        /* コンテンツエリア */
+        .content-area {
+            padding: 30px 20px;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .content-area.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* -------------------------
+           Converter Styles
+           ------------------------- */
+        .controls {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            border: 1px solid #eee;
+        }
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.9em;
+            user-select: none;
+        }
+        .checkbox-wrapper input { margin-right: 8px; accent-color: var(--primary-color); transform: scale(1.1); }
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 5px;
+            color: white;
+        }
+        .bg-org { background-color: #e67e22; }
+        .bg-chem { background-color: #9b59b6; }
+
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 14px;
+            font-size: 18px;
+            border: 2px solid #dfe6e9;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus { border-color: var(--primary-color); }
+        
+        .btn-convert {
+            padding: 0 30px;
+            font-size: 16px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .btn-convert:hover { background-color: #2980b9; }
+
+        .result-row { margin-bottom: 25px; }
+        .label {
+            display: block;
+            font-size: 0.75em;
+            color: #95a5a6;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .value {
+            font-size: 1.3em;
+            color: #2c3e50;
+            font-weight: 500;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+
+        .cards-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px dashed #ddd;
+        }
+        .element-card {
+            border: 1px solid #e1e8ed;
+            border-radius: 6px;
+            padding: 8px 10px;
+            text-align: center;
+            background: white;
+            min-width: 55px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .element-card.std { border-bottom: 3px solid var(--primary-color); }
+        .element-card.org { border-bottom: 3px solid #e67e22; background: #fffbf7; }
+        .element-card.chem { border-bottom: 3px solid #9b59b6; background: #fbf7ff; }
+        .element-card.error { border-bottom: 3px solid #e74c3c; background: #fff5f5; }
+
+        .ec-sym { display: block; font-size: 1.6em; font-weight: bold; color: #2c3e50; }
+        .ec-jp { display: block; font-size: 0.7em; color: #555; }
+        .ec-num { display: block; font-size: 0.6em; color: #aaa; text-align: left; }
+
+        /* -------------------------
+           Decoder Styles
+           ------------------------- */
+        .decoder-area textarea {
+            width: 100%;
+            height: 100px;
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            outline: none;
+            resize: vertical;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .decoder-area textarea:focus { border-color: var(--accent-color); }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; margin-bottom: 20px; }
+        .btn-decode {
+            flex-grow: 1;
+            padding: 12px;
+            font-size: 16px;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-decode:hover { background-color: #d35400; }
+        .btn-clear {
+            background-color: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 0 20px;
+            cursor: pointer;
+        }
+
+        .decoded-result {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .decoded-text {
+            font-size: 2.2em;
+            font-weight: bold;
+            color: var(--accent-color);
+            word-break: break-all;
+            margin-bottom: 15px;
+            line-height: 1.2;
+        }
+        .decoded-detail {
+            font-size: 0.85em;
+            color: #bdc3c7;
+            text-align: left;
+            border-top: 1px solid #465f76;
+            padding-top: 10px;
+        }
+        .token {
+            display: inline-block;
+            margin: 2px;
+            padding: 2px 6px;
+            background: #34495e;
+            border-radius: 4px;
+            border: 1px solid #465f76;
+        }
+        
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>ELEMENT STATION</h1>
+        <p>元素記号 変換・復元統合ツール</p>
+    </div>
+
+    <!-- タブ切り替え -->
+    <div class="tabs">
+        <button class="tab-btn active" id="btn-converter" onclick="switchTab('converter')">CONVERTER (英→元素)</button>
+        <button class="tab-btn" id="btn-decoder" onclick="switchTab('decoder')">DECODER (和→英)</button>
+    </div>
+
+    <!-- 1. CONVERTER 画面 -->
+    <div id="view-converter" class="content-area active">
+        <div class="controls">
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="chkOrganic" checked onchange="runConversion()">
+                <span>有機化学略号 <span class="badge bg-org">Me, Ph</span></span>
+            </label>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="chkChemistry" checked onchange="runConversion()">
+                <span>化学用語・穴埋め <span class="badge bg-chem">A, Z, Q</span></span>
+            </label>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="inputConv" placeholder="変換したい英単語 (例: Galaxy, Phone)" onkeydown="if(event.key==='Enter') runConversion()">
+            <button class="btn-convert" onclick="runConversion()">変換</button>
+        </div>
+
+        <div id="outConv" style="display:none;">
+            <div class="result-row">
+                <span class="label">1. English</span>
+                <div class="value" id="resEnglish"></div>
+            </div>
+            <div class="result-row">
+                <span class="label">2. 日本語</span>
+                <div class="value" id="resJapanese"></div>
+            </div>
+            <div class="result-row">
+                <span class="label">3. Symbol</span>
+                <div class="value" id="resSymbol" style="font-family: monospace; font-size: 1.5em; letter-spacing: 0.1em;"></div>
+            </div>
+            <div class="cards-area" id="convCards"></div>
+        </div>
+    </div>
+
+    <!-- 2. DECODER 画面 -->
+    <div id="view-decoder" class="content-area decoder-area">
+        <p style="margin-top:0; color:#666; font-size:0.9em;">
+            「硫黄ウラシル...」のような元素名の羅列を、元のアルファベットに復元します。
+        </p>
+        <textarea id="inputDec" placeholder="ここにメッセージを貼り付け (例: 硫黄ウラシルグアニン酸素インジウムグアニン酸素ネオン)"></textarea>
+        
+        <div class="btn-group">
+            <button class="btn-clear" onclick="clearDecoder()">クリア</button>
+            <button class="btn-decode" onclick="runDecode()">復元する</button>
+        </div>
+
+        <div id="outDec" style="display:none;" class="decoded-result">
+            <div class="decoded-text" id="resDecoded"></div>
+            <div class="decoded-detail" id="resDetail"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// =========================================================
+//  MASTER DATABASE
+//  すべてのデータをここで一元管理し、変換・復元両方に使用する
+// =========================================================
+const masterDB = [
+    // --- Standard Elements (1-118) ---
+    { s: "H", j: "水素", e: "Hydrogen", n: 1, t: "std" },
+    { s: "He", j: "ヘリウム", e: "Helium", n: 2, t: "std" },
+    { s: "Li", j: "リチウム", e: "Lithium", n: 3, t: "std" },
+    { s: "Be", j: "ベリリウム", e: "Beryllium", n: 4, t: "std" },
+    { s: "B", j: "ホウ素", e: "Boron", n: 5, t: "std" },
+    { s: "C", j: "炭素", e: "Carbon", n: 6, t: "std" },
+    { s: "N", j: "窒素", e: "Nitrogen", n: 7, t: "std" },
+    { s: "O", j: "酸素", e: "Oxygen", n: 8, t: "std" },
+    { s: "F", j: "フッ素", e: "Fluorine", n: 9, t: "std" },
+    { s: "Ne", j: "ネオン", e: "Neon", n: 10, t: "std" },
+    { s: "Na", j: "ナトリウム", e: "Sodium", n: 11, t: "std" },
+    { s: "Mg", j: "マグネシウム", e: "Magnesium", n: 12, t: "std" },
+    { s: "Al", j: "アルミニウム", e: "Aluminium", n: 13, t: "std" },
+    { s: "Si", j: "ケイ素", e: "Silicon", n: 14, t: "std" },
+    { s: "P", j: "リン", e: "Phosphorus", n: 15, t: "std" },
+    { s: "S", j: "硫黄", e: "Sulfur", n: 16, t: "std" },
+    { s: "Cl", j: "塩素", e: "Chlorine", n: 17, t: "std" },
+    { s: "Ar", j: "アルゴン", e: "Argon", n: 18, t: "std" },
+    { s: "K", j: "カリウム", e: "Potassium", n: 19, t: "std" },
+    { s: "Ca", j: "カルシウム", e: "Calcium", n: 20, t: "std" },
+    { s: "Sc", j: "スカンジウム", e: "Scandium", n: 21, t: "std" },
+    { s: "Ti", j: "チタン", e: "Titanium", n: 22, t: "std" },
+    { s: "V", j: "バナジウム", e: "Vanadium", n: 23, t: "std" },
+    { s: "Cr", j: "クロム", e: "Chromium", n: 24, t: "std" },
+    { s: "Mn", j: "マンガン", e: "Manganese", n: 25, t: "std" },
+    { s: "Fe", j: "鉄", e: "Iron", n: 26, t: "std" },
+    { s: "Co", j: "コバルト", e: "Cobalt", n: 27, t: "std" },
+    { s: "Ni", j: "ニッケル", e: "Nickel", n: 28, t: "std" },
+    { s: "Cu", j: "銅", e: "Copper", n: 29, t: "std" },
+    { s: "Zn", j: "亜鉛", e: "Zinc", n: 30, t: "std" },
+    { s: "Ga", j: "ガリウム", e: "Gallium", n: 31, t: "std" },
+    { s: "Ge", j: "ゲルマニウム", e: "Germanium", n: 32, t: "std" },
+    { s: "As", j: "ヒ素", e: "Arsenic", n: 33, t: "std" },
+    { s: "Se", j: "セレン", e: "Selenium", n: 34, t: "std" },
+    { s: "Br", j: "臭素", e: "Bromine", n: 35, t: "std" },
+    { s: "Kr", j: "クリプトン", e: "Krypton", n: 36, t: "std" },
+    { s: "Rb", j: "ルビジウム", e: "Rubidium", n: 37, t: "std" },
+    { s: "Sr", j: "ストロンチウム", e: "Strontium", n: 38, t: "std" },
+    { s: "Y", j: "イットリウム", e: "Yttrium", n: 39, t: "std" },
+    { s: "Zr", j: "ジルコニウム", e: "Zirconium", n: 40, t: "std" },
+    { s: "Nb", j: "ニオブ", e: "Niobium", n: 41, t: "std" },
+    { s: "Mo", j: "モリブデン", e: "Molybdenum", n: 42, t: "std" },
+    { s: "Tc", j: "テクネチウム", e: "Technetium", n: 43, t: "std" },
+    { s: "Ru", j: "ルテニウム", e: "Ruthenium", n: 44, t: "std" },
+    { s: "Rh", j: "ロジウム", e: "Rhodium", n: 45, t: "std" },
+    { s: "Pd", j: "パラジウム", e: "Palladium", n: 46, t: "std" },
+    { s: "Ag", j: "銀", e: "Silver", n: 47, t: "std" },
+    { s: "Cd", j: "カドミウム", e: "Cadmium", n: 48, t: "std" },
+    { s: "In", j: "インジウム", e: "Indium", n: 49, t: "std" },
+    { s: "Sn", j: "スズ", e: "Tin", n: 50, t: "std" },
+    { s: "Sb", j: "アンチモン", e: "Antimony", n: 51, t: "std" },
+    { s: "Te", j: "テルル", e: "Tellurium", n: 52, t: "std" },
+    { s: "I", j: "ヨウ素", e: "Iodine", n: 53, t: "std" },
+    { s: "Xe", j: "キセノン", e: "Xenon", n: 54, t: "std" },
+    { s: "Cs", j: "セシウム", e: "Caesium", n: 55, t: "std" },
+    { s: "Ba", j: "バリウム", e: "Barium", n: 56, t: "std" },
+    { s: "La", j: "ランタン", e: "Lanthanum", n: 57, t: "std" },
+    { s: "Ce", j: "セリウム", e: "Cerium", n: 58, t: "std" },
+    { s: "Pr", j: "プラセオジム", e: "Praseodymium", n: 59, t: "std" },
+    { s: "Nd", j: "ネオジム", e: "Neodymium", n: 60, t: "std" },
+    { s: "Pm", j: "プロメチウム", e: "Promethium", n: 61, t: "std" },
+    { s: "Sm", j: "サマリウム", e: "Samarium", n: 62, t: "std" },
+    { s: "Eu", j: "ユウロピウム", e: "Europium", n: 63, t: "std" },
+    { s: "Gd", j: "ガドリニウム", e: "Gadolinium", n: 64, t: "std" },
+    { s: "Tb", j: "テルビウム", e: "Terbium", n: 65, t: "std" },
+    { s: "Dy", j: "ジスプロシウム", e: "Dysprosium", n: 66, t: "std" },
+    { s: "Ho", j: "ホルミウム", e: "Holmium", n: 67, t: "std" },
+    { s: "Er", j: "エルビウム", e: "Erbium", n: 68, t: "std" },
+    { s: "Tm", j: "ツリウム", e: "Thulium", n: 69, t: "std" },
+    { s: "Yb", j: "イッテルビウム", e: "Ytterbium", n: 70, t: "std" },
+    { s: "Lu", j: "ルテチウム", e: "Lutetium", n: 71, t: "std" },
+    { s: "Hf", j: "ハフニウム", e: "Hafnium", n: 72, t: "std" },
+    { s: "Ta", j: "タンタル", e: "Tantalum", n: 73, t: "std" },
+    { s: "W", j: "タングステン", e: "Tungsten", n: 74, t: "std" },
+    { s: "Re", j: "レニウム", e: "Rhenium", n: 75, t: "std" },
+    { s: "Os", j: "オスミウム", e: "Osmium", n: 76, t: "std" },
+    { s: "Ir", j: "イリジウム", e: "Iridium", n: 77, t: "std" },
+    { s: "Pt", j: "白金", e: "Platinum", n: 78, t: "std" },
+    { s: "Au", j: "金", e: "Gold", n: 79, t: "std" },
+    { s: "Hg", j: "水銀", e: "Mercury", n: 80, t: "std" },
+    { s: "Tl", j: "タリウム", e: "Thallium", n: 81, t: "std" },
+    { s: "Pb", j: "鉛", e: "Lead", n: 82, t: "std" },
+    { s: "Bi", j: "ビスマス", e: "Bismuth", n: 83, t: "std" },
+    { s: "Po", j: "ポロニウム", e: "Polonium", n: 84, t: "std" },
+    { s: "At", j: "アスタチン", e: "Astatine", n: 85, t: "std" },
+    { s: "Rn", j: "ラドン", e: "Radon", n: 86, t: "std" },
+    { s: "Fr", j: "フランシウム", e: "Francium", n: 87, t: "std" },
+    { s: "Ra", j: "ラジウム", e: "Radium", n: 88, t: "std" },
+    { s: "Ac", j: "アクチニウム", e: "Actinium", n: 89, t: "std" },
+    { s: "Th", j: "トリウム", e: "Thorium", n: 90, t: "std" },
+    { s: "Pa", j: "プロトアクチニウム", e: "Protactinium", n: 91, t: "std" },
+    { s: "U", j: "ウラン", e: "Uranium", n: 92, t: "std" },
+    { s: "Np", j: "ネプツニウム", e: "Neptunium", n: 93, t: "std" },
+    { s: "Pu", j: "プルトニウム", e: "Plutonium", n: 94, t: "std" },
+    { s: "Am", j: "アメリシウム", e: "Americium", n: 95, t: "std" },
+    { s: "Cm", j: "キュリウム", e: "Curium", n: 96, t: "std" },
+    { s: "Bk", j: "バークリウム", e: "Berkelium", n: 97, t: "std" },
+    { s: "Cf", j: "カリホルニウム", e: "Californium", n: 98, t: "std" },
+    { s: "Es", j: "アインスタイニウム", e: "Einsteinium", n: 99, t: "std" },
+    { s: "Fm", j: "フェルミウム", e: "Fermium", n: 100, t: "std" },
+    { s: "Md", j: "メンデレビウム", e: "Mendelevium", n: 101, t: "std" },
+    { s: "No", j: "ノーベリウム", e: "Nobelium", n: 102, t: "std" },
+    { s: "Lr", j: "ローレンシウム", e: "Lawrencium", n: 103, t: "std" },
+    { s: "Rf", j: "ラザホージウム", e: "Rutherfordium", n: 104, t: "std" },
+    { s: "Db", j: "ドブニウム", e: "Dubnium", n: 105, t: "std" },
+    { s: "Sg", j: "シーボーギウム", e: "Seaborgium", n: 106, t: "std" },
+    { s: "Bh", j: "ボーリウム", e: "Bohrium", n: 107, t: "std" },
+    { s: "Hs", j: "ハッシウム", e: "Hassium", n: 108, t: "std" },
+    { s: "Mt", j: "マイトネリウム", e: "Meitnerium", n: 109, t: "std" },
+    { s: "Ds", j: "ダームスタチウム", e: "Darmstadtium", n: 110, t: "std" },
+    { s: "Rg", j: "レントゲニウム", e: "Roentgenium", n: 111, t: "std" },
+    { s: "Cn", j: "コペルニシウム", e: "Copernicium", n: 112, t: "std" },
+    { s: "Nh", j: "ニホニウム", e: "Nihonium", n: 113, t: "std" },
+    { s: "Fl", j: "フレロビウム", e: "Flerovium", n: 114, t: "std" },
+    { s: "Mc", j: "モスコビウム", e: "Moscovium", n: 115, t: "std" },
+    { s: "Lv", j: "リバモリウム", e: "Livermorium", n: 116, t: "std" },
+    { s: "Ts", j: "テネシン", e: "Tennessine", n: 117, t: "std" },
+    { s: "Og", j: "オガネソン", e: "Oganesson", n: 118, t: "std" },
+    
+    // --- Organic Groups (t: org) ---
+    { s: "Me", j: "メチル基", e: "Methyl", n: "Org", t: "org" },
+    { s: "Et", j: "エチル基", e: "Ethyl", n: "Org", t: "org" },
+    { s: "Ph", j: "フェニル基", e: "Phenyl", n: "Org", t: "org" },
+    { s: "Bu", j: "ブチル基", e: "Butyl", n: "Org", t: "org" },
+    { s: "Bn", j: "ベンジル基", e: "Benzyl", n: "Org", t: "org" },
+    { s: "Bz", j: "ベンゾイル基", e: "Benzoyl", n: "Org", t: "org" },
+    { s: "Ms", j: "メシル基", e: "Mesyl", n: "Org", t: "org" },
+    { s: "Tf", j: "トリフリル基", e: "Triflyl", n: "Org", t: "org" },
+    { s: "Py", j: "ピリジン", e: "Pyridine", n: "Org", t: "org" },
+    { s: "Cy", j: "シクロヘキシル", e: "Cyclohexyl", n: "Org", t: "org" },
+    { s: "Ac", j: "アセチル基", e: "Acetyl", n: "Org", t: "org" },
+
+    // --- Chemistry Terms (t: chem) ---
+    { s: "A", j: "アデニン", e: "Adenine", n: "Bio", t: "chem" },
+    { s: "G", j: "グアニン", e: "Guanine", n: "Bio", t: "chem" },
+    { s: "C", j: "シトシン", e: "Cytosine", n: "Bio", t: "chem" },
+    { s: "U", j: "ウラシル", e: "Uracil", n: "Bio", t: "chem" },
+    { s: "T", j: "チミン", e: "Thymine", n: "Bio", t: "chem" },
+    { s: "D", j: "重水素", e: "Deuterium", n: "Chem", t: "chem" },
+    { s: "E", j: "エネルギー", e: "Energy", n: "Phys", t: "chem" },
+    { s: "J", j: "結合定数", e: "Coupling Const", n: "Chem", t: "chem" },
+    { s: "L", j: "配位子", e: "Ligand", n: "Chem", t: "chem" },
+    { s: "M", j: "金属", e: "Metal", n: "Chem", t: "chem" },
+    { s: "Q", j: "反応商", e: "Reaction Quotient", n: "Chem", t: "chem" },
+    { s: "R", j: "有機基", e: "R-Group", n: "Org", t: "chem" },
+    { s: "X", j: "ハロゲン", e: "Halogen", n: "Chem", t: "chem" },
+    { s: "Z", j: "原子番号", e: "Atomic Number", n: "Chem", t: "chem" },
+    { s: "T", j: "三重水素", e: "Tritium", n: "Chem", t: "chem" }, // T duplicate handled by search priority
+    { s: "J", j: "ジュール", e: "Joule", n: "Phys", t: "chem" }
+];
+
+// タブ制御
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.content-area').forEach(c => c.classList.remove('active'));
+    
+    document.getElementById('btn-' + tab).classList.add('active');
+    document.getElementById('view-' + tab).classList.add('active');
+}
+
+// =========================================================
+//  LOGIC: CONVERTER (英→元素)
+// =========================================================
+function runConversion() {
+    const rawInput = document.getElementById('inputConv').value;
+    const outputArea = document.getElementById('outConv');
+    
+    if (!rawInput) {
+        outputArea.style.display = 'none';
+        return;
+    }
+
+    const useOrg = document.getElementById('chkOrganic').checked;
+    const useChem = document.getElementById('chkChemistry').checked;
+
+    // 探索用DBの構築 (lowercase key -> data object)
+    let searchDB = {};
+    
+    // 優先度順に登録 (上書きを防ぐため、存在チェックを入れる)
+    // 優先度: Standard > Organic > Chemistry (ただし2文字マッチが優先されるロジックなので、AcなどはStdが勝つ)
+    
+    masterDB.forEach(item => {
+        const k = item.s.toLowerCase();
+        
+        // 追加条件
+        let shouldAdd = false;
+        if (item.t === 'std') shouldAdd = true;
+        else if (item.t === 'org' && useOrg) shouldAdd = true;
+        else if (item.t === 'chem' && useChem) shouldAdd = true;
+
+        if (shouldAdd) {
+            // キーがまだない場合、登録。
+            // 重複キー(Ac, Tなど)がある場合、基本はStd優先。
+            // しかし、Ac(Acetyl)を有効にしたい場合もあるが、Actiniumと同じSymbolなので
+            // 変換結果としてはどちらが出ても「Ac」になる。
+            // 日本語表記を変えたい場合はここで制御が必要だが、今回は最初に見つかったものを採用(Std優先)
+            if (!searchDB[k]) {
+                searchDB[k] = item;
+            }
+        }
+    });
+
+    const resultPath = solvePuzzle(rawInput, searchDB);
+    displayConvResult(resultPath);
+}
+
+function solvePuzzle(text, db) {
+    const cleanText = text.replace(/\s+/g, '');
+    const len = cleanText.length;
+    const memo = new Array(len + 1).fill(undefined);
+
+    function search(idx) {
+        if (idx === len) return [];
+        if (memo[idx] !== undefined) return memo[idx];
+
+        let candidates = [];
+        // 2 chars
+        if (idx + 1 < len) {
+            const s2 = cleanText.substr(idx, 2).toLowerCase();
+            if (db[s2]) candidates.push({ len: 2, data: db[s2] });
+        }
+        // 1 char
+        const s1 = cleanText.substr(idx, 1).toLowerCase();
+        if (db[s1]) candidates.push({ len: 1, data: db[s1] });
+
+        for (let cand of candidates) {
+            const res = search(idx + cand.len);
+            if (res !== null) {
+                const path = [cand].concat(res);
+                memo[idx] = path;
+                return path;
+            }
+        }
+        memo[idx] = null;
+        return null;
+    }
+
+    const fullMatch = search(0);
+    if (fullMatch) return fullMatch.map(i => ({ found: true, data: i.data }));
+
+    // Fallback
+    return greedyFallback(cleanText, db);
+}
+
+function greedyFallback(text, db) {
+    let i = 0;
+    const res = [];
+    while (i < text.length) {
+        if (i + 1 < text.length) {
+            const s2 = text.substr(i, 2).toLowerCase();
+            if (db[s2]) {
+                res.push({ found: true, data: db[s2] });
+                i += 2;
+                continue;
+            }
+        }
+        const s1 = text.substr(i, 1).toLowerCase();
+        if (db[s1]) {
+            res.push({ found: true, data: db[s1] });
+            i += 1;
+            continue;
+        }
+        res.push({ found: false, text: text[i] });
+        i++;
+    }
+    return res;
+}
+
+function displayConvResult(path) {
+    const out = document.getElementById('outConv');
+    out.style.display = 'block';
+
+    const engArr = [], jpArr = [], symArr = [];
+    const cardArea = document.getElementById('convCards');
+    cardArea.innerHTML = "";
+
+    path.forEach(p => {
+        const div = document.createElement('div');
+        if (p.found) {
+            const d = p.data;
+            engArr.push(d.e);
+            jpArr.push(d.j);
+            symArr.push(d.s);
+            
+            div.className = `element-card ${d.t}`;
+            div.innerHTML = `<span class="ec-num">${d.n}</span><span class="ec-sym">${d.s}</span><span class="ec-jp">${d.j}</span>`;
+        } else {
+            engArr.push(p.text);
+            jpArr.push(p.text);
+            symArr.push(p.text);
+            
+            div.className = `element-card error`;
+            div.innerHTML = `<span class="ec-num">?</span><span class="ec-sym">${p.text}</span><span class="ec-jp"></span>`;
+        }
+        cardArea.appendChild(div);
+    });
+
+    document.getElementById('resEnglish').textContent = engArr.join(" ");
+    document.getElementById('resJapanese').textContent = jpArr.join("");
+    document.getElementById('resSymbol').textContent = symArr.join(" ");
+}
+
+// =========================================================
+//  LOGIC: DECODER (和→英)
+// =========================================================
+function runDecode() {
+    const rawInput = document.getElementById('inputDec').value;
+    const out = document.getElementById('outDec');
+    if (!rawInput) {
+        out.style.display = 'none';
+        return;
+    }
+
+    // 逆引き用マップ作成 (毎回作成するのは非効率だが、データ量は少ないのでOK)
+    // 日本語名 -> Symbol
+    let revMap = {};
+    masterDB.forEach(d => {
+        // キー重複（ウランとウラシル）はキー文字列が違うので問題なし
+        // 同一日本語名がある場合（TとD両方「三重水素」など）は後勝ちになるが、
+        // 復元したいのはSymbolなので、Symbolが同じなら問題ない。
+        revMap[d.j] = d.s;
+    });
+
+    // キーを長さ順（降順）にソート
+    const keys = Object.keys(revMap).sort((a, b) => b.length - a.length);
+
+    // テキスト正規化
+    const text = rawInput.replace(/\s+/g, '');
+    let i = 0;
+    const tokens = [];
+
+    while (i < text.length) {
+        let matched = false;
+        for (let k of keys) {
+            if (text.startsWith(k, i)) {
+                tokens.push({ found: true, s: revMap[k], j: k });
+                i += k.length;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) {
+            tokens.push({ found: false, s: text[i], j: "不明" });
+            i++;
+        }
+    }
+
+    out.style.display = 'block';
+    
+    // 結果表示
+    document.getElementById('resDecoded').textContent = tokens.map(t => t.s).join("");
+    
+    const detailDiv = document.getElementById('resDetail');
+    detailDiv.innerHTML = tokens.map(t => {
+        if (t.found) return `<span class="token">${t.s} (${t.j})</span>`;
+        return `<span class="token" style="background:#c0392b;">${t.s}</span>`;
+    }).join("");
+}
+
+function clearDecoder() {
+    document.getElementById('inputDec').value = "";
+    document.getElementById('outDec').style.display = 'none';
+}
+
+</script>
+</body>
+</html>

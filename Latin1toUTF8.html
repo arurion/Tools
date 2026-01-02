@@ -1,0 +1,129 @@
+<!doctype html>
+
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Latin-1 を UTF-8 として誤解釈した表示・コピー</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Kaku Gothic ProN',Meiryo, sans-serif}
+    body{max-width:900px;margin:32px auto;padding:24px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
+    h1{font-size:1.1rem;margin-bottom:8px}
+    label{display:block;margin-top:12px;font-size:.95rem}
+    textarea{width:100%;min-height:80px;padding:10px;margin-top:8px;border:1px solid #ddd;border-radius:6px;font-family:monospace;font-size:0.95rem;box-sizing:border-box}
+    .row{display:flex;gap:8px;margin-top:8px}
+    button{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fafafa;cursor:pointer}
+    button:active{transform:translateY(1px)}
+    .note{margin-top:10px;color:#444;font-size:.85rem}
+    .small{font-size:.85rem;color:#666}
+    .meta{margin-top:12px;color:#666;font-size:.85rem}
+    .hex{margin-top:8px;font-family:monospace;background:#f7f7f7;padding:8px;border-radius:6px;border:1px solid #eee;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <h1>Latin-1 (ISO-8859-1) を UTF-8 として解釈した表示ツール</h1><label for="input">入力（Latin-1 として扱いたい文字列 — 各文字は 0x00–0xFF）</label>
+
+  <textarea id="input" placeholder="例: CafÃ©">CafÃ©</textarea>  <div class="row">
+    <button id="convert">変換</button>
+    <button id="autoToggle">リアルタイム: ON</button>
+    <button id="sample">サンプル挿入</button>
+  </div><label for="output">表示（入力のバイト列を UTF-8 としてデコードした結果）</label>
+
+  <textarea id="output" readonly placeholder="ここにデコード結果が表示されます"></textarea>  <div class="row">
+    <button id="copy">コピー</button>
+    <button id="select">全選択</button>
+    <button id="showHex">バイト列を表示</button>
+  </div>  <div id="hexArea" class="hex" style="display:none;"></div>  <p class="note">仕組み：入力文字の各コードポイント（0–255）をそのままバイトとみなし、UTF-8 として TextDecoder でデコードします。無効な UTF-8 シーケンスは置換文字 (�, U+FFFD) に変換されます。</p>  <script>
+    // Latin-1 の文字をバイト列 (Uint8Array) に変換
+    function latin1ToBytes(s){
+      const bytes = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++){
+        // JavaScript の文字コードは UTF-16 のコードユニット。0-255 の範囲に収める
+        bytes[i] = s.charCodeAt(i) & 0xFF;
+      }
+      return bytes;
+    }
+
+    // バイト列を UTF-8 としてデコード
+    function decodeBytesAsUtf8(bytes){
+      try{
+        const decoder = new TextDecoder('utf-8', {fatal:false});
+        return decoder.decode(bytes);
+      }catch(e){
+        // 古いブラウザ等で TextDecoder がない場合のフォールバック
+        // 単純に String.fromCharCode を使って代替（ただし正しくない）
+        let s = '';
+        for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+        return s;
+      }
+    }
+
+    function bytesToHexString(bytes){
+      const parts = [];
+      for (let i = 0; i < bytes.length; i++){
+        const h = bytes[i].toString(16).toUpperCase().padStart(2,'0');
+        parts.push('0x' + h);
+      }
+      return parts.join(' ');
+    }
+
+    const input = document.getElementById('input');
+    const output = document.getElementById('output');
+    const convertBtn = document.getElementById('convert');
+    const copyBtn = document.getElementById('copy');
+    const selectBtn = document.getElementById('select');
+    const autoToggle = document.getElementById('autoToggle');
+    const sampleBtn = document.getElementById('sample');
+    const showHexBtn = document.getElementById('showHex');
+    const hexArea = document.getElementById('hexArea');
+
+    let auto = true;
+
+    function convert(){
+      const src = input.value || '';
+      const bytes = latin1ToBytes(src);
+      output.value = decodeBytesAsUtf8(bytes);
+      hexArea.textContent = bytesToHexString(bytes);
+    }
+
+    convertBtn.addEventListener('click', convert);
+    input.addEventListener('input', ()=>{ if (auto) convert(); });
+
+    autoToggle.addEventListener('click', ()=>{
+      auto = !auto;
+      autoToggle.textContent = 'リアルタイム: ' + (auto? 'ON' : 'OFF');
+    });
+
+    sampleBtn.addEventListener('click', ()=>{
+      // 'CafÃ©' は本来 'Café' が Latin-1 を UTF-8 と誤解釈された典型例
+      input.value = 'CafÃ© — OlÃ¡, como estÃ¡s? — ããã«ã¡ã¯';
+      convert();
+    });
+
+    showHexBtn.addEventListener('click', ()=>{
+      if (hexArea.style.display === 'none'){
+        hexArea.style.display = 'block';
+        showHexBtn.textContent = 'バイト列を非表示';
+      }else{
+        hexArea.style.display = 'none';
+        showHexBtn.textContent = 'バイト列を表示';
+      }
+    });
+
+    copyBtn.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(output.value);
+        copyBtn.textContent = 'コピーしました';
+        setTimeout(()=>copyBtn.textContent = 'コピー',1200);
+      }catch(e){
+        output.select();
+        try{ document.execCommand('copy'); copyBtn.textContent = 'コピーしました'; setTimeout(()=>copyBtn.textContent = 'コピー',1200); }catch(_){ alert('クリップボードに書き込めませんでした。手動で選択してコピーしてください。'); }
+      }
+    });
+
+    selectBtn.addEventListener('click', ()=>{ output.select(); });
+
+    // 初期変換
+    convert();
+  </script></body>
+</html>
