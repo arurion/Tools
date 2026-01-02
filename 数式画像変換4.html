@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>数式イメージジェネレーター v9.10 (Ultimate Fix)</title>
+    
+    <!-- 
+      重要: coi-serviceworker.js は必ずHTMLと同じ場所に配置してください。
+      これがないと高画質(MP4/WebM)モードで SharedArrayBuffer エラーになります。
+    -->
+    <script src="coi-serviceworker.js"></script>
+    
+    <!-- GIF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    
+    <!-- UPNG.js + Pako -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/upng-js/2.1.0/UPNG.min.js"></script>
+
+    <!-- JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <!-- FFmpeg Loader (ESM) -->
+    <script type="module">
+        import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+        import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
+        window.FFmpeg = FFmpeg;
+        window.FFmpegUtil = { fetchFile, toBlobURL };
+        window.dispatchEvent(new Event('ffmpeg-ready'));
+    </script>
+
+    <style>
+        :root { --bg-color: #121212; --panel-color: #1e1e1e; --accent-color: #03dac6; --warn-color: #ff9800; --text-color: #e0e0e0; --input-bg: #2c2c2c; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: sans-serif; background: var(--bg-color); color: var(--text-color); margin:0; padding:20px; display:flex; justify-content:center; min-height:100vh; }
+        .container { background: var(--panel-color); padding:1.5rem; border-radius:12px; width:100%; max-width:1200px; display:flex; flex-direction:column; gap:1.5rem; }
+        h1 { margin:0; font-size:1.4rem; text-align:center; color:var(--accent-color); }
+        .main-layout { display:flex; gap:20px; align-items:flex-start; }
+        .controls-area { flex:1; min-width:320px; display:flex; flex-direction:column; gap:15px; }
+        .preview-area { flex:1.5; display:flex; flex-direction:column; align-items:center; position:sticky; top:10px; }
+        @media (max-width:900px) { .main-layout { flex-direction:column-reverse; } .preview-area { position:static; } }
+        label { font-size:0.8rem; font-weight:bold; color:#a0a0a0; display:block; margin-bottom:6px; }
+        input, select, textarea { width:100%; padding:12px; font-size:1rem; background:var(--input-bg); border:1px solid #333; color:#fff; border-radius:8px; font-family:monospace; }
+        button { width:100%; padding:14px; font-weight:bold; font-size:1rem; border:none; border-radius:8px; cursor:pointer; background:var(--accent-color); }
+        button:disabled { background:#555; color:#888; cursor:not-allowed; }
+        .canvas-wrapper { background:#000; border:1px solid #333; display:flex; justify-content:center; align-items:center; aspect-ratio:1/1; max-height:70vh; border-radius:8px; }
+        canvas { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
+        .warn-msg { color:var(--warn-color); background:rgba(255,152,0,0.1); padding:10px; border:1px solid var(--warn-color); border-radius:4px; font-size:0.9rem; display:none; }
+        .error-msg { color:#ff5252; background:rgba(255,82,82,0.1); padding:10px; border:1px solid #ff5252; border-radius:4px; display:none; }
+        .progress-overlay { margin-top:10px; background:#333; height:24px; border-radius:12px; overflow:hidden; position:relative; display:none; }
+        .progress-bar { height:100%; background:#03dac6; width:0%; transition:width 0.1s; }
+        .progress-text { position:absolute; top:0; left:0; width:100%; height:100%; text-align:center; line-height:24px; font-size:0.8rem; color:#000; font-weight:bold; }
+        .row { display:flex; gap:10px; } .col { flex:1; }
+        details { background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; }
+        summary { cursor:pointer; color:var(--accent-color); font-weight:bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>数式イメージジェネレーター v9.10</h1>
+    
+    <div id="coi-warning" class="warn-msg">
+        ⚠️ <strong>機能制限モード:</strong> 高画質動画(MP4/WebM)の生成には <code>coi-serviceworker.js</code> が必要です。<br>
+        現在はGIF/APNG/連番画像のみ書き出し可能です。
+    </div>
+
+    <div class="main-layout">
+        <!-- Controls -->
+        <div class="controls-area">
+            <div class="row">
+                <div class="col">
+                    <label>プリセット</label>
+                    <select id="preset" onchange="applyPreset(this.value)">
+                        <option value="xor_fractal" selected>XOR Fractal</option>
+                        <option value="plasma">Plasma Waves</option>
+                        <option value="retro">Retro TV</option>
+                        <option value="mandelbrot">Mandelbrot</option>
+                        <option value="noise">Noise</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label>解像度</label>
+                    <select id="res-preset">
+                        <option value="256">256px</option>
+                        <option value="512" selected>512px</option>
+                        <option value="800">800px</option>
+                        <option value="1080p">1080p</option>
+                        <option value="custom">自由指定</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row" id="custom-res-row" style="display:none;">
+                <div class="col"><input type="number" id="res-w" value="512" placeholder="W"></div>
+                <div class="col"><input type="number" id="res-h" value="512" placeholder="H"></div>
+            </div>
+
+            <div>
+                <label>数式 (JavaScript)</label>
+                <textarea id="formula" spellcheck="false"></textarea>
+                <div id="error-msg" class="error-msg"></div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <label>カラーモード</label>
+                    <select id="color-mode">
+                        <option value="rgb">RGB</option>
+                        <option value="hsv">HSV</option>
+                        <option value="ycbcr">YCbCr</option>
+                        <option value="grayscale">Gray</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label>時間倍率</label>
+                    <input type="number" id="time-scale" value="1.0" step="0.1">
+                </div>
+            </div>
+
+            <button id="btn-play">再生</button>
+
+            <div style="display:flex; gap:5px; margin-top:5px;">
+                <button onclick="saveSnapshot('png')" style="background:#444; font-size:0.8rem; padding:8px;">PNG保存</button>
+                <button onclick="saveSnapshot('webp')" style="background:#444; font-size:0.8rem; padding:8px;">WebP保存</button>
+            </div>
+
+            <div style="border-top:1px solid #333; padding-top:15px; margin-top:10px;">
+                <label style="color:var(--accent-color); margin-bottom:10px;">動画書き出し</label>
+                <div class="row">
+                    <div class="col">
+                        <select id="rec-format">
+                            <option value="mp4">MP4 (H.264)</option>
+                            <option value="webm">WebM (VP9)</option>
+                            <option value="gif">GIF</option>
+                            <option value="apng">APNG</option>
+                            <option value="seq_png">連番PNG</option>
+                        </select>
+                    </div>
+                    <div class="col"><input type="number" id="rec-fps" value="30" placeholder="FPS"></div>
+                    <div class="col"><input type="number" id="rec-duration" value="3" placeholder="秒"></div>
+                </div>
+
+                <details style="margin-top:10px;">
+                    <summary>🛠 高度な設定</summary>
+                    <div id="opt-video" style="margin-top:10px;">
+                        <label>ピクセル形式</label>
+                        <select id="video-pix-fmt" style="margin-bottom:10px;">
+                            <option value="yuv420p">YUV420 (互換性)</option>
+                            <option value="yuv444p">YUV444 (高画質)</option>
+                            <option value="rgb">RGB (可逆圧縮)</option>
+                        </select>
+                        <label>品質 (CRF 0=Lossless)</label>
+                        <input type="range" id="video-crf" min="0" max="51" value="23" oninput="this.nextElementSibling.innerText=this.value">
+                        <span style="float:right; color:#aaa;">23</span>
+                    </div>
+                    <div id="opt-gif" style="display:none; margin-top:10px;">
+                        <label>GIF品質 (1=最高)</label>
+                        <input type="number" id="gif-quality" value="10" min="1" max="30">
+                    </div>
+                </details>
+
+                <button id="btn-record" style="margin-top:15px;">書き出し開始</button>
+                <div id="progress-container" class="progress-overlay">
+                    <div id="progress-bar" class="progress-bar"></div>
+                    <div id="progress-text" class="progress-text">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="preview-area">
+            <div class="canvas-wrapper">
+                <canvas id="canvas" width="512" height="512"></canvas>
+            </div>
+            <div style="width:100%; display:flex; justify-content:space-between; margin-top:5px; color:#888; font-size:0.8rem;">
+                <span id="status-text">Ready</span>
+                <span id="fps-display">0 FPS</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="worker-code" type="javascript/worker">
+    self.onmessage = function(e) {
+        const { formula, width, height, t, timeScale, colorMode, frameId } = e.data;
+        try {
+            const mathHeader = `const {sin,cos,tan,abs,pow,sqrt,log,exp,min,max,floor,ceil,round,random,PI,atan2,hypot}=Math; const int=Math.floor;`;
+            let body = formula.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+            if (!body.includes('return') && !body.includes('=>') && !body.includes(';')) body = 'return ' + body + ';';
+            if (body.trim().startsWith('((')) body = 'return ' + body + ';';
+            
+            const userFunc = new Function('x','y','t','w','h','u','v','i', mathHeader + '\n' + body);
+            const buffer = new Uint8ClampedArray(width * height * 4);
+            const t_sc = t * timeScale;
+            
+            let idx = 0;
+            for (let y = 0; y < height; y++) {
+                const v = y / height;
+                for (let x = 0; x < width; x++) {
+                    const val = userFunc(x, y, t_sc, width, height, x/width, v, y*width+x);
+                    let r=0,g=0,b=0;
+                    if (colorMode === 'rgb') {
+                        if (Array.isArray(val)) { r=val[0]; g=val[1]; b=val[2]; } else { r=val; g=val; b=val; }
+                    } else if (colorMode === 'hsv') {
+                        let h=Array.isArray(val)?val[0]:0, s=Array.isArray(val)?val[1]:0, v_val=Array.isArray(val)?val[2]:val;
+                        let i_h=Math.floor(h*6), f=h*6-i_h, p=v_val*(1-s), q=v_val*(1-f*s), t_h=v_val*(1-(1-f)*s);
+                        let rr,gg,bb;
+                        switch(i_h%6){case 0:rr=v_val;gg=t_h;bb=p;break;case 1:rr=q;gg=v_val;bb=p;break;case 2:rr=p;gg=v_val;bb=t_h;break;case 3:rr=p;gg=q;bb=v_val;break;case 4:rr=t_h;gg=p;bb=v_val;break;case 5:rr=v_val;gg=p;bb=q;break;}
+                        r=rr*255; g=gg*255; b=bb*255;
+                    } else if (colorMode === 'ycbcr') {
+                         let Y=Array.isArray(val)?val[0]:val, Cb=Array.isArray(val)?val[1]:128, Cr=Array.isArray(val)?val[2]:128;
+                         r=Y+1.402*(Cr-128); g=Y-0.344*(Cb-128)-0.714*(Cr-128); b=Y+1.772*(Cb-128);
+                    } else { r=g=b= (Array.isArray(val)?val[0]:val); }
+                    buffer[idx++] = r; buffer[idx++] = g; buffer[idx++] = b; buffer[idx++] = 255;
+                }
+            }
+            self.postMessage({ status: 'success', buffer: buffer, frameId: frameId }, [buffer.buffer]);
+        } catch (e) { self.postMessage({ status: 'error', message: e.toString() }); }
+    };
+</script>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const workerBlob = new Blob([document.getElementById('worker-code').textContent], {type: "text/javascript"});
+    let worker = null, ffmpeg = null;
+    let isPlaying = false, isRecording = false;
+    let startTime = 0, frameId = 0, fpsFrameCount = 0, lastFpsTime = 0;
+    let onFrameRendered = null;
+
+    // Presets
+    const presets = {
+        'xor_fractal': { mode: 'rgb', code: `(() => {\n    const val = (x ^ y);\n    return [(val+t*50)%256, (val+t*20)%256, val%256];\n})()` },
+        'plasma': { mode: 'rgb', code: `(() => {\n    const cx=u-0.5, cy=v-0.5, d=sqrt(cx*cx+cy*cy), a=atan2(cy, cx);\n    return [(sin(d*20-t*2)+1)*127, (sin(a*5+t)+1)*127, (cos(u*10+t)+1)*127];\n})()` },
+        'retro': { mode: 'ycbcr', code: `(() => {\n    const s=sin((v+t*0.1)*400), n=random();\n    return [(s+1)*40+n*60, (sin(t)+1)*127, (cos(t)+1)*127];\n})()` },
+        'mandelbrot': { mode: 'hsv', code: `(() => {\n    const z=1.0+sin(t*0.5)*0.5, cx=(u-0.5)*3/z-0.5, cy=(v-0.5)*3/z;\n    let zx=0,zy=0,i=0;\n    while(zx*zx+zy*zy<4 && i<30) { const t=zx*zx-zy*zy+cx; zy=2*zx*zy+cy; zx=t; i++; }\n    return i==30?[0,0,0]:[(i/30+t*0.1)%1,0.8,1];\n})()` },
+        'noise': { mode: 'grayscale', code: `random()*255` }
+    };
+
+    function applyPreset(val) {
+        if(presets[val]) {
+            document.getElementById('formula').value = presets[val].code;
+            document.getElementById('color-mode').value = presets[val].mode;
+        }
+    }
+
+    // Worker Init
+    function initWorker() {
+        if(worker) worker.terminate();
+        worker = new Worker(URL.createObjectURL(workerBlob));
+        worker.onmessage = e => {
+            if(e.data.status === 'success') {
+                const { buffer } = e.data;
+                if(buffer.byteLength === canvas.width*canvas.height*4) {
+                    ctx.putImageData(new ImageData(buffer, canvas.width, canvas.height), 0, 0);
+                    if(isPlaying && !isRecording) {
+                        fpsFrameCount++;
+                        const now = performance.now();
+                        if(now-lastFpsTime>=1000) { document.getElementById('fps-display').textContent=`${Math.round(fpsFrameCount*1000/(now-lastFpsTime))} FPS`; lastFpsTime=now; fpsFrameCount=0; }
+                    }
+                    if(isRecording && onFrameRendered) onFrameRendered(buffer);
+                }
+                if(isPlaying && !isRecording) requestAnimationFrame(() => sendFrame((performance.now()-startTime)/1000));
+            } else {
+                document.getElementById('error-msg').textContent = e.data.message;
+                document.getElementById('error-msg').style.display = 'block';
+                isPlaying=false; updateUI();
+            }
+        };
+    }
+
+    function sendFrame(t) {
+        let code = document.getElementById('formula').value;
+        code = code.replace(/\^/g, '**').replace(/(\d)\s*([a-zA-Z(])/g, '$1 * $2');
+        worker.postMessage({
+            formula: code, width: canvas.width, height: canvas.height, t: t,
+            timeScale: parseFloat(document.getElementById('time-scale').value)||1.0,
+            colorMode: document.getElementById('color-mode').value, frameId: ++frameId
+        });
+    }
+
+    function togglePlay() {
+        isPlaying = !isPlaying;
+        if(isPlaying) {
+            document.getElementById('error-msg').style.display='none';
+            startTime = performance.now(); lastFpsTime = performance.now(); fpsFrameCount = 0;
+            sendFrame(0);
+        }
+        updateUI();
+    }
+
+    async function loadFFmpeg() {
+        if(!window.FFmpeg) throw new Error("FFmpeg script not loaded.");
+        document.getElementById('status-text').textContent = "Loading FFmpeg...";
+        
+        ffmpeg = new window.FFmpeg();
+        const base = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm';
+        const ffmpegBase = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm';
+
+        // --- ここが修正の肝: Workerスクリプトを自前でFetchしてパスを書き換えてからBlob化する ---
+        const workerResp = await fetch(`${ffmpegBase}/worker.js`);
+        let workerText = await workerResp.text();
+        // 相対パス imports を 絶対パス(CDN)に置換
+        workerText = workerText.replace(/from\s+['"]\.\/(.*?)['"]/g, `from '${ffmpegBase}/$1'`);
+        const workerBlobURL = URL.createObjectURL(new Blob([workerText], {type: 'text/javascript'}));
+
+        await ffmpeg.load({
+            coreURL: await window.FFmpegUtil.toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await window.FFmpegUtil.toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+            workerURL: workerBlobURL // 修正済みのWorker Blobを指定
+        });
+        document.getElementById('status-text').textContent = "FFmpeg Ready";
+    }
+
+    async function startRender() {
+        if(isRecording) return;
+        const fmt = document.getElementById('rec-format').value;
+        const fps = parseInt(document.getElementById('rec-fps').value)||30;
+        const dur = parseFloat(document.getElementById('rec-duration').value)||3;
+        
+        if((fmt==='mp4'||fmt==='webm')) {
+            if(!window.crossOriginIsolated) {
+                alert("この環境ではMP4/WebMは使用できません (COIエラー)。GIFを使用してください。");
+                return;
+            }
+            if(!ffmpeg) await loadFFmpeg();
+        }
+
+        isRecording=true; isPlaying=false; updateUI(); document.getElementById('error-msg').style.display='none';
+        const frames = [];
+        const total = Math.ceil(dur*fps);
+
+        for(let i=0; i<total; i++) {
+            setProgress((i/total)*50, `Rendering ${i+1}/${total}`);
+            await new Promise(r => { onFrameRendered = b => { frames.push(new Uint8Array(b)); r(); }; sendFrame(i/fps); });
+        }
+        onFrameRendered = null;
+
+        setProgress(50, `Encoding ${fmt}...`);
+        try {
+            if(fmt==='mp4'||fmt==='webm') {
+                const pix = document.getElementById('video-pix-fmt').value;
+                const crf = document.getElementById('video-crf').value;
+                for(let i=0; i<frames.length; i++) await ffmpeg.writeFile(`f${i}.png`, frames[i]);
+                
+                let args = ['-framerate', String(fps), '-i', 'f%d.png'];
+                if(fmt==='mp4') {
+                    if(pix==='rgb') args.push('-c:v','libx264rgb','-crf','0');
+                    else args.push('-c:v','libx264','-pix_fmt',pix,'-crf',crf);
+                    args.push('-preset','medium');
+                } else {
+                    args.push('-c:v','libvpx-vp9','-b:v','0','-crf',crf);
+                    if(pix==='rgb') args.push('-pix_fmt','gbrp','-lossless','1');
+                    else args.push('-pix_fmt',pix);
+                }
+                args.push(`out.${fmt}`);
+                await ffmpeg.exec(args);
+                const d = await ffmpeg.readFile(`out.${fmt}`);
+                download(new Blob([d.buffer]), fmt);
+                await ffmpeg.deleteFile(`out.${fmt}`);
+                for(let i=0; i<frames.length; i++) await ffmpeg.deleteFile(`f${i}.png`);
+            } else if(fmt==='gif') {
+                const gif = new GIF({workers:2, quality:10, width:canvas.width, height:canvas.height, workerScript: URL.createObjectURL(await (await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js')).blob())});
+                frames.forEach(f => gif.addFrame(new ImageData(new Uint8ClampedArray(f), canvas.width, canvas.height), {delay:1000/fps}));
+                gif.on('finished', b => download(b,'gif')); gif.render();
+            } else if(fmt==='apng') {
+                const b = new Blob([UPNG.encode(frames.map(f=>f.buffer), canvas.width, canvas.height, 0, new Array(frames.length).fill(1000/fps))], {type:'image/png'});
+                download(b,'png');
+            } else {
+                const zip = new JSZip();
+                frames.forEach((f,i) => {
+                    const c=document.createElement('canvas');c.width=canvas.width;c.height=canvas.height;
+                    c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(f),canvas.width,canvas.height),0,0);
+                    zip.file(`${i}.png`, new Promise(r=>c.toBlob(r)));
+                });
+                download(await zip.generateAsync({type:"blob"}),'zip');
+            }
+        } catch(e) { document.getElementById('error-msg').textContent=e.message; document.getElementById('error-msg').style.display='block'; }
+        
+        setProgress(-1); isRecording=false; updateUI();
+    }
+
+    function saveSnapshot(ext) { const a=document.createElement('a'); a.href=canvas.toDataURL(`image/${ext}`); a.download=`snap.${ext}`; a.click(); }
+    function download(b,e) { const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`render.${e}`; a.click(); }
+    function updateUI() { 
+        document.getElementById('btn-play').innerText = isPlaying?'停止':'再生';
+        document.getElementById('btn-record').innerText = isRecording?'処理中...':'書き出し開始';
+        document.getElementById('btn-record').disabled = isRecording;
+    }
+    function setProgress(p,t) { 
+        const el=document.getElementById('progress-container'); 
+        if(p<0){el.style.display='none';return;} 
+        el.style.display='block'; document.getElementById('progress-bar').style.width=p+'%'; document.getElementById('progress-text').innerText=t;
+    }
+    
+    // Initialization
+    applyPreset('xor_fractal'); initWorker();
+    if(!window.crossOriginIsolated) {
+        document.getElementById('coi-warning').style.display='block';
+        ['mp4','webm'].forEach(v => document.querySelector(`option[value="${v}"]`).disabled=true);
+        document.getElementById('rec-format').value='gif';
+        document.getElementById('opt-video').style.display='none'; document.getElementById('opt-gif').style.display='block';
+    }
+    document.getElementById('rec-format').addEventListener('change', e=>{
+        document.getElementById('opt-video').style.display = (e.target.value==='mp4'||e.target.value==='webm')?'block':'none';
+        document.getElementById('opt-gif').style.display = (e.target.value==='gif')?'block':'none';
+    });
+    // Resolution Change
+    document.getElementById('res-preset').addEventListener('change', e=>{
+        if(e.target.value==='custom') document.getElementById('custom-res-row').style.display='flex';
+        else { document.getElementById('custom-res-row').style.display='none'; let s=e.target.value==='1080p'?1080:parseInt(e.target.value); canvas.width=canvas.height=(e.target.value==='1080p'||e.target.value==='instagram')?s:s; if(e.target.value==='1080p')canvas.width=1920; sendFrame(0); }
+    });
+    document.getElementById('res-w').addEventListener('change', e=>{canvas.width=e.target.value;sendFrame(0);});
+    document.getElementById('res-h').addEventListener('change', e=>{canvas.height=e.target.value;sendFrame(0);});
+    document.getElementById('btn-play').addEventListener('click', togglePlay);
+    document.getElementById('btn-record').addEventListener('click', startRender);
+    sendFrame(0);
+</script>
+</body>
+</html>
