@@ -172,20 +172,23 @@
                         <option value="xor_fractal" selected>XOR Fractal</option>
                         <option value="plasma">Plasma Waves</option>
                         <option value="retro">Retro TV</option>
-                        <option value="mandelbrot">Mandelbrot</option>
-                        <option value="noise">Noise</option>
+                        <option value="spiral">Hypnotic Spiral</option>
+                        <option value="mandelbrot">Mandelbrot Set</option>
+                        <option value="noise">Noise Static</option>
                     </select>
                 </div>
                 <div class="col">
                     <label>解像度</label>
                     <div class="res-container">
+                        <!-- 変更箇所: 解像度プリセット -->
                         <select id="res-preset">
-                            <option value="custom">自由</option>
-                            <option value="256">256px</option>
-                            <option value="512" selected>512px</option>
-                            <option value="800">800px</option>
-                            <option value="1080p">1080p</option>
-                            <option value="instagram">1:1 (IG)</option>
+                         <option value="custom">Custom (自由)</option>
+                         <option value="128">128 x 128 (Icon)</option>
+                         <option value="256" selected>256 x 256 (Default)</option>
+                         <option value="512">512 x 512 (HQ)</option>
+                         <option value="800">800 x 800</option>
+                         <option value="1080p">1920 x 1080 (FHD)</option>
+                          <option value="instagram">1080 x 1080 (IG)</option>
                         </select>
                     </div>
                 </div>
@@ -477,13 +480,32 @@
     let ffmpeg = null;
     let isFFmpegAvailable = false;
 
-    // --- Presets ---
+// --- 変更箇所: Presets 定義 ---
     const presets = {
-        'xor_fractal': { mode: 'rgb', code: `(() => {\n    // XOR Fractal\n    const val = (x ^ y);\n    return [(val+t*50)%256, (val+t*20)%256, val%256];\n})()` },
-        'plasma': { mode: 'rgb', code: `(() => {\n    // Plasma\n    const cx=u-0.5, cy=v-0.5;\n    const d=sqrt(cx*cx+cy*cy);\n    const a=atan2(cy, cx);\n    const r=(sin(d*20-t*2)+1)*127;\n    const g=(sin(a*5+t)+1)*127;\n    const b=(cos(u*10+t)+1)*127;\n    return [r, g, b];\n})()` },
-        'retro': { mode: 'ycbcr', code: `(() => {\n    // Retro TV (YCbCr)\n    const s=sin((v+t*0.1)*400);\n    const n=random();\n    const Y=(s+1)*40+n*60;\n    return [Y, (sin(t)+1)*127, (cos(t)+1)*127];\n})()` },
-        'mandelbrot': { mode: 'hsv', code: `(() => {\n    // Mandelbrot\n    const z=1.0+sin(t*0.5)*0.5;\n    const cx=(u-0.5)*3/z-0.5, cy=(v-0.5)*3/z;\n    let zx=0,zy=0,i=0;\n    while(zx*zx+zy*zy<4 && i<30) {\n        const t=zx*zx-zy*zy+cx; zy=2*zx*zy+cy; zx=t; i++;\n    }\n    return i==30?[0,0,0]:[(i/30+t*0.1)%1,0.8,1];\n})()` },
-        'noise': { mode: 'grayscale', code: `random()*255` }
+        'xor_fractal': { 
+            mode: 'rgb', 
+            code: `(() => {\n    // XOR Fractal\n    // x, y座標のビット演算で模様を作る\n    const val = (x ^ y);\n    return [(val + t * 50) % 256, (val + t * 20) % 256, val % 256];\n})()` 
+        },
+        'plasma': { 
+            mode: 'rgb', 
+            code: `(() => {\n    // Plasma Waves\n    // 複数の波を合成して滑らかな模様を作る\n    const cx = u - 0.5, cy = v - 0.5;\n    const dist = sqrt(cx * cx + cy * cy);\n    const angle = atan2(cy, cx);\n    \n    const r = (sin(dist * 20 - t * 2) + 1) * 127;\n    const g = (sin(angle * 5 + t) + 1) * 127;\n    const b = (cos(u * 10 + t) + sin(v * 10) + 2) * 64;\n    return [r, g, b];\n})()` 
+        },
+        'retro': { 
+            mode: 'ycbcr', 
+            code: `(() => {\n    // Retro TV (YCbCr)\n    // 走査線(sin波)と砂嵐(random)でレトロ感を出す\n    const scanline = sin((v + t * 0.1) * 400);\n    const noise = random();\n    \n    // Y(輝度), Cb, Cr(色差)\n    const Y = (scanline + 1) * 40 + noise * 60;\n    const Cb = (sin(t) + 1) * 127;\n    const Cr = (cos(t) + 1) * 127;\n    return [Y, Cb, Cr];\n})()` 
+        },
+        'spiral': { 
+            mode: 'hsv', 
+            code: `(() => {\n    // Hypnotic Spiral (HSV)\n    // 色相(H)を回転させてサイケデリックな螺旋を作る\n    const cx = u - 0.5, cy = v - 0.5;\n    const r = sqrt(cx * cx + cy * cy);\n    const a = atan2(cy, cx) / (2 * PI);\n    \n    // H: 角度と距離で色相を回す\n    const h = (a + r - t * 0.2) % 1.0;\n    const v_val = (sin(r * 30 - t * 5) + 1) / 2;\n    return [abs(h), 0.8, v_val];\n})()` 
+        },
+        'mandelbrot': { 
+            mode: 'hsv', 
+            code: `(() => {\n    // Mandelbrot Set\n    // 複素数計算によるフラクタル図形\n    const zoom = 1.0 + sin(t * 0.2) * 0.5;\n    const cx = (u - 0.5) * 3 / zoom - 0.5;\n    const cy = (v - 0.5) * 3 / zoom;\n    \n    let zx = 0, zy = 0, i = 0;\n    const max_iter = 30;\n    while(zx * zx + zy * zy < 4 && i < max_iter) {\n        const tmp = zx * zx - zy * zy + cx;\n        zy = 2 * zx * zy + cy;\n        zx = tmp; i++;\n    }\n    return i == max_iter ? [0, 0, 0] : [(i / max_iter + t * 0.1) % 1, 0.8, 1];\n})()` 
+        },
+        'noise': { 
+            mode: 'grayscale', 
+            code: `random() * 255 // Simple Noise` 
+        }
     };
 
     function applyPreset(val) {
