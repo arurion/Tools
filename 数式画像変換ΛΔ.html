@@ -605,6 +605,12 @@
 
         ffmpeg = new FFmpeg();
         
+        // ★★★ これを追加してください！ ★★★
+        ffmpeg.on('log', ({ message }) => {
+            console.log("[FFmpeg Log]:", message);
+        });
+        // ★★★★★★★★★★★★★★★★★★★★
+
         // ローカルパスを指定 (ffmpeg/フォルダ内)
         // 開発環境によってはbaseURLを調整してください
         const baseURL = 'ffmpeg'; 
