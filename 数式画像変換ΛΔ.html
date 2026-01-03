@@ -630,14 +630,33 @@
         const preset = document.getElementById('video-preset').value;
         const pixFmt = document.getElementById('video-pix-fmt').value;
 
+        // ★★★ 修正: 生データをPNGに変換するための作業用キャンバス ★★★
+        const tmpCvs = document.createElement('canvas');
+        tmpCvs.width = w;
+        tmpCvs.height = h;
+        const tCtx = tmpCvs.getContext('2d');
+
         for(let i=0; i<frames.length; i++) {
-            setProgress(50 + (i/frames.length)*20, "Writing frames...");
-            await ffmpeg.writeFile(`f${i}.png`, frames[i]);
+            setProgress(50 + (i/frames.length)*20, `Writing frames ${i+1}/${frames.length}...`);
+            
+            // 1. 生データ(RGBA)を画像データ化
+            const imgData = new ImageData(new Uint8ClampedArray(frames[i]), w, h);
+            tCtx.putImageData(imgData, 0, 0);
+            
+            // 2. PNGとしてBlob化 → ArrayBuffer化
+            const blob = await new Promise(r => tmpCvs.toBlob(r, 'image/png'));
+            const buf = await blob.arrayBuffer();
+            
+            // 3. FFmpegに渡す
+            await ffmpeg.writeFile(`f${i}.png`, new Uint8Array(buf));
         }
 
         setProgress(75, `FFmpeg Encoding...`);
         const outputFilename = `out.${fmt}`;
         let args = ['-framerate', String(fps), '-i', 'f%d.png'];
+        
+        // 偶数化フィルター
+        args.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2');
 
         if (fmt === 'mp4') {
             if (pixFmt === 'rgb') {
@@ -665,10 +684,25 @@
         }
         args.push(outputFilename);
         
-        await ffmpeg.exec(args);
+        // 実行とログ出力
+        console.log("Starting FFmpeg with args:", args);
+        const ret = await ffmpeg.exec(args);
+        console.log("FFmpeg exit code:", ret);
+
+        if (ret !== 0) {
+            throw new Error(`FFmpeg error: Exit code ${ret}. コンソールのログを確認してください。`);
+        }
+
         const data = await ffmpeg.readFile(outputFilename);
+        console.log("Output file size:", data.byteLength, "bytes");
+
+        if (data.byteLength === 0) {
+            throw new Error("生成されたファイルが 0バイト です。");
+        }
+
         download(new Blob([data.buffer], {type: fmt==='mp4'?'video/mp4':'video/webm'}), fmt);
         
+        // お掃除
         for(let i=0; i<frames.length; i++) await ffmpeg.deleteFile(`f${i}.png`);
         await ffmpeg.deleteFile(outputFilename);
     }
