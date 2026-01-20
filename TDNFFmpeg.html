@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FFmpeg.wasm CMD Interface (Quote Support)</title>
+    <title>FFmpeg.wasm CMD Interface v3</title>
     
     <style>
         body { 
@@ -47,7 +47,7 @@
 </head>
 <body>
 
-    <h2>FFmpeg.wasm Executor v2</h2>
+    <h2>FFmpeg.wasm Executor v3</h2>
 
     <div class="box">
         <div>System Status: <span id="system-status">Initializing...</span></div>
@@ -67,7 +67,7 @@
 
     <div class="box">
         <label>3. 出力ファイル名 (Retrieval)</label>
-        <div class="info">※引数で指定したファイル名（スペース可、引用符は不要）</div>
+        <div class="info">※引数で指定したファイル名（ここには引用符不要）</div>
         <input type="text" id="output-filename" value="output file.mp4">
     </div>
 
@@ -113,35 +113,47 @@
         };
 
         // --- シェル風 引数パーサー ---
-        // スペースで区切るが、" " や ' ' の中は維持し、外側の引用符を削除する
         function parseArgs(str) {
             const args = [];
             let current = '';
-            let quote = null; // null, "'", or '"'
-            
+            let quote = null;
             for (let i = 0; i < str.length; i++) {
                 const c = str[i];
                 if (quote) {
-                    if (c === quote) {
-                        quote = null; // 引用終了 (文字には追加しない=引用符削除)
-                    } else {
-                        current += c;
-                    }
+                    if (c === quote) quote = null;
+                    else current += c;
                 } else {
-                    if (c === '"' || c === "'") {
-                        quote = c; // 引用開始
-                    } else if (/\s/.test(c)) {
-                        if (current.length > 0) {
-                            args.push(current);
-                            current = '';
-                        }
-                    } else {
-                        current += c;
-                    }
+                    if (c === '"' || c === "'") quote = c;
+                    else if (/\s/.test(c)) {
+                        if (current.length > 0) { args.push(current); current = ''; }
+                    } else current += c;
                 }
             }
             if (current.length > 0) args.push(current);
             return args;
+        }
+
+        // --- MIMEタイプ判定 (ここを修正) ---
+        function getMimeType(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const map = {
+                'mp4': 'video/mp4', 'm4v': 'video/mp4',
+                'webm': 'video/webm',
+                'mov': 'video/quicktime',
+                'avi': 'video/x-msvideo',
+                'wmv': 'video/x-ms-wmv',
+                'mp3': 'audio/mpeg',
+                'wav': 'audio/wav',
+                'aac': 'audio/aac',
+                'ogg': 'audio/ogg',
+                'flac': 'audio/flac',
+                'm4a': 'audio/mp4',
+                'gif': 'image/gif',
+                'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                'png': 'image/png'
+            };
+            // 知らない形式はバイナリとして扱う(ブラウザが勝手に拡張子を変えなくなる)
+            return map[ext] || 'application/octet-stream';
         }
 
         const init = async () => {
@@ -178,7 +190,7 @@
             els.fileInfo.innerText = `Selected: ${file.name}`;
             els.mappedName.innerText = currentInputName;
             
-            // デフォルト引数セット (ファイル名にスペースがあってもいいようにクォートする例)
+            // デフォルト引数
             const outName = "output file.mp4";
             els.args.value = `-i ${currentInputName} -c copy "${outName}"`;
             els.outName.value = outName;
@@ -190,10 +202,8 @@
             if (!file || !ffmpeg) return;
 
             const argsStr = els.args.value.trim();
-            // 3. 出力ファイル名欄の値を取得 (引用符除去はしない。ユーザーがファイル名そのものを入力する前提)
             let outputFilename = els.outName.value.trim();
-            // もしユーザーがここにも "output.mp4" と書いてしまった場合のために軽く除去
-            outputFilename = outputFilename.replace(/^["']|["']$/g, '');
+            outputFilename = outputFilename.replace(/^["']|["']$/g, ''); // クォート除去
 
             els.btnRun.disabled = true;
             els.result.style.display = 'none';
@@ -203,30 +213,34 @@
                 log(`\n--- Run ---`);
                 await ffmpeg.writeFile(currentInputName, await fetchFile(file));
                 
-                // ★ ここでパーサーを使う
                 const args = parseArgs(argsStr);
-                
-                log(`Parsed Command: [${args.join(', ')}]`); // デバッグ用表示
+                log(`Parsed Command: [${args.join(', ')}]`);
                 
                 await ffmpeg.exec(args);
                 
                 log(`Reading: ${outputFilename}`);
                 const data = await ffmpeg.readFile(outputFilename);
                 
-                const outExt = outputFilename.split('.').pop().toLowerCase();
-                let mime = 'video/mp4';
-                if(outExt==='wav') mime='audio/wav';
-                else if(outExt==='mp3') mime='audio/mpeg';
-                else if(outExt==='png') mime='image/png';
-                
+                // ★ 正しいMIMEタイプでBlobを作る
+                const mime = getMimeType(outputFilename);
                 const url = URL.createObjectURL(new Blob([data.buffer], { type: mime }));
 
                 els.result.style.display = 'block';
                 els.result.innerHTML = `
                     <h3>Done!</h3>
-                    <a href="${url}" download="${outputFilename}">
-                        <button>Download "${outputFilename}"</button>
-                    </a>
+                    <!-- 動画・音声・画像ならプレビュー表示 -->
+                    ${mime.startsWith('video') ? `<video controls src="${url}" style="max-width:100%"></video><br>` : ''}
+                    ${mime.startsWith('audio') ? `<audio controls src="${url}"></audio><br>` : ''}
+                    ${mime.startsWith('image') ? `<img src="${url}" style="max-width:100%"><br>` : ''}
+                    
+                    <div style="margin-top:10px;">
+                        <a href="${url}" download="${outputFilename}">
+                            <button>Download "${outputFilename}"</button>
+                        </a>
+                        <span style="margin-left:10px; font-size:0.9em;">
+                            (${(data.byteLength/1024/1024).toFixed(2)} MB / ${mime})
+                        </span>
+                    </div>
                 `;
 
                 await ffmpeg.deleteFile(currentInputName);
@@ -242,4 +256,4 @@
         init();
     </script>
 </body>
-        </html>
+</html>
