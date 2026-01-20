@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FFmpeg.wasm CMD Interface</title>
+    <title>FFmpeg.wasm CMD Interface (Quote Support)</title>
     
-    <!-- スタイル: コンソール風 -->
     <style>
         body { 
             font-family: 'Consolas', 'Monaco', monospace; 
@@ -42,47 +41,38 @@
         .info { font-size: 0.9em; color: #888; margin-bottom: 10px; }
     </style>
 
-    <!-- 1. COI (必須) -->
     <script src="coi-serviceworker.js"></script>
-    
-    <!-- 2. FFmpeg (Local) -->
     <script src="ffmpeg/ffmpeg.js"></script>
     <script src="ffmpeg/util.js"></script>
 </head>
 <body>
 
-    <h2>FFmpeg.wasm Executor</h2>
+    <h2>FFmpeg.wasm Executor v2</h2>
 
-    <!-- システムステータス -->
     <div class="box">
         <div>System Status: <span id="system-status">Initializing...</span></div>
     </div>
 
-    <!-- 1. ファイル入力 -->
     <div class="box">
-        <label>1. 入力ファイル選択 (Input)</label>
+        <label>1. 入力ファイル (Input)</label>
         <input type="file" id="uploader" disabled>
         <div class="info" id="file-info">未選択</div>
     </div>
 
-    <!-- 2. コマンド設定 -->
     <div class="box">
         <label>2. FFmpeg引数 (Arguments)</label>
-        <div class="info">入力ファイルは自動的に <b><span id="mapped-name">input.mp4</span></b> という名前で配置されます。</div>
-        <textarea id="cmd-args">-i input.mp4 -c copy output.mp4</textarea>
+        <div class="info">入力ファイルは自動的に <b><span id="mapped-name">input.mp4</span></b> になります。</div>
+        <textarea id="cmd-args">-i input.mp4 -c copy "output file.mp4"</textarea>
     </div>
 
-    <!-- 3. 出力設定 -->
     <div class="box">
         <label>3. 出力ファイル名 (Retrieval)</label>
-        <div class="info">※上記コマンドで指定した出力ファイル名と一致させてください（ダウンロード用）</div>
-        <input type="text" id="output-filename" value="output.mp4">
+        <div class="info">※引数で指定したファイル名（スペース可、引用符は不要）</div>
+        <input type="text" id="output-filename" value="output file.mp4">
     </div>
 
-    <!-- 実行ボタン -->
     <button id="btn-run" disabled>Run FFmpeg</button>
 
-    <!-- 進捗 -->
     <div style="margin: 15px 0;">
         <div style="display:flex; justify-content:space-between;">
             <span>Progress</span>
@@ -91,23 +81,18 @@
         <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
     </div>
 
-    <!-- ログ -->
-    <div id="log-area">Wait for logs...</div>
-
-    <!-- 結果表示 -->
+    <div id="log-area">Logs...</div>
     <div id="result-area" class="box" style="display:none;"></div>
 
     <script>
         // --- 設定 ---
-        const CORE_DIR = 'ffmpeg'; // ffmpeg-core.js等があるディレクトリ
+        const CORE_DIR = 'ffmpeg';
         
-        // --- グローバル変数 ---
         const { FFmpeg } = FFmpegWASM;
         const { fetchFile, toBlobURL } = FFmpegUtil;
         let ffmpeg = null;
-        let currentInputName = "input.mp4"; // 内部的な入力ファイル名
+        let currentInputName = "input.mp4";
 
-        // --- UI要素 ---
         const els = {
             status: document.getElementById('system-status'),
             uploader: document.getElementById('uploader'),
@@ -122,155 +107,139 @@
             result: document.getElementById('result-area')
         };
 
-        // --- ログ出力ヘルパー ---
         const log = (msg) => {
             els.logs.innerText += msg + '\n';
             els.logs.scrollTop = els.logs.scrollHeight;
         };
 
-        // --- 初期化 ---
+        // --- シェル風 引数パーサー ---
+        // スペースで区切るが、" " や ' ' の中は維持し、外側の引用符を削除する
+        function parseArgs(str) {
+            const args = [];
+            let current = '';
+            let quote = null; // null, "'", or '"'
+            
+            for (let i = 0; i < str.length; i++) {
+                const c = str[i];
+                if (quote) {
+                    if (c === quote) {
+                        quote = null; // 引用終了 (文字には追加しない=引用符削除)
+                    } else {
+                        current += c;
+                    }
+                } else {
+                    if (c === '"' || c === "'") {
+                        quote = c; // 引用開始
+                    } else if (/\s/.test(c)) {
+                        if (current.length > 0) {
+                            args.push(current);
+                            current = '';
+                        }
+                    } else {
+                        current += c;
+                    }
+                }
+            }
+            if (current.length > 0) args.push(current);
+            return args;
+        }
+
         const init = async () => {
             if (!window.crossOriginIsolated) {
-                els.status.innerHTML = "<span class='status-err'>Error: Cross Origin Isolated is not enabled. Check coi-serviceworker.</span>";
+                els.status.innerHTML = "<span class='status-err'>COI Error</span>";
                 return;
             }
-
             try {
-                els.status.innerText = "Loading FFmpeg core...";
                 ffmpeg = new FFmpeg();
-
-                // ログイベント
-                ffmpeg.on('log', ({ message }) => {
-                    log(message);
-                });
-
-                // 進捗イベント
+                ffmpeg.on('log', ({ message }) => log(message));
                 ffmpeg.on('progress', ({ progress, time }) => {
                     const p = Math.floor(progress * 100);
-                    els.progText.innerText = `${p}% (time: ${Math.round(time/1000000)}s)`; // timeはマイクロ秒
+                    els.progText.innerText = `${p}%`;
                     els.progFill.style.width = `${p}%`;
                 });
 
-                // ロード (v0.12.x推奨のBlobURL方式)
                 await ffmpeg.load({
                     coreURL: await toBlobURL(`${CORE_DIR}/ffmpeg-core.js`, 'text/javascript'),
-                    wasmURL: await toBlobURL(`${CORE_DIR}/ffmpeg-core.wasm`, 'application/wasm'),
-                    // マルチスレッド版(core-mt)を使う場合は以下のようにworkerURLも指定が必要な場合があります
-                    // workerURL: await toBlobURL(`${CORE_DIR}/ffmpeg-core.worker.js`, 'text/javascript'), 
+                    wasmURL: await toBlobURL(`${CORE_DIR}/ffmpeg-core.wasm`, 'application/wasm')
                 });
 
-                els.status.innerHTML = "<span class='status-ok'>FFmpeg Loaded (v0.12.x)</span>";
+                els.status.innerHTML = "<span class='status-ok'>FFmpeg Ready</span>";
                 els.uploader.disabled = false;
-
             } catch (e) {
-                console.error(e);
-                els.status.innerHTML = `<span class='status-err'>Load Error: ${e.message}</span>`;
-                log(`Core Load Error: ${e.message}`);
+                els.status.innerHTML = `<span class='status-err'>${e.message}</span>`;
             }
         };
 
-        // --- ファイル選択時の処理 ---
         els.uploader.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-
-            // 拡張子を取得して内部名を決定 (例: input.mov)
             const ext = file.name.slice((file.name.lastIndexOf(".") - 1 >>> 0) + 2) || "mp4";
             currentInputName = `input.${ext}`;
-            
-            els.fileInfo.innerText = `Selected: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`;
+            els.fileInfo.innerText = `Selected: ${file.name}`;
             els.mappedName.innerText = currentInputName;
             
-            // コマンド欄のデフォルト値を更新（親切設計）
-            // 既にユーザーが編集している場合は上書きしない方が良いが、今回は初期リセットとして扱う
-            const outExt = "mp4"; // デフォルト出力
-            els.args.value = `-i ${currentInputName} -c copy output.${outExt}`;
-            els.outName.value = `output.${outExt}`;
-            
+            // デフォルト引数セット (ファイル名にスペースがあってもいいようにクォートする例)
+            const outName = "output file.mp4";
+            els.args.value = `-i ${currentInputName} -c copy "${outName}"`;
+            els.outName.value = outName;
             els.btnRun.disabled = false;
         });
 
-        // --- 実行処理 ---
         els.btnRun.addEventListener('click', async () => {
             const file = els.uploader.files[0];
             if (!file || !ffmpeg) return;
 
             const argsStr = els.args.value.trim();
-            const outputFilename = els.outName.value.trim();
-            
-            if (!argsStr || !outputFilename) {
-                alert("コマンドと出力ファイル名を入力してください");
-                return;
-            }
+            // 3. 出力ファイル名欄の値を取得 (引用符除去はしない。ユーザーがファイル名そのものを入力する前提)
+            let outputFilename = els.outName.value.trim();
+            // もしユーザーがここにも "output.mp4" と書いてしまった場合のために軽く除去
+            outputFilename = outputFilename.replace(/^["']|["']$/g, '');
 
-            // UIリセット
             els.btnRun.disabled = true;
-            els.logs.innerText = ""; // ログクリア
             els.result.style.display = 'none';
-            els.result.innerHTML = '';
             els.progFill.style.width = '0%';
             
             try {
-                log(`--- Start ---`);
-                log(`Writing file: ${currentInputName}`);
-                
-                // 1. ファイル書き込み
+                log(`\n--- Run ---`);
                 await ffmpeg.writeFile(currentInputName, await fetchFile(file));
                 
-                // 2. 引数のパース (簡易的なスペース区切り)
-                // 注意: ファイル名にスペースがある場合の引用符処理は簡易実装です
-                const args = argsStr.split(/\s+/);
+                // ★ ここでパーサーを使う
+                const args = parseArgs(argsStr);
                 
-                log(`Exec: ffmpeg ${args.join(' ')}`);
-
-                // 3. 実行
+                log(`Parsed Command: [${args.join(', ')}]`); // デバッグ用表示
+                
                 await ffmpeg.exec(args);
                 
-                log(`--- Finished ---`);
-                log(`Reading output file: ${outputFilename}`);
-
-                // 4. 出力ファイル読み込み
+                log(`Reading: ${outputFilename}`);
                 const data = await ffmpeg.readFile(outputFilename);
                 
-                // 5. ダウンロード/表示生成
-                // 拡張子から簡易的にMIMEタイプを推測
                 const outExt = outputFilename.split('.').pop().toLowerCase();
-                let mime = 'video/mp4'; // fallback
-                if(outExt === 'gif') mime = 'image/gif';
-                else if(outExt === 'mp3') mime = 'audio/mpeg';
-                else if(outExt === 'webm') mime = 'video/webm';
-                else if(outExt === 'png') mime = 'image/png';
+                let mime = 'video/mp4';
+                if(outExt==='wav') mime='audio/wav';
+                else if(outExt==='mp3') mime='audio/mpeg';
+                else if(outExt==='png') mime='image/png';
                 
-                const blob = new Blob([data.buffer], { type: mime });
-                const url = URL.createObjectURL(blob);
+                const url = URL.createObjectURL(new Blob([data.buffer], { type: mime }));
 
                 els.result.style.display = 'block';
                 els.result.innerHTML = `
-                    <h3>Result:</h3>
-                    ${mime.startsWith('video') ? `<video controls src="${url}" style="max-width:100%"></video><br>` : ''}
-                    ${mime.startsWith('image') ? `<img src="${url}" style="max-width:100%"><br>` : ''}
-                    <div style="margin-top:10px;">
-                        <a href="${url}" download="${outputFilename}">
-                            <button>Download ${outputFilename}</button>
-                        </a>
-                        <span style="margin-left:10px;">Size: ${(data.byteLength/1024/1024).toFixed(2)} MB</span>
-                    </div>
+                    <h3>Done!</h3>
+                    <a href="${url}" download="${outputFilename}">
+                        <button>Download "${outputFilename}"</button>
+                    </a>
                 `;
 
-                // 6. 掃除 (メモリ節約のため入力と出力を削除)
                 await ffmpeg.deleteFile(currentInputName);
                 await ffmpeg.deleteFile(outputFilename);
 
             } catch (err) {
-                log(`\n[ERROR] ${err.message}`);
-                console.error(err);
+                log(`[ERROR] ${err.message}`);
             } finally {
                 els.btnRun.disabled = false;
             }
         });
 
-        // 起動
         init();
     </script>
 </body>
-</html>
+        </html>
