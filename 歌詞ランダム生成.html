@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ランダム文字・文字列生成ツール</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #444;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .io-area {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        textarea {
+            width: 100%;
+            height: 120px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+            resize: vertical;
+            box-sizing: border-box;
+            background-color: #fafafa;
+        }
+        
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        /* グリッドレイアウト */
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        /* カード型デザイン */
+        .option-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 8px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+        }
+        .option-card:hover {
+            background-color: #f9f9ff;
+            border-color: #ccc;
+        }
+        .card-header {
+            font-size: 13px;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #eee;
+        }
+        .checkbox-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .cb-label {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            font-weight: normal;
+            cursor: pointer;
+            margin: 0;
+        }
+        .cb-label input {
+            margin-right: 4px;
+            transform: scale(1.1);
+        }
+        
+        .custom-input-area {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #ccc;
+        }
+        .custom-input-note {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .settings-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: end;
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: #eef;
+            border-radius: 5px;
+        }
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .setting-group input[type="number"] {
+            padding: 8px;
+            font-size: 16px;
+            width: 100px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        /* セカンダリボタン */
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        button.secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: normal;
+        }
+        button.secondary:hover {
+            background: #e0e0e0;
+        }
+        
+    </style>
+</head>
+<body>
+
+    <h1>ランダム文字・文字列生成ツール</h1>
+
+    <div class="container">
+        
+        <!-- 設定エリア -->
+        <div class="controls">
+            <label>1. 基本素材の選択</label>
+            <div class="btn-group">
+                <button class="secondary" onclick="toggleType('hira', true)">ひらがな全選択</button>
+                <button class="secondary" onclick="toggleType('hira', false)">ひらがな解除</button>
+                <span style="border-right: 1px solid #ccc; margin: 0 5px;"></span>
+                <button class="secondary" onclick="toggleType('kata', true)">カタカナ全選択</button>
+                <button class="secondary" onclick="toggleType('kata', false)">カタカナ解除</button>
+                <span style="border-right: 1px solid #ccc; margin: 0 5px;"></span>
+                <button class="secondary" onclick="resetAll()">すべてリセット</button>
+            </div>
+            
+            <div class="options-grid" id="checkboxContainer">
+                <!-- ここにカード（行ごとの設定）が生成されます -->
+            </div>
+
+            <div class="custom-input-area">
+                <label for="customItemsInput">2. カスタム素材（カンマ区切りで自由に追加）</label>
+                <div class="custom-input-note">
+                    入力例: <code>𰻞, ﾁｮｱﾖ, ｴｰｳ, A, B</code><br>
+                    ※ここに書いた文字・単語が1つの候補として抽選されます。
+                </div>
+                <textarea id="customItemsInput" placeholder="例: 𰻞, ﾁｮｱﾖ, ｴｰｳ"></textarea>
+            </div>
+        </div>
+
+        <!-- 生成設定と出力エリア -->
+        <div class="io-area">
+            <div class="settings-bar">
+                <div class="setting-group">
+                    <label for="generateCount">生成する数（回数）</label>
+                    <input type="number" id="generateCount" value="50" min="1">
+                </div>
+                
+                <div class="setting-group">
+                    <button onclick="generateText()">生成する</button>
+                </div>
+            </div>
+
+            <div>
+                <label for="outputText">生成結果</label>
+                <textarea id="outputText" readonly placeholder="生成結果..."></textarea>
+            </div>
+        </div>
+    </div>
+
+<script>
+    /**
+     * データ定義
+     * ランダム生成用なので、キーだけあれば十分ですが、定義データ構造はそのまま流用します。
+     * mapのValue(母音)は無視します。
+     */
+    const DEFINITIONS = [
+        { id: 'a', label: 'あ行', map: {'あ':'','い':'','う':'','え':'','お':''} },
+        { id: 'ka', label: 'か行', map: {'か':'','き':'','く':'','け':'','こ':''} },
+        { id: 'kya', label: 'きゃ行', map: {'きゃ':'','きぃ':'','きゅ':'','きぇ':'','きょ':''} },
+        { id: 'qwa', label: 'くぁ行', map: {'くぁ':'','くぃ':'','くぅ':'','くぇ':'','くぉ':''} },
+        { id: 'ga', label: 'が行', map: {'が':'','ぎ':'','ぐ':'','げ':'','ご':''} },
+        { id: 'gya', label: 'ぎゃ行', map: {'ぎゃ':'','ぎぃ':'','ぎゅ':'','ぎぇ':'','ぎょ':''} },
+        { id: 'gwa', label: 'ぐぁ行', map: {'ぐぁ':'','ぐぃ':'','ぐぅ':'','ぐぇ':'','ぐぉ':''} },
+        
+        { id: 'sa', label: 'さ行', map: {'さ':'','し':'','す':'','せ':'','そ':''} },
+        { id: 'sha', label: 'しゃ行', map: {'しゃ':'','しぃ':'','しゅ':'','しぇ':'','しょ':''} },
+        { id: 'za', label: 'ざ行', map: {'ざ':'','じ':'','ず':'','ぜ':'','ぞ':''} },
+        { id: 'ja', label: 'じゃ行', map: {'じゃ':'','じぃ':'','じゅ':'','じぇ':'','じょ':''} },
+        
+        { id: 'ta', label: 'た行', map: {'た':'','ち':'','つ':'','て':'','と':''} },
+        { id: 'cha', label: 'ちゃ行', map: {'ちゃ':'','ちぃ':'','ちゅ':'','ちぇ':'','ちょ':''} },
+        { id: 'tsa', label: 'つぁ行', map: {'つぁ':'','つぃ':'','つ':'','つぇ':'','つぉ':''} },
+        { id: 'da', label: 'だ行', map: {'だ':'','ぢ':'','づ':'','で':'','ど':''} },
+        { id: 'dya', label: 'ぢゃ行', map: {'ぢゃ':'','ぢぃ':'','ぢゅ':'','ぢぇ':'','ぢょ':''} },
+        { id: 'dha', label: 'でゃ行', map: {'でゃ':'','でぃ':'','でゅ':'','でぇ':'','でょ':''} },
+        { id: 'dza', label: 'づぁ行', map: {'づぁ':'','づぃ':'','づぅ':'','づぇ':'','づぉ':''} },
+
+        { id: 'na', label: 'な行', map: {'な':'','に':'','ぬ':'','ね':'','の':''} },
+        { id: 'nya', label: 'にゃ行', map: {'にゃ':'','にぃ':'','にゅ':'','にぇ':'','にょ':''} },
+        
+        { id: 'ha', label: 'は行', map: {'は':'','ひ':'','ふ':'','へ':'','ほ':''} },
+        { id: 'hya', label: 'ひゃ行', map: {'ひゃ':'','ひぃ':'','ひゅ':'','ひぇ':'','ひょ':''} },
+        { id: 'fa', label: 'ふぁ行', map: {'ふぁ':'','ふぃ':'','ふぅ':'','ふぇ':'','ふぉ':''} },
+        { id: 'ba', label: 'ば行', map: {'ば':'','び':'','ぶ':'','べ':'','ぼ':''} },
+        { id: 'bya', label: 'びゃ行', map: {'びゃ':'','びぃ':'','びゅ':'','びぇ':'','びょ':''} },
+        { id: 'bwa', label: 'ぶぁ行', map: {'ぶぁ':'','ぶぃ':'','ぶぅ':'','ぶぇ':'','ぶぉ':''} },
+        { id: 'pa', label: 'ぱ行', map: {'ぱ':'','ぴ':'','ぷ':'','ぺ':'','ぽ':''} },
+        { id: 'pya', label: 'ぴゃ行', map: {'ぴゃ':'','ぴぃ':'','ぴゅ':'','ぴぇ':'','ぴょ':''} },
+        { id: 'pwa', label: 'ぷぁ行', map: {'ぷぁ':'','ぷぃ':'','ぷぅ':'','ぷぇ':'','ぷぉ':''} },
+
+        { id: 'ma', label: 'ま行', map: {'ま':'','み':'','む':'','め':'','も':''} },
+        { id: 'mya', label: 'みゃ行', map: {'みゃ':'','みぃ':'','みゅ':'','みぇ':'','みょ':''} },
+        
+        { id: 'ya', label: 'や行', map: {'や':'','ゆ':'','よ':'','いぇ':''} }, 
+        { id: 'ra', label: 'ら行', map: {'ら':'','り':'','る':'','れ':'','ろ':''} },
+        { id: 'rya', label: 'りゃ行', map: {'りゃ':'','りぃ':'','りゅ':'','りぇ':'','りょ':''} },
+        
+        { id: 'wa', label: 'わ行', map: {'わ':'','を':'','うぃ':'','うぇ':'','うぉ':''} },
+        { id: 'nn', label: 'ん', map: {'ん':''} },
+    ];
+
+    // ひらがな -> カタカナ変換ヘルパー
+    function hiraToKata(str) {
+        return str.replace(/[\u3041-\u3096]/g, function(match) {
+            var chr = match.charCodeAt(0) + 0x60;
+            return String.fromCharCode(chr);
+        });
+    }
+
+    /**
+     * UI生成
+     */
+    function initUI() {
+        const container = document.getElementById('checkboxContainer');
+        DEFINITIONS.forEach(group => {
+            // カード枠
+            const card = document.createElement('div');
+            card.className = 'option-card';
+
+            // ヘッダー（行名）
+            const header = document.createElement('div');
+            header.className = 'card-header';
+            header.textContent = group.label;
+            card.appendChild(header);
+
+            // チェックボックスの行コンテナ
+            const cbRow = document.createElement('div');
+            cbRow.className = 'checkbox-row';
+
+            // ひらがな用
+            const lblHira = document.createElement('label');
+            lblHira.className = 'cb-label';
+            const chkHira = document.createElement('input');
+            chkHira.type = 'checkbox';
+            chkHira.className = 'chk-hira';
+            chkHira.id = `hira_${group.id}`;
+            lblHira.appendChild(chkHira);
+            lblHira.appendChild(document.createTextNode('ひらがな'));
+
+            // カタカナ用
+            const lblKata = document.createElement('label');
+            lblKata.className = 'cb-label';
+            const chkKata = document.createElement('input');
+            chkKata.type = 'checkbox';
+            chkKata.className = 'chk-kata';
+            chkKata.id = `kata_${group.id}`;
+            lblKata.appendChild(chkKata);
+            lblKata.appendChild(document.createTextNode('カタカナ'));
+
+            cbRow.appendChild(lblHira);
+            cbRow.appendChild(lblKata);
+            card.appendChild(cbRow);
+            container.appendChild(card);
+        });
+    }
+
+    // 一括操作
+    function toggleType(type, state) {
+        const selector = type === 'hira' ? '.chk-hira' : '.chk-kata';
+        document.querySelectorAll(selector).forEach(cb => cb.checked = state);
+    }
+
+    function resetAll() {
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        document.getElementById('customItemsInput').value = '';
+    }
+
+    /**
+     * 生成ロジック
+     */
+    function generateText() {
+        const count = parseInt(document.getElementById('generateCount').value, 10) || 50;
+        const customText = document.getElementById('customItemsInput').value;
+
+        // 生成プール（文字列の配列）
+        let pool = [];
+
+        // 1. 標準リストの追加
+        DEFINITIONS.forEach(group => {
+            const hiraChecked = document.getElementById(`hira_${group.id}`).checked;
+            const kataChecked = document.getElementById(`kata_${group.id}`).checked;
+
+            if (hiraChecked || kataChecked) {
+                // mapのキーだけ取得
+                for (const key of Object.keys(group.map)) {
+                    // ひらがな
+                    if (hiraChecked) {
+                        pool.push(key);
+                    }
+                    // カタカナ
+                    if (kataChecked) {
+                        pool.push(hiraToKata(key));
+                    }
+                }
+            }
+        });
+
+        // 2. カスタム入力の追加
+        if (customText) {
+            // カンマまたは改行で区切る
+            const items = customText.split(/[,\n]/); 
+            items.forEach(item => {
+                const trimmed = item.trim();
+                if (trimmed) {
+                    pool.push(trimmed);
+                }
+            });
+        }
+
+        if (pool.length === 0) {
+            alert('生成素材が選択されていません。チェックボックスを入れるか、カスタム素材を入力してください。');
+            return;
+        }
+
+        // ランダム生成実行
+        let result = [];
+        for (let i = 0; i < count; i++) {
+            const randomStr = pool[Math.floor(Math.random() * pool.length)];
+            result.push(randomStr);
+        }
+
+        document.getElementById('outputText').value = result.join('');
+    }
+
+    initUI();
+</script>
+
+</body>
+</html>
