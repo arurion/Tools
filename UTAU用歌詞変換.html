@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>母音変換ツール（ひらがな・カタカナ）</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #444;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .io-area {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 600px) {
+            .io-area {
+                grid-template-columns: 1fr;
+            }
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .option-item {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+        .option-item input {
+            margin-right: 8px;
+            transform: scale(1.2);
+        }
+        .custom-input-area {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #ccc;
+        }
+        .custom-input-note {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        #customMapInput {
+            height: 60px;
+            font-family: monospace;
+        }
+        .btn-area {
+            text-align: center;
+            margin-top: 10px;
+        }
+        /* トグルボタン風デザイン */
+        .toggle-all {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        button {
+            padding: 5px 15px;
+            margin-right: 10px;
+            cursor: pointer;
+            background: #eee;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #ddd;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ひらがな・カタカナ → 母音変換ツール</h1>
+
+    <div class="container">
+        <!-- 入出力エリア -->
+        <div class="io-area">
+            <div>
+                <label for="inputText">変換したいテキスト</label>
+                <textarea id="inputText" placeholder="ここに文字を入力してください（例：こんにちは）"></textarea>
+            </div>
+            <div>
+                <label for="outputText">変換結果</label>
+                <textarea id="outputText" readonly placeholder="変換結果がここに表示されます"></textarea>
+            </div>
+        </div>
+
+        <!-- 設定エリア -->
+        <div class="controls">
+            <label>変換する行・種類の選択</label>
+            <div class="toggle-all">
+                <button onclick="toggleAll(true)">すべて選択</button>
+                <button onclick="toggleAll(false)">すべて解除</button>
+            </div>
+            <div class="options-grid" id="checkboxContainer">
+                <!-- JavaScriptでここにチェックボックスを生成します -->
+            </div>
+
+            <div class="option-item" style="margin-top: 10px; padding: 5px; background: #eef;">
+                <input type="checkbox" id="smallCharLogic" checked>
+                <span>小文字（ぁぃぅ等）は直前の文字を消して上書きする</span>
+            </div>
+
+            <div class="custom-input-area">
+                <label for="customMapInput">カスタム変換リスト (区切り文字は「,」)</label>
+                <div class="custom-input-note">形式: 「変換元#変換後」 (例: 吾輩#わがはい, x#y) ※#がない場合は無視されます</div>
+                <textarea id="customMapInput" placeholder="例: 吾輩#わがはい, 拙者#せっしゃ"></textarea>
+            </div>
+        </div>
+    </div>
+
+<script>
+    /**
+     * データ定義
+     * key: グループID
+     * label: 表示名
+     * map: { 変換元: 変換後 } のベース定義（ひらがなのみ定義すればカタカナは自動生成）
+     */
+    const DEFINITIONS = [
+        { id: 'a', label: 'あ行 (あ)', map: {'あ':'あ','い':'い','う':'う','え':'え','お':'お'} },
+        { id: 'ka', label: 'か行 (か)', map: {'か':'あ','き':'い','く':'う','け':'え','こ':'お'} },
+        { id: 'kya', label: 'きゃ行 (きゃ)', map: {'きゃ':'あ','きぃ':'い','きゅ':'う','きぇ':'え','きょ':'お'} },
+        { id: 'qwa', label: 'くぁ行 (くぁ)', map: {'くぁ':'あ','くぃ':'い','くぅ':'う','くぇ':'え','くぉ':'お'} },
+        { id: 'ga', label: 'が行 (が)', map: {'が':'あ','ぎ':'い','ぐ':'う','げ':'え','ご':'お'} },
+        { id: 'gya', label: 'ぎゃ行 (ぎゃ)', map: {'ぎゃ':'あ','ぎぃ':'い','ぎゅ':'う','ぎぇ':'え','ぎょ':'お'} },
+        { id: 'gwa', label: 'ぐぁ行 (ぐぁ)', map: {'ぐぁ':'あ','ぐぃ':'い','ぐぅ':'う','ぐぇ':'え','ぐぉ':'お'} },
+        
+        { id: 'sa', label: 'さ行 (さ)', map: {'さ':'あ','し':'い','す':'う','せ':'え','そ':'お'} },
+        { id: 'sha', label: 'しゃ行 (しゃ)', map: {'しゃ':'あ','しぃ':'い','しゅ':'う','しぇ':'え','しょ':'お'} },
+        { id: 'za', label: 'ざ行 (ざ)', map: {'ざ':'あ','じ':'い','ず':'う','ぜ':'え','ぞ':'お'} },
+        { id: 'ja', label: 'じゃ行 (じゃ)', map: {'じゃ':'あ','じぃ':'い','じゅ':'う','じぇ':'え','じょ':'お'} },
+        
+        { id: 'ta', label: 'た行 (た/ち/つ)', map: {'た':'あ','ち':'い','つ':'う','て':'え','と':'お'} },
+        { id: 'cha', label: 'ちゃ行 (ちゃ)', map: {'ちゃ':'あ','ちぃ':'い','ちゅ':'う','ちぇ':'え','ちょ':'お'} },
+        { id: 'tsa', label: 'つぁ行 (つぁ)', map: {'つぁ':'あ','つぃ':'い','つ':'う','つぇ':'え','つぉ':'お'} },
+        { id: 'da', label: 'だ行 (だ/ぢ/づ)', map: {'だ':'あ','ぢ':'い','づ':'う','で':'え','ど':'お'} },
+        { id: 'dya', label: 'ぢゃ行 (ぢゃ)', map: {'ぢゃ':'あ','ぢぃ':'い','ぢゅ':'う','ぢぇ':'え','ぢょ':'お'} },
+        { id: 'dha', label: 'でゃ行 (でゃ)', map: {'でゃ':'あ','でぃ':'い','でゅ':'う','でぇ':'え','でょ':'お'} },
+        { id: 'dza', label: 'づぁ行 (づぁ)', map: {'づぁ':'あ','づぃ':'い','づぅ':'う','づぇ':'え','づぉ':'お'} },
+
+        { id: 'na', label: 'な行 (な)', map: {'な':'あ','に':'い','ぬ':'う','ね':'え','の':'お'} },
+        { id: 'nya', label: 'にゃ行 (にゃ)', map: {'にゃ':'あ','にぃ':'い','にゅ':'う','にぇ':'え','にょ':'お'} },
+        
+        { id: 'ha', label: 'は行 (は)', map: {'は':'あ','ひ':'い','ふ':'う','へ':'え','ほ':'お'} },
+        { id: 'hya', label: 'ひゃ行 (ひゃ)', map: {'ひゃ':'あ','ひぃ':'い','ひゅ':'う','ひぇ':'え','ひょ':'お'} },
+        { id: 'fa', label: 'ふぁ行 (ふぁ)', map: {'ふぁ':'あ','ふぃ':'い','ふぅ':'う','ふぇ':'え','ふぉ':'お'} },
+        { id: 'ba', label: 'ば行 (ば)', map: {'ば':'あ','び':'い','ぶ':'う','べ':'え','ぼ':'お'} },
+        { id: 'bya', label: 'びゃ行 (びゃ)', map: {'びゃ':'あ','びぃ':'い','びゅ':'う','びぇ':'え','びょ':'お'} },
+        { id: 'bwa', label: 'ぶぁ行 (ぶぁ)', map: {'ぶぁ':'あ','ぶぃ':'い','ぶぅ':'う','ぶぇ':'え','ぶぉ':'お'} },
+        { id: 'pa', label: 'ぱ行 (ぱ)', map: {'ぱ':'あ','ぴ':'い','ぷ':'う','ぺ':'え','ぽ':'お'} },
+        { id: 'pya', label: 'ぴゃ行 (ぴゃ)', map: {'ぴゃ':'あ','ぴぃ':'い','ぴゅ':'う','ぴぇ':'え','ぴょ':'お'} },
+        { id: 'pwa', label: 'ぷぁ行 (ぷぁ)', map: {'ぷぁ':'あ','ぷぃ':'い','ぷぅ':'う','ぷぇ':'え','ぷぉ':'お'} },
+
+        { id: 'ma', label: 'ま行 (ま)', map: {'ま':'あ','み':'い','む':'う','め':'え','も':'お'} },
+        { id: 'mya', label: 'みゃ行 (みゃ)', map: {'みゃ':'あ','みぃ':'い','みゅ':'う','みぇ':'え','みょ':'お'} },
+        
+        { id: 'ya', label: 'や行 (や)', map: {'や':'あ','ゆ':'う','よ':'お','いぇ':'え'} }, 
+        { id: 'ra', label: 'ら行 (ら)', map: {'ら':'あ','り':'い','る':'う','れ':'え','ろ':'お'} },
+        { id: 'rya', label: 'りゃ行 (りゃ)', map: {'りゃ':'あ','りぃ':'い','りゅ':'う','りぇ':'え','りょ':'お'} },
+        
+        { id: 'wa', label: 'わ行 (わ)', map: {'わ':'あ','を':'お','うぃ':'い','うぇ':'え','うぉ':'お'} },
+        { id: 'nn', label: 'ん (→う)', map: {'ん':'う'} },
+    ];
+
+    // 小文字とそれに対応する母音（汎用ルール用）
+    const SMALL_VOWEL_MAP = {
+        'ぁ':'あ', 'ァ':'あ',
+        'ぃ':'い', 'ィ':'い',
+        'ぅ':'う', 'ゥ':'う',
+        'ぇ':'え', 'ェ':'え',
+        'ぉ':'お', 'ォ':'お',
+        'ゃ':'あ', 'ャ':'あ',
+        'ゅ':'う', 'ュ':'う',
+        'ょ':'お', 'ョ':'お',
+        'ゎ':'あ', 'ヮ':'あ',
+        // ヶなどは文脈によるのでここでは除外
+    };
+
+    /**
+     * ひらがなをカタカナに変換するヘルパー
+     */
+    function hiraToKata(str) {
+        return str.replace(/[\u3041-\u3096]/g, function(match) {
+            var chr = match.charCodeAt(0) + 0x60;
+            return String.fromCharCode(chr);
+        });
+    }
+
+    /**
+     * UI生成
+     */
+    function initUI() {
+        const container = document.getElementById('checkboxContainer');
+        DEFINITIONS.forEach(group => {
+            const div = document.createElement('div');
+            div.className = 'option-item';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `chk_${group.id}`;
+            checkbox.checked = true; // デフォルトですべてON
+            checkbox.dataset.groupId = group.id;
+            checkbox.addEventListener('change', updateConversion);
+
+            const label = document.createElement('label');
+            label.htmlFor = `chk_${group.id}`;
+            label.textContent = group.label;
+            label.style.cursor = 'pointer';
+            label.style.fontWeight = 'normal';
+
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            container.appendChild(div);
+        });
+
+        // イベントリスナー
+        document.getElementById('inputText').addEventListener('input', updateConversion);
+        document.getElementById('customMapInput').addEventListener('input', updateConversion);
+        document.getElementById('smallCharLogic').addEventListener('change', updateConversion);
+    }
+
+    /**
+     * すべて選択/解除
+     */
+    function toggleAll(checked) {
+        const checkboxes = document.querySelectorAll('#checkboxContainer input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = checked);
+        updateConversion();
+    }
+
+    /**
+     * 変換ロジック
+     */
+    function updateConversion() {
+        const input = document.getElementById('inputText').value;
+        const customText = document.getElementById('customMapInput').value;
+        const useSmallCharLogic = document.getElementById('smallCharLogic').checked;
+
+        // 1. マッピングテーブルの構築
+        let conversionMap = {};
+        
+        // 1-A. 標準オプションから構築
+        DEFINITIONS.forEach(group => {
+            const cb = document.getElementById(`chk_${group.id}`);
+            if (cb && cb.checked) {
+                for (const [key, val] of Object.entries(group.map)) {
+                    conversionMap[key] = val; // ひらがな
+                    conversionMap[hiraToKata(key)] = val; // カタカナも追加
+                }
+            }
+        });
+
+        // 1-B. カスタム入力から構築（優先度高：後で上書き）
+        if (customText) {
+            const pairs = customText.split(',');
+            pairs.forEach(pair => {
+                const parts = pair.split('#');
+                if (parts.length >= 2) {
+                    const k = parts[0].trim();
+                    const v = parts[1].trim();
+                    if (k) conversionMap[k] = v;
+                }
+            });
+        }
+
+        // 2. 変換処理
+        // 最長一致させるため、キーを文字数の長い順にソートしておく
+        // (例: 'きゃ' vs 'き')
+        const sortedKeys = Object.keys(conversionMap).sort((a, b) => b.length - a.length);
+        
+        let result = [];
+        let i = 0;
+        
+        while (i < input.length) {
+            let matchFound = false;
+
+            // マップにあるか確認（最長一致）
+            for (const key of sortedKeys) {
+                if (input.substr(i, key.length) === key) {
+                    result.push(conversionMap[key]);
+                    i += key.length;
+                    matchFound = true;
+                    break;
+                }
+            }
+
+            if (!matchFound) {
+                const char = input[i];
+                
+                // マップになかった場合、小文字ルールの適用チェック
+                if (useSmallCharLogic && SMALL_VOWEL_MAP[char]) {
+                    // 直前の文字を消す（結果配列が空でなければ）
+                    if (result.length > 0) {
+                        result.pop();
+                    }
+                    // 対応する母音を追加
+                    result.push(SMALL_VOWEL_MAP[char]);
+                } else {
+                    // そのまま出力
+                    result.push(char);
+                }
+                i++;
+            }
+        }
+
+        document.getElementById('outputText').value = result.join('');
+    }
+
+    // 初期化実行
+    initUI();
+</script>
+
+</body>
+</html>
