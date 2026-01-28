@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tone Curve v8 (Save Fixed)</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-main: #eeeeee;
+            --text-sub: #aaaaaa;
+            --accent: #8ab4f8;
+            --border: #333333;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+        }
+
+        * { box-sizing: border-box; touch-action: manipulation; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            height: 44px;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 calc(10px + var(--safe-right)) 0 calc(10px + var(--safe-left));
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .header-title { font-weight: 600; font-size: 0.9rem; }
+        .btn-text {
+            background: none; border: none; color: var(--accent);
+            font-size: 0.9rem; cursor: pointer; padding: 10px;
+        }
+        .btn-text:active { opacity: 0.7; }
+
+        input[type="file"] { display: none; }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column; 
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .image-area {
+            flex: 1;
+            position: relative;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            min-height: 0;
+        }
+
+        canvas#imageCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .controls-sidebar {
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border);
+            padding: 15px;
+            padding-bottom: calc(15px + var(--safe-bottom));
+            padding-left: calc(15px + var(--safe-left));
+            padding-right: calc(15px + var(--safe-right));
+            
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            z-index: 20;
+        }
+
+        .curve-widget {
+            width: 100%;
+            max-width: 300px;
+            aspect-ratio: 1;
+            position: relative;
+            background-color: #252525;
+            border-radius: 8px;
+            border: 1px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media (max-height: 700px) and (orientation: portrait) {
+            .curve-widget { max-width: 220px; }
+            .controls-sidebar { padding: 10px; gap: 10px; }
+        }
+
+        canvas#curveCanvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            cursor: crosshair;
+        }
+
+        .channel-row {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .chan-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #333;
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.1s, border-color 0.2s;
+        }
+
+        .chan-btn:active { transform: scale(0.95); }
+        .chan-btn.active { border-color: var(--text-main); background-color: #444; }
+        
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .chan-btn[data-val="all"] .dot { background: white; }
+        .chan-btn[data-val="r"] .dot { background: #ff5252; }
+        .chan-btn[data-val="g"] .dot { background: #69f0ae; }
+        .chan-btn[data-val="b"] .dot { background: #448aff; }
+        .chan-btn[data-val="lum"] { color: #ccc; font-size: 10px; font-weight: bold; }
+
+        .btn-reset {
+            color: var(--text-sub);
+            font-size: 0.8rem;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        @media (orientation: landscape) {
+            .main-container { flex-direction: row; }
+            .image-area { padding-bottom: var(--safe-bottom); }
+            .controls-sidebar {
+                width: 280px; 
+                height: auto;
+                border-top: none;
+                border-left: 1px solid var(--border);
+                overflow-y: auto;
+                justify-content: flex-start;
+                padding-top: 20px;
+            }
+            .curve-widget { max-width: 100%; margin-bottom: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <button class="btn-text" onclick="document.getElementById('upload').click()">Open</button>
+        <span class="header-title">Tone Curve</span>
+        <button class="btn-text" id="btnDownload">Save</button>
+        <input type="file" id="upload" accept="image/*">
+    </header>
+
+    <div class="main-container">
+        <div class="image-area">
+            <canvas id="imageCanvas"></canvas>
+        </div>
+
+        <div class="controls-sidebar">
+            <div id="curveContainer" class="curve-widget">
+                <canvas id="curveCanvas" width="300" height="300"></canvas>
+            </div>
+
+            <div class="channel-row">
+                <div class="chan-btn active" data-val="all" title="Master"><div class="dot"></div></div>
+                <div class="chan-btn" data-val="r" title="Red"><div class="dot"></div></div>
+                <div class="chan-btn" data-val="g" title="Green"><div class="dot"></div></div>
+                <div class="chan-btn" data-val="b" title="Blue"><div class="dot"></div></div>
+                <div class="chan-btn" data-val="lum" title="Luminance">Lum</div>
+            </div>
+            
+            <div class="btn-reset" id="btnResetChannel">Reset Channel</div>
+        </div>
+    </div>
+
+    <script>
+        const upload = document.getElementById('upload');
+        const imageCanvas = document.getElementById('imageCanvas');
+        const curveCanvas = document.getElementById('curveCanvas');
+        const ctxImg = imageCanvas.getContext('2d');
+        const ctxCurve = curveCanvas.getContext('2d');
+        const chanBtns = document.querySelectorAll('.chan-btn');
+        const btnReset = document.getElementById('btnResetChannel');
+        const btnDownload = document.getElementById('btnDownload');
+
+        let originalImageData = null;
+        let currentChannel = 'all';
+        let isDragging = false;
+        let dragIdx = -1;
+        
+        const HIT_RADIUS = 30;
+        const CANVAS_SIZE = 300; 
+        const GRAPH_SIZE = 256;  
+        const PADDING = (CANVAS_SIZE - GRAPH_SIZE) / 2; 
+
+        const toScreenX = (val) => PADDING + val;
+        const toScreenY = (val) => CANVAS_SIZE - PADDING - val;
+        const fromScreenX = (px) => Math.max(0, Math.min(255, px - PADDING));
+        const fromScreenY = (py) => Math.max(0, Math.min(255, CANVAS_SIZE - PADDING - py));
+
+        const defaultPoints = () => [{x:0, y:0}, {x:255, y:255}];
+        const channels = {
+            all: defaultPoints(),
+            r: defaultPoints(),
+            g: defaultPoints(),
+            b: defaultPoints(),
+            lum: defaultPoints()
+        };
+
+        class Spline {
+            constructor(points) {
+                this.points = points.sort((a, b) => a.x - b.x);
+                this.xs = this.points.map(p => p.x);
+                this.ys = this.points.map(p => p.y);
+                this.ks = this.getNaturalKs(this.xs, this.ys);
+            }
+            getNaturalKs(xs, ys) {
+                const n = xs.length - 1;
+                if (n < 1) return new Float64Array(xs.length);
+                const A = new Float64Array(n+1), B = new Float64Array(n+1), C = new Float64Array(n+1), D = new Float64Array(n+1);
+                for (let i=1; i<n; i++) {
+                    A[i] = xs[i]-xs[i-1];
+                    B[i] = 2*(xs[i+1]-xs[i-1]);
+                    C[i] = xs[i+1]-xs[i];
+                    D[i] = 6*((ys[i+1]-ys[i])/C[i] - (ys[i]-ys[i-1])/A[i]);
+                }
+                const c_p = new Float64Array(n), d_p = new Float64Array(n);
+                for (let i=1; i<n; i++) {
+                    const m = 1.0/(B[i]-A[i]*c_p[i-1]);
+                    c_p[i] = C[i]*m;
+                    d_p[i] = (D[i]-A[i]*d_p[i-1])*m;
+                }
+                const ks = new Float64Array(n+1);
+                for (let i=n-1; i>0; i--) ks[i] = d_p[i]-c_p[i]*ks[i+1];
+                return ks;
+            }
+            at(x) {
+                if (x <= this.xs[0]) return this.ys[0];
+                if (x >= this.xs[this.xs.length - 1]) return this.ys[this.ys.length - 1];
+                let i=1; while(i<this.xs.length-1 && this.xs[i]<x) i++; i--;
+                const t = (x-this.xs[i])/(this.xs[i+1]-this.xs[i]);
+                const a = this.ks[i]*(this.xs[i+1]-this.xs[i])**2;
+                const b = this.ks[i+1]*(this.xs[i+1]-this.xs[i])**2;
+                const val = (1-t)*this.ys[i] + t*this.ys[i+1] + t*(1-t)*((1-t)*a - t*b)/6.0;
+                return Math.max(0, Math.min(255, val));
+            }
+        }
+
+        upload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxSide = 1600; 
+                    let w = img.width, h = img.height;
+                    if (w > maxSide || h > maxSide) {
+                        const ratio = Math.min(maxSide/w, maxSide/h);
+                        w *= ratio; h *= ratio;
+                    }
+                    imageCanvas.width = w;
+                    imageCanvas.height = h;
+                    ctxImg.drawImage(img, 0, 0, w, h);
+                    originalImageData = ctxImg.getImageData(0, 0, w, h);
+                    drawCurve(); applyCurves();
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function getLUT(points) {
+            const s = new Spline(points);
+            const lut = new Uint8Array(256);
+            for(let i=0; i<256; i++) lut[i] = Math.round(s.at(i));
+            return lut;
+        }
+
+        let busy = false;
+        function applyCurves() {
+            if (!originalImageData || busy) return;
+            busy = true;
+            requestAnimationFrame(() => {
+                const d = ctxImg.createImageData(originalImageData);
+                const src = originalImageData.data;
+                const dst = d.data;
+                
+                const lAll = getLUT(channels.all);
+                const lR = getLUT(channels.r);
+                const lG = getLUT(channels.g);
+                const lB = getLUT(channels.b);
+                const lL = getLUT(channels.lum);
+                const useLum = channels.lum.some((p,i) => i>0 && i<channels.lum.length-1 && (p.x!==p.y)) || channels.lum[0].y !== 0 || channels.lum[channels.lum.length-1].y !== 255;
+
+                for (let i=0; i<src.length; i+=4) {
+                    let r = src[i], g = src[i+1], b = src[i+2];
+                    r = lR[r]; g = lG[g]; b = lB[b];
+                    r = lAll[r]; g = lAll[g]; b = lAll[b];
+                    if (useLum) {
+                        const y = 0.299*r + 0.587*g + 0.114*b;
+                        const idx = Math.max(0, Math.min(255, Math.round(y)));
+                        const ty = lL[idx];
+                        if (y > 1.0) {
+                            const ratio = ty/y;
+                            r *= ratio; g *= ratio; b *= ratio;
+                        } else {
+                            const diff = ty - y;
+                            r += diff; g += diff; b += diff;
+                        }
+                    }
+                    dst[i] = r < 0 ? 0 : r > 255 ? 255 : r;
+                    dst[i+1] = g < 0 ? 0 : g > 255 ? 255 : g;
+                    dst[i+2] = b < 0 ? 0 : b > 255 ? 255 : b;
+                    dst[i+3] = src[i+3];
+                }
+                ctxImg.putImageData(d, 0, 0);
+                busy = false;
+            });
+        }
+
+        function drawCurve() {
+            ctxCurve.clearRect(0,0,CANVAS_SIZE,CANVAS_SIZE);
+            ctxCurve.strokeStyle = '#444';
+            ctxCurve.lineWidth = 1;
+            ctxCurve.strokeRect(toScreenX(0), toScreenY(255), 256, 256);
+
+            ctxCurve.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctxCurve.beginPath();
+            for(let i=64; i<256; i+=64) {
+                ctxCurve.moveTo(toScreenX(i), toScreenY(0)); ctxCurve.lineTo(toScreenX(i), toScreenY(255));
+                ctxCurve.moveTo(toScreenX(0), toScreenY(i)); ctxCurve.lineTo(toScreenX(255), toScreenY(i));
+            }
+            ctxCurve.stroke();
+            
+            ctxCurve.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctxCurve.beginPath();
+            ctxCurve.moveTo(toScreenX(0), toScreenY(0)); ctxCurve.lineTo(toScreenX(255), toScreenY(255));
+            ctxCurve.stroke();
+
+            const pts = channels[currentChannel];
+            const s = new Spline(pts);
+            
+            let col = '#fff';
+            if(currentChannel==='r') col='#ff5252';
+            else if(currentChannel==='g') col='#69f0ae';
+            else if(currentChannel==='b') col='#448aff';
+            else if(currentChannel==='lum') col='#ddd';
+
+            ctxCurve.strokeStyle = col;
+            ctxCurve.lineWidth = 3;
+            ctxCurve.beginPath();
+            for(let x=0; x<=255; x+=4) {
+                const y = s.at(x);
+                if(x===0) ctxCurve.moveTo(toScreenX(x), toScreenY(y)); 
+                else ctxCurve.lineTo(toScreenX(x), toScreenY(y));
+            }
+            ctxCurve.stroke();
+
+            pts.forEach(p => {
+                const sx = toScreenX(p.x);
+                const sy = toScreenY(p.y);
+                ctxCurve.beginPath(); ctxCurve.fillStyle = 'rgba(0,0,0,0.5)';
+                ctxCurve.arc(sx, sy, 8, 0, Math.PI*2); ctxCurve.fill();
+                ctxCurve.beginPath(); ctxCurve.fillStyle = col;
+                ctxCurve.arc(sx, sy, 5, 0, Math.PI*2); ctxCurve.fill();
+            });
+        }
+
+        function getPointerPos(e) {
+            const rect = curveCanvas.getBoundingClientRect();
+            let cx = e.clientX, cy = e.clientY;
+            if(e.changedTouches && e.changedTouches.length) {
+                cx = e.changedTouches[0].clientX;
+                cy = e.changedTouches[0].clientY;
+            }
+            const scaleX = CANVAS_SIZE / rect.width;
+            const scaleY = CANVAS_SIZE / rect.height;
+            const px = (cx - rect.left) * scaleX;
+            const py = (cy - rect.top) * scaleY;
+            return { screenX: px, screenY: py, x: fromScreenX(px), y: fromScreenY(py) };
+        }
+
+        function onDown(e) {
+            e.preventDefault();
+            const {screenX, screenY, x, y} = getPointerPos(e);
+            const pts = channels[currentChannel];
+            
+            dragIdx = pts.findIndex(p => {
+                const sx = toScreenX(p.x);
+                const sy = toScreenY(p.y);
+                return Math.hypot(sx - screenX, sy - screenY) < HIT_RADIUS;
+            });
+            
+            if(dragIdx === -1) {
+                const minX = pts[0].x;
+                const maxX = pts[pts.length - 1].x;
+                if (x > minX && x < maxX) {
+                    if(pts.length < 14) {
+                        pts.push({x, y});
+                        pts.sort((a,b)=>a.x-b.x);
+                        dragIdx = pts.findIndex(p => p.x===x && p.y===y);
+                        isDragging = true;
+                        drawCurve(); applyCurves();
+                    }
+                }
+            } else { isDragging = true; }
+        }
+
+        function onMove(e) {
+            if(!isDragging || dragIdx === -1) return;
+            e.preventDefault();
+            const {x, y} = getPointerPos(e);
+            const pts = channels[currentChannel];
+            const pt = pts[dragIdx];
+            
+            let minX = 0, maxX = 255;
+            if (dragIdx === 0) {
+                minX = 0;
+                maxX = (pts.length > 1) ? pts[1].x - 2 : 255;
+            } else if (dragIdx === pts.length - 1) {
+                minX = (pts.length > 1) ? pts[dragIdx - 1].x + 2 : 0;
+                maxX = 255;
+            } else {
+                minX = pts[dragIdx - 1].x + 2;
+                maxX = pts[dragIdx + 1].x - 2;
+            }
+            pt.x = Math.max(minX, Math.min(maxX, x));
+            pt.y = y;
+            drawCurve(); applyCurves();
+        }
+
+        function onUp(e) { isDragging = false; dragIdx = -1; }
+
+        curveCanvas.addEventListener('mousedown', onDown);
+        curveCanvas.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        curveCanvas.addEventListener('touchstart', onDown, {passive:false});
+        curveCanvas.addEventListener('touchmove', onMove, {passive:false});
+        window.addEventListener('touchend', onUp);
+
+        let lastTap = 0;
+        curveCanvas.addEventListener('click', (e) => {
+             const now = new Date().getTime();
+             if (now - lastTap < 300) {
+                 const {screenX, screenY} = getPointerPos(e);
+                 const pts = channels[currentChannel];
+                 const idx = pts.findIndex(p => {
+                    const sx = toScreenX(p.x);
+                    const sy = toScreenY(p.y);
+                    return Math.hypot(sx - screenX, sy - screenY) < HIT_RADIUS;
+                 });
+                 if(idx > 0 && idx < pts.length - 1) {
+                     pts.splice(idx, 1);
+                     drawCurve(); applyCurves();
+                 }
+             }
+             lastTap = now;
+        });
+
+        chanBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                chanBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentChannel = btn.dataset.val;
+                drawCurve();
+            });
+        });
+
+        btnReset.addEventListener('click', () => {
+            channels[currentChannel] = defaultPoints();
+            drawCurve(); applyCurves();
+        });
+
+        // -------------------------
+        // Save処理の修正部分
+        // -------------------------
+        btnDownload.addEventListener('click', () => {
+            if(!originalImageData) return;
+            
+            // toBlobを使ってBlob化してから保存することで、メモリ制限やセキュリティ制限を回避
+            imageCanvas.toBlob((blob) => {
+                if(!blob) return;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'edited_image.png';
+                
+                // Firefox等の一部ブラウザでは、DOMに追加しないとclick()が反応しない
+                document.body.appendChild(a);
+                a.click();
+                
+                // 後始末
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        });
+
+        drawCurve();
+    </script>
+</body>
+</html>
