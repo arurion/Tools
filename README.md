@@ -19,4 +19,5 @@
 [関数音源作成V9.html](https://arurion.github.io/Tools/関数音源作成V9.html)  
 [歌詞ランダム生成.html](https://arurion.github.io/Tools/歌詞ランダム生成.html)  
 [UTAU用歌詞変換.html](https://arurion.github.io/Tools/UTAU用歌詞変換.html)  
-[トーンカーブ.html](https://arurion.github.io/Tools/トーンカーブ.html)
+[トーンカーブ.html](https://arurion.github.io/Tools/トーンカーブ.html)  
+[ネット速度.html](https://arurion.github.io/Tools/ネット速度.html)
