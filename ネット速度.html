@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internet Speed Test | BLAST</title>
+    <style>
+        :root {
+            --main-black: #1a1a1a;
+            --main-green: #20c65a;
+            --main-gray: #999;
+            --bg-color: #ffffff;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--main-black);
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* ロゴ */
+        .header-logo {
+            position: absolute;
+            top: 5vh; /* 画面高さに対する割合 */
+            left: 5vw;
+            width: 120px;
+            height: 40px;
+        }
+
+        /* メイン表示エリア */
+        .meter-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .label {
+            font-size: 1.2rem;
+            margin-bottom: 2vh;
+            color: var(--main-black);
+        }
+
+        /* 数値と単位のラッパー */
+        .value-wrapper {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            width: 100%;
+            /* はみ出し防止の要：折り返さない */
+            white-space: nowrap; 
+            transition: opacity 0.2s;
+        }
+
+        /* 数値：初期サイズは vw (画面幅基準) で指定 */
+        .speed-val {
+            font-size: 24vw; /* デフォルトでかなりデカく */
+            font-weight: 400;
+            letter-spacing: -0.04em;
+            line-height: 1;
+            transition: color 0.4s;
+            z-index: 2;
+        }
+
+        /* 単位 */
+        .speed-unit {
+            font-size: 4vw;
+            font-weight: 500;
+            margin-left: 1rem;
+            color: var(--main-black);
+        }
+
+        /* PCなどでデカすぎないように上限キャップ (任意) */
+        @media (min-width: 1000px) {
+            .speed-val { font-size: 240px; }
+            .speed-unit { font-size: 40px; }
+        }
+
+        .finished .speed-val { color: var(--main-green); }
+
+        /* Spinner */
+        .spinner-svg {
+            width: 60px;
+            height: 60px;
+            margin-top: 3vh;
+            display: none;
+        }
+        .spinner-circle {
+            fill: none;
+            stroke: var(--main-black);
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 150;
+            stroke-dashoffset: 150;
+            transform-origin: center;
+            animation: dash 1.5s ease-in-out infinite, rotate 2s linear infinite;
+        }
+
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+        @keyframes dash {
+            0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+            50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+            100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+        }
+
+        /* ボタン群 */
+        .actions-row {
+            margin-top: 4vh;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            height: 50px;
+        }
+
+        .details-btn {
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 10px 24px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+            display: none; 
+            color: var(--main-black);
+        }
+        .details-btn:hover { border-color: var(--main-black); }
+
+        .restart-btn {
+            background: #fff;
+            border: 1px solid #ccc;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            padding: 0;
+        }
+        .restart-btn:hover { border-color: var(--main-black); }
+        .restart-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--main-black);
+            transition: transform 0.4s;
+        }
+        .restart-btn:hover svg { transform: rotate(-180deg); }
+
+        /* 詳細パネル */
+        .details-panel {
+            display: flex;
+            gap: 5vw;
+            margin-top: 5vh;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.5s;
+            pointer-events: none;
+        }
+        .details-panel.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .detail-item h4 {
+            font-size: 0.8rem;
+            color: var(--main-gray);
+            margin: 0 0 5px 0;
+            text-transform: uppercase;
+        }
+        .detail-item .val {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--main-black);
+        }
+        .detail-item .unit-s {
+            font-size: 1rem;
+            color: var(--main-gray);
+            font-weight: normal;
+            margin-left: 4px;
+        }
+
+        /* 設定パネル */
+        .config-overlay {
+            position: fixed;
+            bottom: 60px;
+            right: 20px;
+            width: 260px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #eee;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(5px);
+            transform: scale(0.9);
+            opacity: 0;
+            pointer-events: none;
+            transition: 0.2s;
+            transform-origin: bottom right;
+            z-index: 100;
+        }
+        .config-overlay.open {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .cfg-row { margin-bottom: 12px; }
+        .cfg-row label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+        .cfg-row input {
+            width: 100%; padding: 8px; box-sizing: border-box;
+            border: 1px solid #ddd; border-radius: 6px;
+            font-size: 0.9rem; text-align: center;
+        }
+        .cfg-row input:focus { outline: none; border-color: var(--main-green); }
+
+        .gear-icon {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            opacity: 0.05; 
+            transition: opacity 0.3s, transform 0.5s;
+            z-index: 101;
+        }
+        .gear-icon:hover { opacity: 0.6; transform: rotate(90deg); }
+
+        .click-trigger {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5;
+            cursor: pointer;
+        }
+        .click-trigger.inactive { display: none; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Logo -->
+    <svg class="header-logo" viewBox="0 0 120 40">
+        <text x="0" y="30" font-family="Arial, sans-serif" font-weight="900" font-size="28" fill="#1a1a1a">BLAST</text>
+        <circle cx="105" cy="20" r="10" fill="none" stroke="#20c65a" stroke-width="3" />
+        <path d="M101 20 L104 23 L109 17" fill="none" stroke="#20c65a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+
+    <!-- Meter Area -->
+    <div class="meter-container" id="meterContainer">
+        <div class="label">お使いのインターネットの速度</div>
+        
+        <!-- 数値と単位のラッパー -->
+        <div class="value-wrapper" id="valWrapper">
+            <div class="speed-val" id="displayVal">0</div>
+            <div class="speed-unit" id="displayUnit">Kbps</div>
+        </div>
+
+        <svg class="spinner-svg" id="spinner" viewBox="0 0 50 50">
+            <circle class="spinner-circle" cx="25" cy="25" r="20"></circle>
+        </svg>
+
+        <div class="actions-row">
+            <button class="details-btn" id="btnDetails" onclick="showDetails()">詳細を表示</button>
+            <button class="restart-btn" id="btnRestart" onclick="runTest()" title="再テスト">
+                <svg viewBox="0 0 24 24">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="details-panel" id="detailsPanel">
+            <div class="detail-item">
+                <h4>レイテンシ</h4>
+                <div class="val" id="resPing">--</div>
+                <span class="unit-s">ms</span>
+            </div>
+            <div class="detail-item">
+                <h4>アップロード</h4>
+                <div class="val" id="resUp">--</div>
+                <span class="unit-s" id="resUpUnit">Mbps</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Panel -->
+    <div class="config-overlay" id="config">
+        <div class="cfg-row">
+            <label>DOWNLOAD VALUE</label>
+            <input type="number" id="inDown" value="12.5">
+        </div>
+        <div class="cfg-row">
+            <label>DOWNLOAD UNIT</label>
+            <input type="text" id="inUnitDown" value="Qbps">
+        </div>
+        <div class="cfg-row">
+            <label>UPLOAD VALUE</label>
+            <input type="number" id="inUp" value="850">
+        </div>
+        <div class="cfg-row">
+            <label>UPLOAD UNIT</label>
+            <input type="text" id="inUnitUp" value="Zbps">
+        </div>
+        <div class="cfg-row">
+            <label>PING (ms)</label>
+            <input type="number" id="inPing" value="0">
+        </div>
+    </div>
+
+    <svg class="gear-icon" onclick="toggleConfig()" viewBox="0 0 24 24">
+        <path fill="#1a1a1a" d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.49l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+    </svg>
+
+    <div class="click-trigger" id="trigger" onclick="runTest()"></div>
+
+    <script>
+        const ui = {
+            container: document.getElementById('meterContainer'),
+            wrapper: document.getElementById('valWrapper'),
+            val: document.getElementById('displayVal'),
+            unit: document.getElementById('displayUnit'),
+            spinner: document.getElementById('spinner'),
+            btnDetails: document.getElementById('btnDetails'),
+            btnRestart: document.getElementById('btnRestart'),
+            detailsPanel: document.getElementById('detailsPanel'),
+            resPing: document.getElementById('resPing'),
+            resUp: document.getElementById('resUp'),
+            resUpUnit: document.getElementById('resUpUnit'),
+            trigger: document.getElementById('trigger'),
+            config: document.getElementById('config')
+        };
+
+        const input = {
+            down: document.getElementById('inDown'),
+            uDown: document.getElementById('inUnitDown'),
+            up: document.getElementById('inUp'),
+            uUp: document.getElementById('inUnitUp'),
+            ping: document.getElementById('inPing')
+        };
+
+        let isRunning = false;
+
+        function toggleConfig() {
+            ui.config.classList.toggle('open');
+        }
+
+        // --- オートフィット機能の核 ---
+        // テキスト幅が画面幅を超えそうになったら、比率を計算してフォントサイズを下げる
+        function fitText() {
+            // CSSで設定した初期サイズ(vwベース)に戻す
+            ui.val.style.fontSize = '';
+            ui.unit.style.fontSize = '';
+            
+            // 現在の幅を取得
+            const wrapperWidth = ui.wrapper.offsetWidth;
+            const windowWidth = window.innerWidth;
+            const maxWidth = windowWidth * 0.9; // 画面幅の90%をリミットとする
+
+            if (wrapperWidth > maxWidth) {
+                // はみ出している場合、縮小率を計算
+                const scale = maxWidth / wrapperWidth;
+                
+                // 現在の計算済みフォントサイズを取得
+                const currentValSize = parseFloat(window.getComputedStyle(ui.val).fontSize);
+                const currentUnitSize = parseFloat(window.getComputedStyle(ui.unit).fontSize);
+
+                // 新しいサイズを適用
+                ui.val.style.fontSize = (currentValSize * scale) + "px";
+                ui.unit.style.fontSize = (currentUnitSize * scale) + "px";
+            }
+        }
+        
+        // 画面リサイズ時にもフィットさせる
+        window.addEventListener('resize', fitText);
+
+        async function runTest() {
+            if(isRunning) return;
+            isRunning = true;
+            ui.trigger.classList.add('inactive');
+            
+            ui.container.classList.remove('finished');
+            ui.val.innerText = "0";
+            ui.spinner.style.display = 'block';
+            
+            ui.btnDetails.style.display = 'none';
+            ui.btnRestart.style.display = 'none';
+            ui.detailsPanel.classList.remove('visible');
+
+            // Reset fonts to default before starting animation
+            ui.val.style.fontSize = '';
+            ui.unit.style.fontSize = '';
+
+            const targetDown = parseFloat(input.down.value);
+            const unitDown = input.uDown.value;
+            const targetUp = parseFloat(input.up.value);
+            const unitUp = input.uUp.value;
+            const ping = input.ping.value;
+
+            ui.unit.innerText = unitDown;
+
+            // アニメーション
+            await animateValue(targetDown, (val) => {
+                ui.val.innerText = formatNumber(val);
+                // ★ 数値が変わるたびにサイズ調整を実行
+                fitText();
+            });
+
+            ui.val.innerText = targetDown;
+            fitText(); // 最終調整
+            
+            ui.container.classList.add('finished');
+            ui.spinner.style.display = 'none';
+
+            ui.resPing.innerText = ping;
+            ui.resUp.innerText = targetUp;
+            ui.resUpUnit.innerText = unitUp;
+
+            ui.btnDetails.style.display = 'block';
+            ui.btnRestart.style.display = 'flex';
+            
+            isRunning = false;
+        }
+
+        function showDetails() {
+            ui.btnDetails.style.display = 'none';
+            ui.detailsPanel.classList.add('visible');
+        }
+
+        function formatNumber(num) {
+            if (num >= 100) return Math.floor(num);
+            if (num >= 10) return num.toFixed(0);
+            return num.toFixed(1);
+        }
+
+        function animateValue(target, cb) {
+            return new Promise(resolve => {
+                let start = null;
+                const duration = 3500; 
+
+                function step(timestamp) {
+                    if (!start) start = timestamp;
+                    const progress = Math.min((timestamp - start) / duration, 1);
+                    
+                    const ease = 1 - Math.pow(1 - progress, 4);
+                    let current = target * ease;
+                    
+                    if (progress < 0.9) {
+                        const noise = (Math.random() - 0.5) * (target * 0.15);
+                        current += noise;
+                        if(current < 0) current = 0;
+                    }
+
+                    cb(current);
+
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+    </script>
+</body>
+</html>
