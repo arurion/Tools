@@ -248,7 +248,7 @@
                             <li><strong>円 (距離):</strong> <code>sqrt((u-0.5)**2 + (v-0.5)**2)</code></li>
                             <li><strong>ストライプ:</strong> <code>sin(u * 50) > 0 ? 255 : 0</code></li>
                             <li><strong>ノイズ:</strong> <code>random() * 255</code></li>
-                            <li><strong>ビット演算 (XOR):</strong> <code>(x ^ y) % 256</code></li>
+                            <li><strong>ビット演算 (XOR):</strong> <code>(()=>{return (x ^ y) % 256;})()</code></li>
                         </ul>
                     </div>
 
@@ -257,7 +257,7 @@
                         <p style="margin:5px 0; color:#aaa;">
                             即時関数を使うと変数宣言やif文、ループが使えます。<br>
                             <code>(() => { let val=0; ... return [r,g,b]; })()</code><br>
-                            <span style="font-size:0.85em; color:#ff8a80;">※この形式の場合、自動補正 (例: 2t → 2*t) は無効になります。</span>
+                            <span style="font-size:0.85em; color:#ff8a80;">※この形式の場合、自動補正 (例: 2t → 2*t) は無効になります。<br>また、^(XOR)はJSモードでないと動作しません。通常では、べき乗として扱われます</span>
                         </p>
                     </div>
 
