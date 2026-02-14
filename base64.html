@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="description" content="このサイトではBase64のエンコード、デコードが可能です"	/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>Base64エンコード/デコード.html</title>
+		<style>
+			body {font-family:sans-serif;padding:5%;max-width:60%; margin:0 auto;}
+			textarea {width:100%;box-sizing:border-box;resize: vertical;}
+		</style>
+		<script>
+			// text読み込み
+			document.addEventListener('DOMContentLoaded', () => {
+			const plainInput = document.getElementById('PlaneText');
+			const base64Input = document.getElementById('Base64Text');
+			
+			// UTF-8変換とBase64エンコード
+            const utf8_to_b64 = (str) => {
+                return window.btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+                    (match, p1) => String.fromCharCode('0x' + p1)));
+            };
+			
+			// Base64デコード
+			const b64_to_utf8 = (str) => {
+				return decodeURIComponent(atob(str).split('').map((c) => {
+					return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+				}).join(''));
+			};
+			
+			// 入力時処理
+            plainInput.addEventListener('input', () => {
+                try {
+                    base64Input.value = utf8_to_b64(plainInput.value);
+                } catch (e) {
+                    base64Input.value = ""; // エラー時は空
+                }
+            });
+			
+			// 入力時処理2
+			
+            base64Input.addEventListener('input', () => {
+                try {
+                    const cleanStr = base64Input.value.trim();
+                    if (cleanStr === "") {
+                        plainInput.value = "";
+                        return;
+                    }
+                    plainInput.value = b64_to_utf8(cleanStr);
+                } catch (e) {
+                    console.log("有効なBase64ではない");
+                }
+            });
+        });
+		</script>
+	</head>
+
+	<body>
+		<textarea id="PlaneText" rows="5" placeholder="Base64エンコードしたい文字をここに入力"></textarea>
+		<textarea id="Base64Text" rows="5" placeholder="Base64をここに入力"></textarea>
+		<!-- Plane(飛行機) Text --> 
+		<p>※Base64はRFC 4648です。<br>バイナリファイルのBase64は対応しておりません。<br>文字はUTF-8として変換されます</p>
+	</body>
+</html>
