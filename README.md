@@ -1,7 +1,7 @@
 # Tools
 自作ツール  
 ほとんどLLM作  
-Base64のやつ以外
+Base64のやつ(base64.html)以外  
 数式画像変換ΛΔ.htmlとTDNFFmpeg.htmlはFFmpegを使用しているのでGPLです  
 自作疑似フルート関数生成.jsは結構考えました。関数音源作成ツールで使えます  
 
@@ -23,3 +23,4 @@ Base64のやつ以外
 [UTAU用歌詞変換.html](https://arurion.github.io/Tools/UTAU用歌詞変換.html)  
 [トーンカーブ.html](https://arurion.github.io/Tools/トーンカーブ.html)  
 [ネット速度.html](https://arurion.github.io/Tools/ネット速度.html)
+[base64.html](https://arurion.github.io/Tools/base64.html)
