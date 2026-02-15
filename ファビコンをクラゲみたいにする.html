@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Emoji Pyoko Sync - 18FPS optimized</title>
+    <link id="favicon" rel="icon" href="">
+    <style>
+        body { 
+            background-color: #121212; color: #eee; margin: 0; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            height: 100vh; font-family: sans-serif; overflow: hidden; 
+        }
+        #dom-display { width: 200px; height: 200px; border-bottom: 4px solid #333; }
+        .info { margin-top: 20px; text-align: center; font-size: 14px; color: #888; line-height: 1.6; }
+        .status { color: #00ffcc; font-weight: bold; }
+        #loading { position: fixed; background: #121212; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div>カラー絵文字を厳密スキャン中...</div>
+    <div style="font-size: 12px; color: #666; margin-top: 8px;">18FPS点滅防止処理を適用</div>
+</div>
+
+<div class="container">
+    <canvas id="dom-display"></canvas>
+    <div class="info">
+        BPM: <span class="status">135</span> | Scale: <span class="status">0.85 - 1.0</span><br>
+        Favicon Refresh: <span class="status">18 FPS</span>
+    </div>
+</div>
+
+<script>
+(async () => {
+    // --- 設定 ---
+    const BPM = 135;
+    const SCALE_MIN = 0.85;
+    const SCALE_MAX = 1.0;
+    const FAV_FPS = 18; // ★ユーザー指定の18FPS
+    
+    const CANVAS_SIZE = 64;
+    const FONT_SIZE_PX = 54;
+    const FONT_FAMILY = '"Noto Color Emoji"';
+    const GF_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap';
+
+    const favicon = document.getElementById('favicon');
+    const domCanvas = document.getElementById('dom-display');
+    const domCtx = domCanvas.getContext('2d');
+    domCanvas.width = CANVAS_SIZE;
+    domCanvas.height = CANVAS_SIZE;
+
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = CANVAS_SIZE;
+    offCanvas.height = CANVAS_SIZE;
+    const ctx = offCanvas.getContext('2d');
+
+    // --- フォント読み込み ---
+    const link = document.createElement('link');
+    link.rel = 'stylesheet'; link.href = GF_CSS;
+    document.head.appendChild(link);
+    await document.fonts.load(`${FONT_SIZE_PX}px "Noto Color Emoji"`);
+
+    // --- 彩度チェックによる厳格判定（Windowsの豆腐除外） ---
+    const isStrictColorEmoji = (emoji) => {
+        const tCanvas = document.createElement('canvas');
+        tCanvas.width = 24; tCanvas.height = 24;
+        const tCtx = tCanvas.getContext('2d', {willReadFrequently: true});
+        tCtx.font = `18px "Noto Color Emoji"`;
+        tCtx.textBaseline = 'middle'; tCtx.textAlign = 'center';
+        tCtx.fillText(emoji, 12, 12);
+        const imgData = tCtx.getImageData(0, 0, 24, 24).data;
+        for (let i = 0; i < imgData.length; i += 4) {
+            const diff = Math.max(
+                Math.abs(imgData[i] - imgData[i+1]), 
+                Math.abs(imgData[i+1] - imgData[i+2]), 
+                Math.abs(imgData[i+2] - imgData[i])
+            );
+            if (diff > 25) return true; // 彩度があればカラー絵文字と判定
+        }
+        return false;
+    };
+
+    // --- 絵文字リスト作成 ---
+    const validEmojis = [];
+    const ranges = [[0x1F600, 0x1F64F], [0x1F300, 0x1F5FF], [0x1F680, 0x1F6FF], [0x1F900, 0x1F9FF]];
+    for (const [start, end] of ranges) {
+        for (let cp = start; cp <= end; cp += 1) {
+            const char = String.fromCodePoint(cp);
+            if (isStrictColorEmoji(char)) validEmojis.push(char);
+            if (validEmojis.length >= 120) break;
+        }
+        if (validEmojis.length >= 120) break;
+    }
+    document.getElementById('loading').style.display = 'none';
+
+    // --- アニメーション変数 ---
+    const animationDuration = (60 / BPM) * 1000; // 1拍のミリ秒
+    const scaleCenter = (SCALE_MAX + SCALE_MIN) / 2;
+    const scaleAmplitude = (SCALE_MAX - SCALE_MIN) / 2;
+    const GROUND_Y = CANVAS_SIZE - 4;
+
+    let startTime = performance.now();
+    let lastCycle = -1;
+    let lastFavUpdateTime = 0;
+    let currentEmoji = validEmojis[0];
+
+    function update(currentTime) {
+        const elapsedTime = currentTime - startTime;
+        
+        // 1. 拍（サイクル）の判定
+        const currentCycle = Math.floor(elapsedTime / animationDuration);
+        if (currentCycle !== lastCycle) {
+            currentEmoji = validEmojis[Math.floor(Math.random() * validEmojis.length)];
+            lastCycle = currentCycle;
+        }
+
+        // 2. 伸縮率(scaleY)の計算
+        const progress = (elapsedTime % animationDuration) / animationDuration;
+        const cosValue = -Math.cos(progress * 2 * Math.PI);
+        const scaleY = scaleCenter + cosValue * scaleAmplitude;
+
+        // 3. オフスクリーンキャンバスへ描画
+        ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        ctx.save();
+        ctx.translate(CANVAS_SIZE / 2, GROUND_Y);
+        ctx.scale(1, scaleY); // 下辺固定の伸縮
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.font = `${FONT_SIZE_PX}px "Noto Color Emoji", sans-serif`;
+        ctx.fillText(currentEmoji, 0, 0);
+        ctx.restore();
+
+        // 4. DOM表示（60FPSで滑らかに表示）
+        domCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        domCtx.drawImage(offCanvas, 0, 0);
+
+        // 5. ファビコン更新（指定の18FPSに制限）
+        // 1000ms / 18fps ≒ 55.5ms ごとに更新
+        if (currentTime - lastFavUpdateTime >= (1000 / FAV_FPS)) {
+            favicon.href = offCanvas.toDataURL('image/png');
+            lastFavUpdateTime = currentTime;
+        }
+
+        requestAnimationFrame(update);
+    }
+
+    requestAnimationFrame(update);
+})();
+</script>
+</body>
+</html>
