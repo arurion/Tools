@@ -290,14 +290,21 @@
             <!-- XML Import (Second step) -->
             <input type="file" id="xmlLoader" accept=".xml" style="display:none" onchange="app.handleXmlImport(this)">
         </div>
-
-        <select id="exportFormat" style="margin-bottom:5px;">
+        <!-- スプライトシートを任意の出力の仕方に -->
+        <select id="exportFormat" style="margin-bottom:5px;" onchange="document.getElementById('sheetSettings').style.display = this.value === 'spritesheet' ? 'flex' : 'none'">
             <option value="png_single">現在フレーム (PNG)</option>
             <option value="zip_seq">連番画像 (ZIP)</option>
             <option value="spritesheet">SpriteSheet + XML</option>
             <option value="apng">APNG (アニメーション)</option>
             <option value="gif">GIF (アニメーション)</option>
         </select>
+        
+        <!-- スプライトシート用の行列設定（初期は非表示） -->
+        <div id="sheetSettings" style="display:none; gap:5px; margin-bottom:5px; align-items:center;">
+            <label style="font-size:12px;">横(列): <input type="number" id="sheetCols" value="4" min="1" style="width:40px;"></label>
+            <label style="font-size:12px;">縦(行): <input type="number" id="sheetRows" value="4" min="1" style="width:40px;"></label>
+        </div>
+
         <button onclick="app.exportProject()" style="width:100%">書き出し (Export)</button>
     </div>
 </div>
@@ -1117,9 +1124,17 @@ async exportProject() {
             renders.forEach((c, i) => z.file(`frame_${i}.png`, c.toDataURL().split(',')[1], {base64: true}));
             z.generateAsync({type: 'blob'}).then(b => saveAs(b, 'frames.zip'));
         }
+        // スプライトシートを任意の分け方に
         else if (fmt === 'spritesheet') {
-            const cols = Math.ceil(Math.sqrt(renders.length));
-            const rows = Math.ceil(renders.length / cols);
+            const cols = parseInt(document.getElementById('sheetCols').value) || 1;
+            const rows = parseInt(document.getElementById('sheetRows').value) || 1;
+            
+            // フレーム数以上のマスがあるかチェック
+            if (cols * rows < renders.length) {
+                alert(`マスの数が足りません！\nアニメーションのフレーム数: ${renders.length}コマ\n指定されたマス数: ${cols * rows}マス (横${cols} × 縦${rows})`);
+                return;
+            }
+
             const sheet = document.createElement('canvas'); 
             sheet.width = cols * this.width; 
             sheet.height = rows * this.height;
