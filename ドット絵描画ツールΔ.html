@@ -976,9 +976,12 @@ triggerXmlSelect() {
         const reader = new FileReader();
         reader.onload = e => {
             const img = new Image();
-            img.onload = () => {
+                img.onload = () => {
                 // 新規レイヤー作成
                 const newLayer = this.createLayer(file.name);
+                
+                // 【変更】拡大縮小時にぼやけないようにする（ニアレストネイバー）
+                newLayer.ctx.imageSmoothingEnabled = false;
                 
                 // キャンバスサイズに合わせて画像を描画（リサイズ）
                 newLayer.ctx.drawImage(img, 0, 0, this.width, this.height);
