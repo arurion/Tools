@@ -232,6 +232,7 @@
             <button class="tool-btn" onclick="app.setTool('rect')" title="Rect (R)">⬜</button>
             <button class="tool-btn" onclick="app.setTool('circle')" title="Circle (C)">⚪</button>
             <button class="tool-btn" onclick="app.setTool('move')" title="Move Layer (M)">✋</button>
+            <button class="tool-btn" onclick="app.setTool('select')" title="Select Area (S)">⛶</button>
         </div>
         <div style="margin-top:5px; display:flex; align-items:center; gap:5px;">
             <label>Size:</label>
@@ -361,7 +362,9 @@ constructor() {
         
         // Import temp storage
         this.pendingImportImg = null;
-
+        // Copy/Paste State
+        this.selection = null; // {x, y, w, h}
+        this.clipboard = null; // ImageData
         // DOM
         this.canvas = document.getElementById('drawingCanvas');
         this.container = document.getElementById('canvasContainer');
@@ -471,6 +474,8 @@ setupEvents() {
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); this.undo(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); this.redo(); }
+            if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') { e.preventDefault(); this.copySelection(); }
+            if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') { e.preventDefault(); this.pasteSelection(); }
         });
 
         window.addEventListener('keyup', e => {
@@ -518,12 +523,12 @@ setupEvents() {
             if (!this.isDrawing) return;
             const pos = getPos(e);
             
-            if(this.tool === 'pen' || this.tool === 'eraser') {
+if(this.tool === 'pen' || this.tool === 'eraser') {
                 this.plotLine(this.getCurrentCtx(), this.lastPos.x, this.lastPos.y, pos.x, pos.y);
                 this.lastPos = pos;
                 this.renderCanvas();
             } 
-            else if (['line','rect','circle','move'].includes(this.tool)) {
+            else if (['line','rect','circle','move','select'].includes(this.tool)) {
                 this.renderCanvas(); 
                 this.drawPreview(this.lastPos, pos);
             }
@@ -549,8 +554,16 @@ setupEvents() {
             else if(this.tool === 'move') {
                 this.shiftLayer(pos.x - this.lastPos.x, pos.y - this.lastPos.y);
             }
+            else if(this.tool === 'select') {
+                // 選択範囲を確定 (始点と終点から矩形を計算)
+                const x = Math.min(this.lastPos.x, pos.x);
+                const y = Math.min(this.lastPos.y, pos.y);
+                const w = Math.abs(pos.x - this.lastPos.x) + 1;
+                const h = Math.abs(pos.y - this.lastPos.y) + 1;
+                this.selection = {x, y, w, h};
+            }
             
-            this.saveHistory();
+            if(this.tool !== 'select') this.saveHistory(); // 選択だけなら履歴に残さない
             this.renderCanvas();
         });
         
@@ -648,10 +661,20 @@ setupEvents() {
         if (this.tool === 'line') this.plotLine(ctx, p1.x, p1.y, p2.x, p2.y);
         else if (this.tool === 'rect') this.plotRect(ctx, p1.x, p1.y, p2.x, p2.y);
         else if (this.tool === 'circle') this.plotCircle(ctx, p1.x, p1.y, p2.x, p2.y);
-        else if (this.tool === 'move') {
+else if (this.tool === 'move') {
             ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
             const dx = p2.x - p1.x, dy = p2.y - p1.y;
             ctx.strokeRect(dx, dy, this.width, this.height);
+        }
+        else if (this.tool === 'select') {
+            // ドラッグ中の点線表示
+            ctx.save();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.setLineDash([4, 2]);
+            const w = p2.x - p1.x + (p2.x>=p1.x?1:-1), h = p2.y - p1.y + (p2.y>=p1.y?1:-1); // 1px補正
+            ctx.strokeRect(p1.x - 0.5, p1.y - 0.5, w, h); // グリッドに合わせるため0.5ずらす
+            ctx.strokeStyle = '#000'; ctx.lineDashOffset = 3;
+            ctx.strokeRect(p1.x - 0.5, p1.y - 0.5, w, h);
+            ctx.restore();
         }
     }
 
@@ -728,8 +751,19 @@ setupEvents() {
         ctx.putImageData(d, dx, dy);
     }
 
-    renderCanvas() {
+renderCanvas() {
         this.ctx.clearRect(0, 0, this.width, this.height);
+        
+        // 選択範囲が確定している場合、点線を表示
+        if (this.selection && this.tool === 'select' && !this.isDrawing) {
+            this.ctx.save();
+            this.ctx.strokeStyle = '#fff'; this.ctx.lineWidth = 1; this.ctx.setLineDash([4, 2]);
+            this.ctx.strokeRect(this.selection.x - 0.5, this.selection.y - 0.5, this.selection.w, this.selection.h);
+            this.ctx.strokeStyle = '#000'; this.ctx.lineDashOffset = 3;
+            this.ctx.strokeRect(this.selection.x - 0.5, this.selection.y - 0.5, this.selection.w, this.selection.h);
+            this.ctx.restore();
+        }
+
         if (document.getElementById('onionSkin').checked && this.currentFrameIndex > 0) {
             const prev = this.frames[this.currentFrameIndex - 1];
             this.ctx.save();
@@ -1258,7 +1292,7 @@ async exportProject() {
         this.updateUI();
         this.saveHistory();
     }
-    mergeDown() {
+mergeDown() {
         if (this.currentLayerIndex === 0) return;
         const frame = this.frames[this.currentFrameIndex];
         const top = frame.layers[this.currentLayerIndex];
@@ -1266,6 +1300,47 @@ async exportProject() {
         bot.ctx.drawImage(top.canvas, 0, 0);
         frame.layers.splice(this.currentLayerIndex, 1);
         this.currentLayerIndex--;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    // 【新規】選択範囲のコピー
+    copySelection() {
+        if (!this.selection) { alert("範囲を選択してください(Select Tool)"); return; }
+        const ctx = this.getCurrentCtx();
+        this.clipboard = ctx.getImageData(this.selection.x, this.selection.y, this.selection.w, this.selection.h);
+        
+        // コピーしたことを視覚的に知らせる（一瞬枠を光らせる等）
+        const tempDiv = document.createElement('div');
+        tempDiv.innerText = "Copied!";
+        tempDiv.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#000; color:#fff; padding:10px; z-index:9999; border-radius:5px;";
+        document.body.appendChild(tempDiv);
+        setTimeout(() => document.body.removeChild(tempDiv), 500);
+    }
+
+    // 【新規】新規レイヤーへペースト
+    pasteSelection() {
+        if (!this.clipboard) return;
+        
+        // 新規レイヤー作成
+        const newLayer = this.createLayer('Pasted Layer');
+        
+        // 元の座標に配置する（選択範囲の左上）
+        // ※ this.selection が null になっている可能性も考慮し、保持された imageData のサイズを使用
+        const targetX = this.selection ? this.selection.x : 0;
+        const targetY = this.selection ? this.selection.y : 0;
+        
+        newLayer.ctx.putImageData(this.clipboard, targetX, targetY);
+        
+        // 現在のフレームに挿入
+        const frame = this.frames[this.currentFrameIndex];
+        frame.layers.splice(this.currentLayerIndex + 1, 0, newLayer);
+        this.currentLayerIndex++;
+        
+        // ペースト後は移動ツールに切り替えると便利なので切り替え
+        this.setTool('move');
+        this.selection = null; // ペーストしたら選択解除
+        
         this.updateUI();
         this.saveHistory();
     }
