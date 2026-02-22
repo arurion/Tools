@@ -232,6 +232,8 @@
             <button class="tool-btn" onclick="app.setTool('rect')" title="Rect (R)">⬜</button>
             <button class="tool-btn" onclick="app.setTool('circle')" title="Circle (C)">⚪</button>
             <button class="tool-btn" onclick="app.setTool('move')" title="Move Layer (M)">✋</button>
+            <!-- 選択コピー追加 -->
+            <button class="tool-btn" onclick="app.setTool('select')" title="Select (S)">⬚</button>
         </div>
         <div style="margin-top:5px; display:flex; align-items:center; gap:5px;">
             <label>Size:</label>
@@ -267,26 +269,33 @@
 
     <!-- Right Sidebar -->
     <div class="right-sidebar">
+<!-- レイヤー順変更機能追加 -->
         <h3>Layers</h3>
         <div style="display:flex; gap:2px; margin-bottom:5px;">
             <button onclick="app.addLayer()" style="flex:1">+Add</button>
             <button onclick="app.deleteLayer()" title="Delete">Del</button>
             <button onclick="app.mergeDown()" title="Merge Down">▼</button>
+            <button onclick="app.moveLayerUp()" title="Move Up">↑</button>
+            <button onclick="app.moveLayerDown()" title="Move Down">↓</button>
         </div>
-        <div id="layerList" class="layer-list"></div>
 
         <h3>Settings</h3>
         <label style="font-size:12px;"><input type="checkbox" id="onionSkin" onchange="app.renderCanvas()"> Onion Skin (透かし)</label>
 
         <h3>Import / Export</h3>
         
+<!-- レイヤーとして画像を追加機能の追加 -->
         <div style="border:1px solid #555; padding:5px; margin-bottom:10px; background:#222;">
             <div style="font-size:11px; color:#aaa; margin-bottom:5px;">PROJECT / IMAGE / SHEET</div>
-            <button onclick="document.getElementById('fileLoader').click()" style="width:100%; color:#fff; background:var(--accent-color);">
+            <button onclick="document.getElementById('fileLoader').click()" style="width:100%; color:#fff; background:var(--accent-color); margin-bottom: 5px;">
                 📂 開く (Open)
+            </button>
+            <button onclick="document.getElementById('layerImgLoader').click()" style="width:100%; color:#fff; background:#555;">
+                🖼️ レイヤーとして画像追加
             </button>
             <!-- Main Import -->
             <input type="file" id="fileLoader" multiple style="display:none" onchange="app.handleFileImport(this)">
+            <input type="file" id="layerImgLoader" accept="image/*" style="display:none" onchange="app.handleLayerImageImport(this)">
             <!-- XML Import (Second step) -->
             <input type="file" id="xmlLoader" accept=".xml" style="display:none" onchange="app.handleXmlImport(this)">
         </div>
@@ -353,6 +362,9 @@ constructor() {
         // Panning state
         this.isSpaceDown = false;
         this.isPanning = false;
+        // 画像コピペ用変数
+        this.selection = null; // {x0, y0, x1, y1}
+        this.clipboardCanvas = null;
         
         // Import temp storage
         this.pendingImportImg = null;
@@ -466,6 +478,9 @@ setupEvents() {
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); this.undo(); }
             if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); this.redo(); }
+            // コピペ追加
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c') { e.preventDefault(); this.copySelection(); }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') { e.preventDefault(); this.pasteClipboard(); }
         });
 
         window.addEventListener('keyup', e => {
@@ -497,6 +512,11 @@ setupEvents() {
             if(this.tool === 'picker') { this.pickColor(this.lastPos.x, this.lastPos.y); this.isDrawing=false; return; }
             if(this.tool === 'bucket') { this.floodFill(this.lastPos.x, this.lastPos.y); this.isDrawing=false; this.saveHistory(); return; }
             
+            if (this.tool === 'select') {
+                this.selection = null;
+                this.renderCanvas();
+            }
+
             if(this.tool === 'pen' || this.tool === 'eraser') {
                 this.drawDot(this.getCurrentCtx(), this.lastPos.x, this.lastPos.y);
             }
@@ -518,7 +538,7 @@ setupEvents() {
                 this.lastPos = pos;
                 this.renderCanvas();
             } 
-            else if (['line','rect','circle','move'].includes(this.tool)) {
+            else if (['line','rect','circle','move','select'].includes(this.tool)) {
                 this.renderCanvas(); 
                 this.drawPreview(this.lastPos, pos);
             }
@@ -543,6 +563,11 @@ setupEvents() {
             }
             else if(this.tool === 'move') {
                 this.shiftLayer(pos.x - this.lastPos.x, pos.y - this.lastPos.y);
+            }
+            else if (this.tool === 'select') {
+                this.selection = { x0: this.lastPos.x, y0: this.lastPos.y, x1: pos.x, y1: pos.y };
+                this.renderCanvas();
+                return; // 選択範囲を作るだけなので履歴保存はスキップ
             }
             
             this.saveHistory();
@@ -636,8 +661,19 @@ setupEvents() {
         }
     }
 
+// コピペ用部分追加
     drawPreview(p1, p2) {
         const ctx = this.ctx; 
+        
+        if (this.tool === 'select') {
+            ctx.strokeStyle = '#fff'; ctx.setLineDash([1, 1]); ctx.lineWidth = 1;
+            const xMin = Math.min(p1.x, p2.x), yMin = Math.min(p1.y, p2.y);
+            const w = Math.abs(p2.x - p1.x) + 1, h = Math.abs(p2.y - p1.y) + 1;
+            ctx.strokeRect(xMin - 0.1, yMin - 0.1, w + 0.2, h + 0.2);
+            ctx.setLineDash([]);
+            return;
+        }
+
         ctx.fillStyle = this.color;
         
         if (this.tool === 'line') this.plotLine(ctx, p1.x, p1.y, p2.x, p2.y);
@@ -723,26 +759,80 @@ setupEvents() {
         ctx.putImageData(d, dx, dy);
     }
 
-    renderCanvas() {
-        this.ctx.clearRect(0, 0, this.width, this.height);
-        if (document.getElementById('onionSkin').checked && this.currentFrameIndex > 0) {
-            const prev = this.frames[this.currentFrameIndex - 1];
-            this.ctx.save();
-            this.ctx.globalAlpha = 0.3;
-            prev.layers.forEach(l => { if(l.visible) this.ctx.drawImage(l.canvas, 0, 0); });
-            this.ctx.restore();
+// コピペ用機能追加
+    drawPreview(p1, p2) {
+        const ctx = this.ctx; 
+        
+        if (this.tool === 'select') {
+            ctx.strokeStyle = '#fff'; ctx.setLineDash([1, 1]); ctx.lineWidth = 1;
+            const xMin = Math.min(p1.x, p2.x), yMin = Math.min(p1.y, p2.y);
+            const w = Math.abs(p2.x - p1.x) + 1, h = Math.abs(p2.y - p1.y) + 1;
+            ctx.strokeRect(xMin - 0.1, yMin - 0.1, w + 0.2, h + 0.2);
+            ctx.setLineDash([]);
+            return;
         }
+
+        ctx.fillStyle = this.color;
+        
+        if (this.tool === 'line') this.plotLine(ctx, p1.x, p1.y, p2.x, p2.y);
+        else if (this.tool === 'rect') this.plotRect(ctx, p1.x, p1.y, p2.x, p2.y);
+        else if (this.tool === 'circle') this.plotCircle(ctx, p1.x, p1.y, p2.x, p2.y);
+        else if (this.tool === 'move') {
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            ctx.strokeRect(dx, dy, this.width, this.height);
+        }
+    }
+
+// 【変更】塗りつぶし (RGBA対応)
+    floodFill(x, y) {
+// コピーペースト機能追加
+    copySelection() {
+        if (!this.selection) return;
+        const x = Math.min(this.selection.x0, this.selection.x1);
+        const y = Math.min(this.selection.y0, this.selection.y1);
+        const w = Math.abs(this.selection.x1 - this.selection.x0) + 1;
+        const h = Math.abs(this.selection.y1 - this.selection.y0) + 1;
+        
+        this.clipboardCanvas = document.createElement('canvas');
+        this.clipboardCanvas.width = w;
+        this.clipboardCanvas.height = h;
+        const ctx = this.clipboardCanvas.getContext('2d');
+        
+        // 現在アクティブなレイヤーから選択範囲をコピー
+        const currentLayerCanvas = this.frames[this.currentFrameIndex].layers[this.currentLayerIndex].canvas;
+        ctx.drawImage(currentLayerCanvas, x, y, w, h, 0, 0, w, h);
+    }
+
+    pasteClipboard() {
+        if (!this.clipboardCanvas) return;
+        
         const frame = this.frames[this.currentFrameIndex];
-        frame.layers.forEach(l => {
-            if (l.visible) this.ctx.drawImage(l.canvas, 0, 0);
-        });
-        this.updateFramePreview(this.currentFrameIndex);
+        const newLayer = this.createLayer(`Pasted`);
+        
+        // 選択範囲が残っていればその位置に、無ければ(0,0)に貼り付ける
+        const x = this.selection ? Math.min(this.selection.x0, this.selection.x1) : 0;
+        const y = this.selection ? Math.min(this.selection.y0, this.selection.y1) : 0;
+        
+        newLayer.ctx.drawImage(this.clipboardCanvas, x, y);
+        
+        // 新規レイヤーとして現在レイヤーの上に挿入
+        frame.layers.splice(this.currentLayerIndex + 1, 0, newLayer);
+        this.currentLayerIndex++;
+        
+        // 選択範囲をリセットし、貼り付けたものをすぐ動かせるように「移動ツール」に切り替え
+        this.selection = null;
+        this.setTool('move');
+        
+        this.updateUI();
+        this.saveHistory();
     }
 
     // ==========================================
     // UI Updates
     // ==========================================
     
+    updateUI() {
     updateUI() {
         const lList = document.getElementById('layerList');
         lList.innerHTML = '';
@@ -863,7 +953,32 @@ setupEvents() {
     // ==========================================
     // Import / Export
     // ==========================================
-    
+    // 画像挿入機能
+    handleLayerImageImport(input) {
+        if(!input.files[0]) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const frame = this.frames[this.currentFrameIndex];
+                const newLayer = this.createLayer(`Imported Image`);
+                
+                // 画像を現在のキャンバスサイズに合わせてリサイズして描画
+                newLayer.ctx.drawImage(img, 0, 0, this.width, this.height);
+                
+                // 現在のレイヤーの上に挿入
+                frame.layers.splice(this.currentLayerIndex + 1, 0, newLayer);
+                this.currentLayerIndex++;
+                
+                this.updateUI();
+                this.saveHistory();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+        input.value = ''; // Reset
+    }
+
     handleFileImport(input) {
         if(input.files.length === 0) return;
         
@@ -1223,6 +1338,7 @@ async exportProject() {
         this.updateUI();
         this.saveHistory();
     }
+
     mergeDown() {
         if (this.currentLayerIndex === 0) return;
         const frame = this.frames[this.currentFrameIndex];
@@ -1230,6 +1346,28 @@ async exportProject() {
         const bot = frame.layers[this.currentLayerIndex - 1];
         bot.ctx.drawImage(top.canvas, 0, 0);
         frame.layers.splice(this.currentLayerIndex, 1);
+        this.currentLayerIndex--;
+        this.updateUI();
+        this.saveHistory();
+    }
+     // レイヤー順変更
+    moveLayerUp() {
+        const frame = this.frames[this.currentFrameIndex];
+        if (this.currentLayerIndex >= frame.layers.length - 1) return;
+        const tmp = frame.layers[this.currentLayerIndex];
+        frame.layers[this.currentLayerIndex] = frame.layers[this.currentLayerIndex + 1];
+        frame.layers[this.currentLayerIndex + 1] = tmp;
+        this.currentLayerIndex++;
+        this.updateUI();
+        this.saveHistory();
+    }
+    
+    moveLayerDown() {
+        const frame = this.frames[this.currentFrameIndex];
+        if (this.currentLayerIndex <= 0) return;
+        const tmp = frame.layers[this.currentLayerIndex];
+        frame.layers[this.currentLayerIndex] = frame.layers[this.currentLayerIndex - 1];
+        frame.layers[this.currentLayerIndex - 1] = tmp;
         this.currentLayerIndex--;
         this.updateUI();
         this.saveHistory();
