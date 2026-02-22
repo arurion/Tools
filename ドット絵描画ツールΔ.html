@@ -271,6 +271,8 @@
         <h3>Layers</h3>
         <div style="display:flex; gap:2px; margin-bottom:5px;">
             <button onclick="app.addLayer()" style="flex:1">+Add</button>
+            <button onclick="app.moveLayerUp()" title="Up">↑</button>
+            <button onclick="app.moveLayerDown()" title="Down">↓</button>
             <button onclick="app.deleteLayer()" title="Delete">Del</button>
             <button onclick="app.mergeDown()" title="Merge Down">▼</button>
         </div>
@@ -1290,9 +1292,40 @@ async exportProject() {
         frame.layers.splice(this.currentLayerIndex, 1);
         if (this.currentLayerIndex >= frame.layers.length) this.currentLayerIndex = frame.layers.length - 1;
         this.updateUI();
+this.saveHistory();
+    }
+
+    // 【新規】レイヤーを一つ上へ
+    moveLayerUp() {
+        const layers = this.frames[this.currentFrameIndex].layers;
+        if(this.currentLayerIndex >= layers.length - 1) return; // すでに一番上
+        
+        // 配列の要素を入れ替え
+        const temp = layers[this.currentLayerIndex];
+        layers[this.currentLayerIndex] = layers[this.currentLayerIndex + 1];
+        layers[this.currentLayerIndex + 1] = temp;
+        
+        this.currentLayerIndex++; // 選択状態も追従
+        this.updateUI();
         this.saveHistory();
     }
-mergeDown() {
+
+    // 【新規】レイヤーを一つ下へ
+    moveLayerDown() {
+        if(this.currentLayerIndex <= 0) return; // すでに一番下
+        const layers = this.frames[this.currentFrameIndex].layers;
+        
+        // 配列の要素を入れ替え
+        const temp = layers[this.currentLayerIndex];
+        layers[this.currentLayerIndex] = layers[this.currentLayerIndex - 1];
+        layers[this.currentLayerIndex - 1] = temp;
+        
+        this.currentLayerIndex--; // 選択状態も追従
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    mergeDown() {
         if (this.currentLayerIndex === 0) return;
         const frame = this.frames[this.currentFrameIndex];
         const top = frame.layers[this.currentLayerIndex];
