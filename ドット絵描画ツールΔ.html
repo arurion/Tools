@@ -795,7 +795,7 @@ renderCanvas() {
             item.onclick = () => { this.currentLayerIndex = i; this.updateUI(); };
             item.innerHTML = `
                 <span style="cursor:pointer; margin-right:5px;" onclick="event.stopPropagation(); app.toggleVis(${i})">${l.visible ? '👁️' : '⚪'}</span>
-                <span class="name">${l.name}</span>
+                <span class="name" title="ダブルクリックで名称変更" ondblclick="event.stopPropagation(); app.renameLayer(${i})">${l.name}</span>
             `;
             lList.appendChild(item);
         }
@@ -822,10 +822,22 @@ renderCanvas() {
         this.renderCanvas();
     }
     
-    toggleVis(i) {
+toggleVis(i) {
         this.frames[this.currentFrameIndex].layers[i].visible = !this.frames[this.currentFrameIndex].layers[i].visible;
         this.renderCanvas();
         this.updateUI();
+    }
+
+    // 【新規】レイヤー名変更
+    renameLayer(i) {
+        const layer = this.frames[this.currentFrameIndex].layers[i];
+        // プロンプトを表示
+        const newName = prompt("新しいレイヤー名を入力:", layer.name);
+        if (newName !== null) { // キャンセルされなかった場合
+            layer.name = newName || layer.name; // 空文字なら変更しない
+            this.updateUI();
+            this.saveHistory();
+        }
     }
 
     updateFramePreview(idx) {
