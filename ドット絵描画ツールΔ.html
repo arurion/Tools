@@ -285,8 +285,13 @@
             <button onclick="document.getElementById('fileLoader').click()" style="width:100%; color:#fff; background:var(--accent-color);">
                 📂 開く (Open)
             </button>
+            <button onclick="document.getElementById('layerLoader').click()" style="width:100%; margin-top:5px;">
+                ➕ 画像をレイヤー追加
+            </button>
             <!-- Main Import -->
             <input type="file" id="fileLoader" multiple style="display:none" onchange="app.handleFileImport(this)">
+            <!-- Layer Import -->
+            <input type="file" id="layerLoader" accept="image/*" style="display:none" onchange="app.handleLayerImport(this)">
             <!-- XML Import (Second step) -->
             <input type="file" id="xmlLoader" accept=".xml" style="display:none" onchange="app.handleXmlImport(this)">
         </div>
@@ -910,9 +915,39 @@ setupEvents() {
     }
 
     // Triggered by the Overlay Button
-    triggerXmlSelect() {
+triggerXmlSelect() {
         document.getElementById('overlayBtn').style.display = 'none';
         document.getElementById('xmlLoader').click();
+    }
+
+    // 【新規】画像を現在のフレームにレイヤーとして追加（サイズ合わせ）
+    handleLayerImport(input) {
+        if (input.files.length === 0) return;
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                // 新規レイヤー作成
+                const newLayer = this.createLayer(file.name);
+                
+                // キャンバスサイズに合わせて画像を描画（リサイズ）
+                newLayer.ctx.drawImage(img, 0, 0, this.width, this.height);
+                
+                // 現在のフレームの、現在選択中レイヤーの上に挿入
+                const frame = this.frames[this.currentFrameIndex];
+                frame.layers.splice(this.currentLayerIndex + 1, 0, newLayer);
+                
+                // 選択レイヤーを新規レイヤーに移動
+                this.currentLayerIndex++;
+                
+                this.updateUI();
+                this.saveHistory();
+                input.value = ''; // リセット
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
     }
 
     handleXmlImport(input) {
