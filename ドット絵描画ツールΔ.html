@@ -223,7 +223,7 @@
     <!-- Left Sidebar -->
     <div class="sidebar">
         <h3>Tools</h3>
-    <div class="tool-grid">
+        <div class="tool-grid">
             <button class="tool-btn active" onclick="app.setTool('pen')" title="Pen (P)">✏️</button>
             <button class="tool-btn" onclick="app.setTool('eraser')" title="Eraser (E)">🧼</button>
             <button class="tool-btn" onclick="app.setTool('bucket')" title="Fill (F)">🪣</button>
@@ -232,7 +232,6 @@
             <button class="tool-btn" onclick="app.setTool('rect')" title="Rect (R)">⬜</button>
             <button class="tool-btn" onclick="app.setTool('circle')" title="Circle (C)">⚪</button>
             <button class="tool-btn" onclick="app.setTool('move')" title="Move Layer (M)">✋</button>
-            <button class="tool-btn" onclick="app.setTool('select')" title="Select (S)">⬚</button>
         </div>
         <div style="margin-top:5px; display:flex; align-items:center; gap:5px;">
             <label>Size:</label>
@@ -267,14 +266,13 @@
     </div>
 
     <!-- Right Sidebar -->
-<h3>Layers</h3>
+    <div class="right-sidebar">
+        <h3>Layers</h3>
         <div style="display:flex; gap:2px; margin-bottom:5px;">
             <button onclick="app.addLayer()" style="flex:1">+Add</button>
             <button onclick="app.deleteLayer()" title="Delete">Del</button>
             <button onclick="app.mergeDown()" title="Merge Down">▼</button>
         </div>
-        <button onclick="document.getElementById('layerImgLoader').click()" style="width:100%; margin-bottom:5px; font-size:11px;">🖼️ 新規レイヤーとして画像読込</button>
-        <input type="file" id="layerImgLoader" accept="image/*" style="display:none" onchange="app.importImageToLayer(this)">
         <div id="layerList" class="layer-list"></div>
 
         <h3>Settings</h3>
@@ -1225,7 +1223,7 @@ async exportProject() {
         this.updateUI();
         this.saveHistory();
     }
-mergeDown() {
+    mergeDown() {
         if (this.currentLayerIndex === 0) return;
         const frame = this.frames[this.currentFrameIndex];
         const top = frame.layers[this.currentLayerIndex];
@@ -1235,33 +1233,6 @@ mergeDown() {
         this.currentLayerIndex--;
         this.updateUI();
         this.saveHistory();
-    }
-
-    importImageToLayer(input) {
-        if(!input.files[0]) return;
-        const reader = new FileReader();
-        reader.onload = e => {
-            const img = new Image();
-            img.onload = () => {
-                if (img.width !== this.width || img.height !== this.height) {
-                    if (confirm(`画像サイズ(${img.width}x${img.height})がキャンバス(${this.width}x${this.height})と異なります。\nキャンバスのサイズを変更しますか？\n\n[OK] = 変更する\n[キャンセル] = そのまま配置`)) {
-                        this.resizeProject(img.width, img.height);
-                    }
-                }
-                const frame = this.frames[this.currentFrameIndex];
-                const newLayer = this.createLayer(`Imported Img`);
-                newLayer.ctx.drawImage(img, 0, 0);
-                
-                // 現在のレイヤーの上に挿入
-                frame.layers.splice(this.currentLayerIndex + 1, 0, newLayer);
-                this.currentLayerIndex++;
-                this.updateUI();
-                this.saveHistory();
-                input.value = '';
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(input.files[0]);
     }
 }
 const app = new PixelApp();
