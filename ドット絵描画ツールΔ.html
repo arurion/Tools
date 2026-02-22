@@ -273,7 +273,6 @@
             <button onclick="app.deleteLayer()" title="Delete">Del</button>
             <button onclick="app.mergeDown()" title="Merge Down">▼</button>
         </div>
-    <!-- レイヤー画像取り込み -->
         <button onclick="document.getElementById('layerImgLoader').click()" style="width:100%; margin-bottom:5px; font-size:11px;">🖼️ 新規レイヤーとして画像読込</button>
         <input type="file" id="layerImgLoader" accept="image/*" style="display:none" onchange="app.importImageToLayer(this)">
         <div id="layerList" class="layer-list"></div>
