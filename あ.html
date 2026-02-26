@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全調スケール＆アルペジオ楽譜</title>
+<script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic-min.js"></script>
+<style>
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background-color: #f4f6f8;
+    color: #333;
+    line-height: 1.6;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 10px;
+  }
+  .desc {
+    text-align: center;
+    color: #7f8c8d;
+    margin-bottom: 40px;
+    font-size: 1.1em;
+    letter-spacing: 1px;
+    word-wrap: break-word;
+  }
+  .pair-container {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 40px;
+    padding: 30px;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .pair-title {
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-top: 0;
+    color: #2980b9;
+    font-size: 1.8em;
+    text-align: center;
+  }
+  .tab-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    background-color: #ecf0f1;
+    border: 1px solid #bdc3c7;
+    border-radius: 20px;
+    padding: 10px 20px;
+    font-size: 1em;
+    color: #2c3e50;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    font-weight: bold;
+  }
+  .tab-btn:hover {
+    background-color: #d5dbdb;
+  }
+  .tab-btn.active {
+    background-color: #3498db;
+    color: white;
+    border-color: #3498db;
+  }
+  .score-block {
+    margin-bottom: 30px;
+  }
+  .score-block:last-child {
+    margin-bottom: 0;
+  }
+  .score-paper {
+    width: 100%;
+    overflow-x: auto;
+  }
+</style>
+</head>
+<body>
+
+<h1>全調 スケール＆アルペジオ練習</h1>
+<div class="desc">
+  I II III IV | V VI VII VIII | VIII VII VI V | IV III II I | I III V VIII | VII V IV II | I<br>
+  (自然長音階 / 自然短音階 / 和声的短音階 / 旋律的短音階)<br>
+  ※全体を1オクターブ上げ、Fb Major系のオクターブ折り返しを修正しました
+</div>
+
+<div id="app"></div>
+
+<script>
+// ABC記譜法でのオクターブ指定（全体的に1オクターブ上げた状態）
+const groups = [
+  {
+    title: "C / B#",
+    pairs:[
+      {
+        label: "C Major / A Minor",
+        major: { name: "C Major", key: "C", notes:["c", "d", "e", "f", "g", "a", "b", "c'"] },
+        minor: { name: "A Minor", key: "Am", notes:["A", "B", "c", "d", "e", "f", "g", "a"], harm7: "^g", mel6: "^f" }
+      },
+      {
+        label: "B# Major / Gx Minor",
+        major: { name: "B# Major", key: "C", notes:["^B", "^^c", "^^d", "^e", "^^f", "^^g", "^^a", "^b"] },
+        minor: { name: "Gx Minor", key: "C", notes:["^^G", "^^A", "^B", "^^c", "^^d", "^e", "^^f", "^^g"], harm7: "=g", mel6: "^^e" }
+      }
+    ]
+  },
+  {
+    title: "C# / Db",
+    pairs:[
+      {
+        label: "Db Major / Bb Minor",
+        major: { name: "Db Major", key: "Db", notes:["d", "e", "f", "g", "a", "b", "c'", "d'"] },
+        minor: { name: "Bb Minor", key: "Bbm", notes:["B", "c", "d", "e", "f", "g", "a", "b"], harm7: "=a", mel6: "=g" }
+      },
+      {
+        label: "C# Major / A# Minor",
+        major: { name: "C# Major", key: "C#", notes:["c", "d", "e", "f", "g", "a", "b", "c'"] },
+        minor: { name: "A# Minor", key: "A#m", notes:["A", "B", "c", "d", "e", "f", "g", "a"], harm7: "^^g", mel6: "^^f" }
+      }
+    ]
+  },
+  {
+    title: "D",
+    pairs:[
+      {
+        label: "D Major / B Minor",
+        major: { name: "D Major", key: "D", notes:["d", "e", "f", "g", "a", "b", "c'", "d'"] },
+        minor: { name: "B Minor", key: "Bm", notes:["B", "c", "d", "e", "f", "g", "a", "b"], harm7: "^a", mel6: "^g" }
+      }
+    ]
+  },
+  {
+    title: "D# / Eb",
+    pairs:[
+      {
+        label: "Eb Major / C Minor",
+        major: { name: "Eb Major", key: "Eb", notes:["e", "f", "g", "a", "b", "c'", "d'", "e'"] },
+        minor: { name: "C Minor", key: "Cm", notes:["c", "d", "e", "f", "g", "a", "b", "c'"], harm7: "=b", mel6: "=a" }
+      },
+      {
+        label: "D# Major / B# Minor",
+        major: { name: "D# Major", key: "C", notes:["^d", "^e", "^^f", "^g", "^a", "^b", "^^c'", "^d'"] },
+        minor: { name: "B# Minor", key: "C", notes:["^B", "^^c", "^d", "^e", "^^f", "^g", "^a", "^b"], harm7: "^^a", mel6: "^^g" }
+      }
+    ]
+  },
+  {
+    title: "E / Fb",
+    pairs:[
+      {
+        label: "E Major / C# Minor",
+        major: { name: "E Major", key: "E", notes:["e", "f", "g", "a", "b", "c'", "d'", "e'"] },
+        minor: { name: "C# Minor", key: "C#m", notes:["c", "d", "e", "f", "g", "a", "b", "c'"], harm7: "^b", mel6: "^a" }
+      },
+      {
+        label: "Fb Major / Db Minor",
+        major: { name: "Fb Major", key: "C", notes:["_f", "_g", "_a", "__b", "_c'", "_d'", "_e'", "_f'"] },
+        minor: { name: "Db Minor", key: "C", notes:["_d", "_e", "_f", "_g", "_a", "__b", "_c'", "_d'"], harm7: "=c'", mel6: "_b" }
+      }
+    ]
+  },
+  {
+    title: "E# / F",
+    pairs:[
+      {
+        label: "F Major / D Minor",
+        major: { name: "F Major", key: "F", notes:["f", "g", "a", "b", "c'", "d'", "e'", "f'"] },
+        minor: { name: "D Minor", key: "Dm", notes:["d", "e", "f", "g", "a", "b", "c'", "d'"], harm7: "^c'", mel6: "=b" }
+      },
+      {
+        label: "E# Major / Cx Minor",
+        major: { name: "E# Major", key: "C", notes:["^e", "^^f", "^^g", "^a", "^b", "^^c'", "^^d'", "^e'"] },
+        minor: { name: "Cx Minor", key: "C", notes:["^^c", "^^d", "^e", "^^f", "^^g", "^a", "^b", "^^c'"], harm7: "^^b", mel6: "^^a" }
+      }
+    ]
+  },
+  {
+    title: "F# / Gb",
+    pairs:[
+      {
+        label: "Gb Major / Eb Minor",
+        major: { name: "Gb Major", key: "Gb", notes:["G", "A", "B", "c", "d", "e", "f", "g"] },
+        minor: { name: "Eb Minor", key: "Ebm", notes:["E", "F", "G", "A", "B", "c", "d", "e"], harm7: "=d", mel6: "=c" }
+      },
+      {
+        label: "F# Major / D# Minor",
+        major: { name: "F# Major", key: "F#", notes:["f", "g", "a", "b", "c'", "d'", "e'", "f'"] },
+        minor: { name: "D# Minor", key: "D#m", notes:["d", "e", "f", "g", "a", "b", "c'", "d'"], harm7: "^^c'", mel6: "^b" }
+      }
+    ]
+  },
+  {
+    title: "G",
+    pairs:[
+      {
+        label: "G Major / E Minor",
+        major: { name: "G Major", key: "G", notes:["G", "A", "B", "c", "d", "e", "f", "g"] },
+        minor: { name: "E Minor", key: "Em", notes:["E", "F", "G", "A", "B", "c", "d", "e"], harm7: "^d", mel6: "^c" }
+      }
+    ]
+  },
+  {
+    title: "G# / Ab",
+    pairs:[
+      {
+        label: "Ab Major / F Minor",
+        major: { name: "Ab Major", key: "Ab", notes:["A", "B", "c", "d", "e", "f", "g", "a"] },
+        minor: { name: "F Minor", key: "Fm", notes:["F", "G", "A", "B", "c", "d", "e", "f"], harm7: "=e", mel6: "=d" }
+      },
+      {
+        label: "G# Major / E# Minor",
+        major: { name: "G# Major", key: "C", notes:["^G", "^A", "^B", "^c", "^d", "^e", "^^f", "^g"] },
+        minor: { name: "E# Minor", key: "C", notes:["^E", "^^F", "^G", "^A", "^B", "^c", "^d", "^e"], harm7: "^^d", mel6: "^^c" }
+      }
+    ]
+  },
+  {
+    title: "A",
+    pairs:[
+      {
+        label: "A Major / F# Minor",
+        major: { name: "A Major", key: "A", notes:["A", "B", "c", "d", "e", "f", "g", "a"] },
+        minor: { name: "F# Minor", key: "F#m", notes:["F", "G", "A", "B", "c", "d", "e", "f"], harm7: "^e", mel6: "^d" }
+      }
+    ]
+  },
+  {
+    title: "A# / Bb",
+    pairs:[
+      {
+        label: "Bb Major / G Minor",
+        major: { name: "Bb Major", key: "Bb", notes:["B", "c", "d", "e", "f", "g", "a", "b"] },
+        minor: { name: "G Minor", key: "Gm", notes:["G", "A", "B", "c", "d", "e", "f", "g"], harm7: "^f", mel6: "=e" }
+      },
+      {
+        label: "A# Major / Fx Minor",
+        major: { name: "A# Major", key: "C", notes:["^A", "^B", "^^c", "^d", "^e", "^^f", "^^g", "^a"] },
+        minor: { name: "Fx Minor", key: "C", notes:["^^F", "^^G", "^A", "^B", "^^c", "^d", "^e", "^^f"], harm7: "^^e", mel6: "^^d" }
+      }
+    ]
+  },
+  {
+    title: "B / Cb",
+    pairs:[
+      {
+        label: "B Major / G# Minor",
+        major: { name: "B Major", key: "B", notes:["B", "c", "d", "e", "f", "g", "a", "b"] },
+        minor: { name: "G# Minor", key: "G#m", notes:["G", "A", "B", "c", "d", "e", "f", "g"], harm7: "^^f", mel6: "^e" }
+      },
+      {
+        label: "Cb Major / Ab Minor",
+        major: { name: "Cb Major", key: "Cb", notes:["c", "d", "e", "f", "g", "a", "b", "c'"] },
+        minor: { name: "Ab Minor", key: "Abm", notes:["A", "B", "c", "d", "e", "f", "g", "a"], harm7: "=g", mel6: "=f" }
+      }
+    ]
+  }
+];
+
+// 指定された数列・小節割りに合わせて組み立てる関数
+// I II III IV | V VI VII VIII | VIII VII VI V | IV III II I | I III V VIII | VII V IV II | I
+function makeSeq(n1, n2, n3, n4, n5, n6, n7, n8, scaleDown7, scaleDown6, arpDown7) {
+  // 最後の音(n1)は、4拍分の全音符として終わらせるために "4" を付与します
+  return `${n1} ${n2} ${n3} ${n4} | ${n5} ${n6} ${n7} ${n8} | ${n8} ${scaleDown7} ${scaleDown6} ${n5} | ${n4} ${n3} ${n2} ${n1} | ${n1} ${n3} ${n5} ${n8} | ${arpDown7} ${n5} ${n4} ${n2} | ${n1}4 |]`;
+}
+
+// レンダリング済みの状態を保持し、タブ切り替え時に再レンダリングを防ぐ
+const renderedState = {};
+
+function renderScoreForPair(gIndex, pIndex) {
+  const pairId = `pair-${gIndex}-${pIndex}`;
+  if (renderedState[pairId]) return;
+
+  const pair = groups[gIndex].pairs[pIndex];
+
+  const mNotes = pair.major.notes;
+  const majorSeq = makeSeq(mNotes[0], mNotes[1], mNotes[2], mNotes[3], mNotes[4], mNotes[5], mNotes[6], mNotes[7], mNotes[6], mNotes[5], mNotes[6]);
+
+  const miNotes = pair.minor.notes;
+  const h7 = pair.minor.harm7;
+  const m6 = pair.minor.mel6;
+
+  // 短音階3種
+  const natSeq = makeSeq(miNotes[0], miNotes[1], miNotes[2], miNotes[3], miNotes[4], miNotes[5], miNotes[6], miNotes[7], miNotes[6], miNotes[5], miNotes[6]);
+  const harmSeq = makeSeq(miNotes[0], miNotes[1], miNotes[2], miNotes[3], miNotes[4], miNotes[5], h7, miNotes[7], h7, miNotes[5], h7);
+  const melSeq = makeSeq(miNotes[0], miNotes[1], miNotes[2], miNotes[3], miNotes[4], m6, h7, miNotes[7], miNotes[6], miNotes[5], miNotes[6]);
+
+  const scores =[
+    { id: `score-${gIndex}-${pIndex}-maj`, title: `${pair.major.name} (自然長音階)`, key: pair.major.key, seq: majorSeq },
+    { id: `score-${gIndex}-${pIndex}-min-nat`, title: `${pair.minor.name} (自然短音階)`, key: pair.minor.key, seq: natSeq },
+    { id: `score-${gIndex}-${pIndex}-min-harm`, title: `${pair.minor.name} (和声的短音階)`, key: pair.minor.key, seq: harmSeq },
+    { id: `score-${gIndex}-${pIndex}-min-mel`, title: `${pair.minor.name} (旋律的短音階)`, key: pair.minor.key, seq: melSeq }
+  ];
+
+  scores.forEach(scoreObj => {
+    const abc = `X: 1\nT: ${scoreObj.title}\nM: 4/4\nL: 1/4\nK: ${scoreObj.key}\n${scoreObj.seq}`;
+    ABCJS.renderAbc(scoreObj.id, abc, { 
+      responsive: "resize",
+      add_classes: true,
+      staffwidth: 740
+    });
+  });
+
+  renderedState[pairId] = true;
+}
+
+// タブを切り替える関数
+function switchTab(gIndex, pIndex) {
+  const group = groups[gIndex];
+  group.pairs.forEach((p, idx) => {
+    const content = document.getElementById(`content-${gIndex}-${idx}`);
+    const btn = document.getElementById(`btn-${gIndex}-${idx}`);
+    if (idx === pIndex) {
+      content.style.display = 'block';
+      if(btn) btn.classList.add('active');
+      renderScoreForPair(gIndex, idx);
+    } else {
+      content.style.display = 'none';
+      if(btn) btn.classList.remove('active');
+    }
+  });
+}
+
+// DOMの構築
+const app = document.getElementById('app');
+
+groups.forEach((group, gIndex) => {
+  const container = document.createElement('div');
+  container.className = 'pair-container';
+
+  // タブボタンエリア（異名同音が存在する場合のみ描画）
+  if (group.pairs.length > 1) {
+    const tabDiv = document.createElement('div');
+    tabDiv.className = 'tab-buttons';
+    group.pairs.forEach((p, pIndex) => {
+      const btn = document.createElement('button');
+      btn.id = `btn-${gIndex}-${pIndex}`;
+      btn.className = 'tab-btn';
+      btn.textContent = p.label;
+      btn.onclick = () => switchTab(gIndex, pIndex);
+      tabDiv.appendChild(btn);
+    });
+    container.appendChild(tabDiv);
+  } else {
+    const title = document.createElement('h2');
+    title.className = 'pair-title';
+    title.textContent = group.pairs[0].label;
+    container.appendChild(title);
+  }
+
+  // スコアエリア作成
+  group.pairs.forEach((p, pIndex) => {
+    const contentDiv = document.createElement('div');
+    contentDiv.id = `content-${gIndex}-${pIndex}`;
+    contentDiv.className = 'pair-content';
+    contentDiv.style.display = 'none';['maj', 'min-nat', 'min-harm', 'min-mel'].forEach(type => {
+      const block = document.createElement('div');
+      block.className = 'score-block';
+      const paper = document.createElement('div');
+      paper.className = 'score-paper';
+      paper.id = `score-${gIndex}-${pIndex}-${type}`;
+      block.appendChild(paper);
+      contentDiv.appendChild(block);
+    });
+
+    container.appendChild(contentDiv);
+  });
+
+  app.appendChild(container);
+
+  // 初期化：各グループの先頭(0番目)のタブを表示・レンダリング
+  switchTab(gIndex, 0);
+});
+</script>
+</body>
+</html>
