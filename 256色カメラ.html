@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroCam.exe - 256c & 8bit Audio</title>
+    
+    <!-- 7.css (Windows 7 Aero style UI) -->
+    <link rel="stylesheet" href="https://unpkg.com/7.css">
+    
+    <!-- Google Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet" />
+    
+    <!-- UPNG.js と pako -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+    
+    <style>
+        body {
+            background: radial-gradient(circle at center, #2378b6 0%, #043d6c 100%);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+        }
+
+        .window {
+            width: 100%;
+            max-width: 720px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+        }
+
+        .screen-container {
+            background-color: #000;
+            width: 100%;
+            height: 45vh;
+            min-height: 240px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #666;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .controls-wrapper {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .controls-left, .controls-right {
+            flex: 1 1 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        fieldset {
+            margin: 0;
+            padding: 10px;
+        }
+
+        .field-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .field-row label.fixed-label {
+            width: 70px;
+            flex-shrink: 0;
+        }
+
+        .field-row select, .field-row input[type="range"] {
+            flex-grow: 1;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-buttons button {
+            flex: 1;
+            padding: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .material-symbols-outlined {
+            font-size: 18px;
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+        }
+
+        @keyframes recordingBlink {
+            0% { color: #cc0000; }
+            50% { color: #000000; }
+            100% { color: #cc0000; }
+        }
+        button.recording {
+            animation: recordingBlink 1s infinite;
+            font-weight: bold;
+        }
+        button.recording .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1;
+            color: #cc0000;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="window glass active">
+        <div class="title-bar">
+            <div class="title-bar-text">RetroCam.exe - VGA 256c & 8bit Audio</div>
+            <div class="title-bar-controls">
+                <button aria-label="Minimize"></button>
+                <button aria-label="Maximize"></button>
+                <button aria-label="Close"></button>
+            </div>
+        </div>
+        <div class="window-body">
+            
+            <div class="screen-container">
+                <video id="video" autoplay playsinline muted style="display:none;"></video>
+                <canvas id="displayCanvas"></canvas>
+            </div>
+
+            <div class="controls-wrapper">
+                
+                <div class="controls-left">
+                    <fieldset>
+                        <legend>映像設定 (Video)</legend>
+                        <div class="field-row">
+                            <label class="fixed-label" for="resolution">解像度:</label>
+                            <select id="resolution">
+                                <option value="160x144">160x144 (GameBoy)</option>
+                                <option value="256x212">256x212 (MSX2)</option>
+                                <option value="320x200" selected>320x200 (PC-98/VGA)</option>
+                                <option value="640x400">640x400 (PC-98 Hi-Res)</option>
+                                <option value="640x480">640x480 (VGA)</option>
+                                <option value="768x512">768x512 (X68000)</option>
+                                <option value="1920x1080">1920x1080 (FHD)</option>
+                                <option value="max">カメラ最大</option>
+                                <option value="custom">カスタム...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="field-row" id="customResGroup" style="display: none;">
+                            <label class="fixed-label">カスタム:</label>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <input type="number" id="customW" value="256" min="16" max="4096" style="width: 60px;">
+                                <span>x</span>
+                                <input type="number" id="customH" value="256" min="16" max="4096" style="width: 60px;">
+                            </div>
+                        </div>
+
+                        <div class="field-row">
+                            <label class="fixed-label" for="brightness">明るさ:</label>
+                            <input type="range" id="brightness" min="-100" max="100" value="0">
+                        </div>
+                        <div class="field-row">
+                            <label class="fixed-label" for="dither">ディザ:</label>
+                            <input type="range" id="dither" min="0" max="100" value="48">
+                        </div>
+                    </fieldset>
+                </div>
+
+                <div class="controls-right">
+                    <fieldset>
+                        <legend>音声設定 (Audio)</legend>
+                        <div class="field-row" style="gap: 5px;">
+                            <input type="checkbox" id="micEnable">
+                            <label for="micEnable" style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <span class="material-symbols-outlined" style="font-size: 16px;">mic</span>
+                                マイク有効化 (8bit / 11kHz レトロ音質)
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset style="flex-grow: 1;">
+                        <legend>操作 (Actions)</legend>
+                        <div class="action-buttons" style="margin-bottom: 8px;">
+                            <button id="btnSwitch">
+                                <span class="material-symbols-outlined">cameraswitch</span> カメラ切替
+                            </button>
+                        </div>
+                        <div class="action-buttons">
+                            <button id="btnShoot">
+                                <span class="material-symbols-outlined">photo_camera</span> 静止画
+                            </button>
+                            <button id="btnRecord">
+                                <span class="material-symbols-outlined">videocam</span> 録画
+                            </button>
+                        </div>
+                    </fieldset>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('displayCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    
+    const BAYER_MATRIX = [[ 0,  8,  2, 10],[12,  4, 14,  6],[ 3, 11,  1,  9],[15,  7, 13,  5]];
+
+    let currentFacingMode = 'user';
+    let currentRes = '320x200';
+    let animationId;
+
+    let mediaRecorder = null;
+    let recordedChunks =[];
+    let isRecording = false;
+
+    let audioCtx = null;
+    let audioSource = null;
+    let lowpassNode = null;
+    let bitCrusherNode = null;
+    let audioDest = null;
+
+    function updateCanvasSize() {
+        if (currentRes === 'max') {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+        } else if (currentRes === 'custom') {
+            canvas.width = parseInt(document.getElementById('customW').value) || 320;
+            canvas.height = parseInt(document.getElementById('customH').value) || 200;
+        } else {
+            const [w, h] = currentRes.split('x').map(Number);
+            canvas.width = w;
+            canvas.height = h;
+        }
+    }
+
+    async function startCamera() {
+        if (video.srcObject) {
+            video.srcObject.getTracks().forEach(track => track.stop());
+        }
+
+        const useAudio = document.getElementById('micEnable').checked;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: currentFacingMode, width: { ideal: 3840 }, height: { ideal: 2160 } },
+                audio: useAudio ? {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                } : false
+            });
+            video.srcObject = stream;
+            video.play();
+            
+            video.onloadedmetadata = () => {
+                updateCanvasSize();
+                if (!animationId) loop(); 
+            };
+        } catch (err) {
+            alert("カメラ(またはマイク)へのアクセスを許可してください。");
+            document.getElementById('micEnable').checked = false;
+        }
+    }
+
+    function loop() {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (vw === 0 || vh === 0) {
+            animationId = requestAnimationFrame(loop);
+            return;
+        }
+
+        if (currentRes === 'max' && (canvas.width !== vw || canvas.height !== vh)) {
+            canvas.width = vw;
+            canvas.height = vh;
+        }
+
+        const width = canvas.width;
+        const height = canvas.height;
+        const targetAspect = width / height;
+        const videoAspect = vw / vh;
+        let sx, sy, sWidth, sHeight;
+
+        if (videoAspect > targetAspect) {
+            sHeight = vh;
+            sWidth = sHeight * targetAspect;
+            sx = (vw - sWidth) / 2;
+            sy = 0;
+        } else {
+            sWidth = vw;
+            sHeight = sWidth / targetAspect;
+            sx = 0;
+            sy = (vh - sHeight) / 2;
+        }
+
+        ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, width, height);
+        applyRetroPCFilter(width, height);
+
+        animationId = requestAnimationFrame(loop);
+    }
+
+    function applyRetroPCFilter(width, height) {
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        const brightness = parseInt(document.getElementById('brightness').value);
+        const ditherSpread = parseInt(document.getElementById('dither').value);
+
+        for (let i = 0; i < data.length; i += 4) {
+            const pixelIndex = i / 4;
+            const x = pixelIndex % width;
+            const y = Math.floor(pixelIndex / width);
+
+            const ditherValue = (BAYER_MATRIX[y % 4][x % 4] / 16) - 0.5;
+            const offset = (ditherValue * ditherSpread) + brightness;
+
+            let r = data[i] + offset;
+            let g = data[i+1] + offset;
+            let b = data[i+2] + offset;
+
+            r = r < 0 ? 0 : r > 255 ? 255 : r;
+            g = g < 0 ? 0 : g > 255 ? 255 : g;
+            b = b < 0 ? 0 : b > 255 ? 255 : b;
+
+            data[i]   = Math.round(r / 255 * 7) * (255 / 7);
+            data[i+1] = Math.round(g / 255 * 7) * (255 / 7);
+            data[i+2] = Math.round(b / 255 * 3) * (255 / 3);
+            data[i+3] = 255;
+        }
+        ctx.putImageData(imageData, 0, 0);
+    }
+
+    function exportUPNG() {
+        const width = canvas.width;
+        const height = canvas.height;
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const pngBuffer = UPNG.encode([imageData.data.buffer], width, height, 256);
+
+        const blob = new Blob([pngBuffer], { type: "image/png" });
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const link = document.createElement("a");
+            const resLabel = (currentRes === 'max' || currentRes === 'custom') ? `${width}x${height}` : currentRes;
+            link.download = `VGA_INDEXED8_${resLabel}_${Date.now()}.png`;
+            link.href = e.target.result;
+            link.click();
+        };
+        reader.readAsDataURL(blob);
+    }
+
+    async function setupAudioPipeline(stream) {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+
+        if (audioSource) audioSource.disconnect();
+        if (lowpassNode) lowpassNode.disconnect();
+        if (bitCrusherNode) bitCrusherNode.disconnect();
+
+        audioSource = audioCtx.createMediaStreamSource(stream);
+
+        // 耳障りな高音ノイズ(エイリアシング)を抑えるためのローパスフィルター
+        // ※これを挟むことで、昔のスピーカーのような「こもった」まろやかな音になります
+        lowpassNode = audioCtx.createBiquadFilter();
+        lowpassNode.type = 'lowpass';
+        lowpassNode.frequency.value = 4500; 
+
+        const bufferSize = 4096;
+        bitCrusherNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+        let phaser = 0;
+        let lastOut = 0;
+        
+        // 90年代のSoundBlaster等で標準的だった 11025Hz (11kHz)
+        const targetSampleRate = 11025; 
+        const normFreq = targetSampleRate / audioCtx.sampleRate;
+        
+        // 4bit -> 8bit に変更（音声が明瞭に聞き取れる解像度）
+        const step = Math.pow(2, 8); 
+
+        bitCrusherNode.onaudioprocess = function(e) {
+            const input = e.inputBuffer.getChannelData(0);
+            const output = e.outputBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                phaser += normFreq;
+                if (phaser >= 1.0) {
+                    phaser -= 1.0;
+                    lastOut = Math.round(input[i] * step) / step;
+                }
+                output[i] = lastOut;
+            }
+        };
+
+        if (!audioDest) audioDest = audioCtx.createMediaStreamDestination();
+
+        // パイプライン: マイク -> ローパス(高音カット) -> ビットクラッシャー(劣化) -> 出力
+        audioSource.connect(lowpassNode);
+        lowpassNode.connect(bitCrusherNode);
+        bitCrusherNode.connect(audioDest);
+
+        return audioDest.stream.getAudioTracks();
+    }
+
+    async function toggleRecording() {
+        const btnRecord = document.getElementById('btnRecord');
+
+        if (!isRecording) {
+            recordedChunks =[];
+            const videoTracks = canvas.captureStream(30).getVideoTracks();
+            let finalTracks = [...videoTracks];
+
+            const useAudio = document.getElementById('micEnable').checked;
+            const originalAudioTracks = video.srcObject.getAudioTracks();
+
+            if (useAudio && originalAudioTracks.length > 0) {
+                const retroAudioTracks = await setupAudioPipeline(video.srcObject);
+                finalTracks =[...videoTracks, ...retroAudioTracks];
+            }
+
+            const finalStream = new MediaStream(finalTracks);
+
+            const mimeTypes =['video/webm; codecs=vp9', 'video/webm; codecs=vp8', 'video/webm', 'video/mp4'];
+            let selectedMimeType = '';
+            for (let type of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    selectedMimeType = type;
+                    break;
+                }
+            }
+
+            mediaRecorder = new MediaRecorder(finalStream, { mimeType: selectedMimeType });
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const ext = selectedMimeType.includes('mp4') ? 'mp4' : 'webm';
+                const blob = new Blob(recordedChunks, { type: selectedMimeType });
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const link = document.createElement('a');
+                    const width = canvas.width;
+                    const height = canvas.height;
+                    const resLabel = (currentRes === 'max' || currentRes === 'custom') ? `${width}x${height}` : currentRes;
+                    
+                    link.download = `VGA_INDEXED8_${resLabel}_${Date.now()}.${ext}`;
+                    link.href = e.target.result;
+                    link.click();
+                };
+                reader.readAsDataURL(blob);
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+
+            btnRecord.innerHTML = '<span class="material-symbols-outlined">stop</span> 停止 (録画中)';
+            btnRecord.classList.add('recording');
+            toggleControls(true);
+
+        } else {
+            mediaRecorder.stop();
+            isRecording = false;
+
+            btnRecord.innerHTML = '<span class="material-symbols-outlined">videocam</span> 録画';
+            btnRecord.classList.remove('recording');
+            toggleControls(false);
+        }
+    }
+
+    function toggleControls(disabled) {
+        document.getElementById('resolution').disabled = disabled;
+        document.getElementById('customW').disabled = disabled;
+        document.getElementById('customH').disabled = disabled;
+        document.getElementById('btnSwitch').disabled = disabled;
+        document.getElementById('micEnable').disabled = disabled;
+    }
+
+    document.getElementById('resolution').addEventListener('change', (e) => {
+        currentRes = e.target.value;
+        const customGroup = document.getElementById('customResGroup');
+        customGroup.style.display = (currentRes === 'custom') ? 'flex' : 'none';
+        updateCanvasSize();
+    });
+
+    document.getElementById('customW').addEventListener('input', updateCanvasSize);
+    document.getElementById('customH').addEventListener('input', updateCanvasSize);
+
+    document.getElementById('micEnable').addEventListener('change', () => {
+        startCamera();
+    });
+
+    document.getElementById('btnSwitch').addEventListener('click', () => {
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+        startCamera();
+    });
+
+    document.getElementById('btnShoot').addEventListener('click', exportUPNG);
+    document.getElementById('btnRecord').addEventListener('click', toggleRecording);
+
+    startCamera();
+
+</script>
+</body>
+</html>
