@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNG Polyglot Generator (pack.py 100% Port)</title>
+    <style>
+        body { font-family: monospace; max-width: 700px; margin: 20px auto; padding: 0 15px; background: #111; color: #eee; }
+        .box { border: 1px solid #444; padding: 20px; background: #222; }
+        input[type="file"] { color: #aaa; margin-bottom: 15px; }
+        button { background-color: #4caf50; color: white; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        pre { background: #000; padding: 10px; border: 1px solid #333; color: #0f0; overflow-x: auto; white-space: pre-wrap; }
+        .warning { color: #ff9800; }
+        .error { color: #f44336; }
+    </style>
+</head>
+<body>
+    <h2>pack.py Web Port</h2>
+    
+    <div class="box">
+        <label>1. cover.png:</label><br>
+        <input type="file" id="cover" accept=".png"><br>
+        
+        <label>2. content.bin (zip, bz2, etc.):</label><br>
+        <input type="file" id="payload"><br>
+        
+        <button onclick="runPackPy()">実行 (pack.py)</button>
+    </div>
+    
+    <h4>Terminal:</h4>
+    <pre id="log"></pre>
+
+    <script>
+        const logEl = document.getElementById('log');
+        function print(msg, type="") {
+            logEl.innerHTML += `<span class="${type}">${msg}</span>\n`;
+            console.log(msg);
+        }
+
+        // --- Helper Functions ---
+        // Python's data.rindex(b"PK\x05\x06")
+        function rindex(arr, searchSeq) {
+            for (let i = arr.length - searchSeq.length; i >= 0; i--) {
+                let match = true;
+                for (let j = 0; j < searchSeq.length; j++) {
+                    if (arr[i + j] !== searchSeq[j]) { match = false; break; }
+                }
+                if (match) return i;
+            }
+            return -1;
+        }
+
+        // Python's data.index(b"PK\x01\x02", start)
+        function index(arr, searchSeq, start = 0) {
+            for (let i = start; i <= arr.length - searchSeq.length; i++) {
+                let match = true;
+                for (let j = 0; j < searchSeq.length; j++) {
+                    if (arr[i + j] !== searchSeq[j]) { match = false; break; }
+                }
+                if (match) return i;
+            }
+            return -1;
+        }
+
+        // zlib.crc32 equivalent
+        const crcTable = new Uint32Array(256);
+        for (let i = 0; i < 256; i++) {
+            let c = i;
+            for (let j = 0; j < 8; j++) { c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1)); }
+            crcTable[i] = c;
+        }
+        function crc32(arr) {
+            let crc = 0xFFFFFFFF;
+            for (let i = 0; i < arr.length; i++) { crc = (crc >>> 8) ^ crcTable[(crc ^ arr[i]) & 0xFF]; }
+            return (crc ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        // --- Python's fixup_zip function ---
+        function fixup_zip(data, start_offset) {
+            // find the "end of central directory" marker
+            const eocd_marker =[0x50, 0x4B, 0x05, 0x06];
+            const end_central_dir_offset = rindex(data, eocd_marker);
+            
+            if (end_central_dir_offset === -1) {
+                print("Warning: PK\\x05\\x06 not found. Is this really a valid zip?", "warning");
+                return;
+            }
+
+            const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+            // adjust comment length so that any trailing data (i.e. PNG IEND) is part of the comment
+            const comment_length = (data.length - end_central_dir_offset) - 22 + 0x10;
+            view.setUint16(end_central_dir_offset + 20, comment_length, true); // little endian
+
+            // find the number of central directory entries
+            const cdent_count = view.getUint16(end_central_dir_offset + 10, true);
+
+            // find the offset of the central directory entries, and fix it
+            let central_dir_start_offset = view.getUint32(end_central_dir_offset + 16, true);
+            view.setUint32(end_central_dir_offset + 16, central_dir_start_offset + start_offset, true);
+
+            // iterate over the central directory entries
+            const cd_marker =[0x50, 0x4B, 0x01, 0x02];
+            for (let _ = 0; _ < cdent_count; _++) {
+                central_dir_start_offset = index(data, cd_marker, central_dir_start_offset);
+                if (central_dir_start_offset === -1) break;
+
+                // fix the offset that points to the local file header
+                const off = view.getUint32(central_dir_start_offset + 42, true);
+                view.setUint32(central_dir_start_offset + 42, off + start_offset, true);
+
+                central_dir_start_offset += 1;
+            }
+        }
+
+        // --- Main execution ---
+        async function runPackPy() {
+            logEl.innerHTML = "";
+            const coverFile = document.getElementById('cover').files[0];
+            const payloadFile = document.getElementById('payload').files[0];
+
+            if(!coverFile || !payloadFile) {
+                print("USAGE: select cover.png and content.bin", "error"); return;
+            }
+
+            const png_in = new Uint8Array(await coverFile.arrayBuffer());
+            const content_in = new Uint8Array(await payloadFile.arrayBuffer());
+            const payloadName = payloadFile.name;
+
+            // check the PNG magic is present
+            const PNG_MAGIC =[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+            for (let i = 0; i < 8; i++) {
+                if (png_in[i] !== PNG_MAGIC[i]) {
+                    print("ERROR: PNG magic mismatch.", "error"); return;
+                }
+            }
+
+            let png_out_chunks = [png_in.subarray(0, 8)];
+            let png_out_tell = 8;
+            let idat_body_parts =[];
+            let width = 0, height = 0;
+
+            let offset = 8;
+            while (offset < png_in.length) {
+                let view = new DataView(png_in.buffer, png_in.byteOffset, png_in.byteLength);
+                let chunk_len = view.getUint32(offset, false);
+                let chunk_type = png_in.subarray(offset + 4, offset + 8);
+                let chunk_type_str = String.fromCharCode(...chunk_type);
+                let chunk_body = png_in.subarray(offset + 8, offset + 8 + chunk_len);
+                let chunk_csum = png_in.subarray(offset + 8 + chunk_len, offset + 12 + chunk_len);
+
+                offset += 12 + chunk_len;
+
+                // if it's a non-essential chunk, skip over it
+                if (!["IHDR", "PLTE", "IDAT", "IEND"].includes(chunk_type_str)) {
+                    print(`Warning: dropping non-essential or unknown chunk: ${chunk_type_str}`, "warning");
+                    continue;
+                }
+
+                // take note of the image width and height
+                if (chunk_type_str === "IHDR") {
+                    let bodyView = new DataView(chunk_body.buffer, chunk_body.byteOffset, chunk_body.byteLength);
+                    width = bodyView.getUint32(0, false);
+                    height = bodyView.getUint32(4, false);
+                    print(`Image size: ${width}x${height}px`);
+                }
+
+                // There might be multiple IDAT chunks...
+                if (chunk_type_str === "IDAT") {
+                    idat_body_parts.push(chunk_body);
+                    continue;
+                }
+
+                // the IEND chunk should be at the end...
+                if (chunk_type_str === "IEND") {
+                    let idat_len_total = idat_body_parts.reduce((acc, val) => acc + val.length, 0);
+                    let start_offset = png_out_tell + 8 + idat_len_total;
+                    print(`Embedded file starts at offset 0x${start_offset.toString(16)}`);
+
+                    // concatenate our content that we want to embed
+                    let new_idat_body = new Uint8Array(idat_len_total + content_in.length);
+                    let pos = 0;
+                    for (let p of idat_body_parts) {
+                        new_idat_body.set(p, pos);
+                        pos += p.length;
+                    }
+                    new_idat_body.set(content_in, pos);
+
+                    if (new_idat_body.length > width * height) {
+                        print("ERROR: Input files too big for cover image resolution.", "error");
+                        return;
+                    }
+
+                    // if its a zip file, fix the offsets
+                    let ext = payloadName.split('.').pop().toLowerCase();
+                    if (["zip", "jar"].includes(ext)) {
+                        print("Fixing up zip offsets...");
+                        fixup_zip(new_idat_body, start_offset);
+                    }
+
+                    // write the IDAT chunk
+                    let idat_header = new Uint8Array(8);
+                    let idatView = new DataView(idat_header.buffer);
+                    idatView.setUint32(0, new_idat_body.length, false);
+                    idat_header[4] = 73; idat_header[5] = 68; idat_header[6] = 65; idat_header[7] = 84; // b"IDAT"
+                    
+                    png_out_chunks.push(idat_header);
+                    png_out_tell += 8;
+                    
+                    png_out_chunks.push(new_idat_body);
+                    png_out_tell += new_idat_body.length;
+
+                    // crc32 for IDAT
+                    let crcArr = new Uint8Array(4 + new_idat_body.length);
+                    crcArr.set(idat_header.subarray(4, 8), 0);
+                    crcArr.set(new_idat_body, 4);
+                    let crcVal = crc32(crcArr);
+                    let crcBuf = new Uint8Array(4);
+                    new DataView(crcBuf.buffer).setUint32(0, crcVal, false);
+                    
+                    png_out_chunks.push(crcBuf);
+                    png_out_tell += 4;
+                }
+
+                // write chunk
+                let header = new Uint8Array(8);
+                let headerView = new DataView(header.buffer);
+                headerView.setUint32(0, chunk_len, false);
+                header.set(chunk_type, 4);
+
+                png_out_chunks.push(header);
+                png_out_tell += 8;
+                
+                png_out_chunks.push(chunk_body);
+                png_out_tell += chunk_body.length;
+                
+                png_out_chunks.push(chunk_csum);
+                png_out_tell += 4;
+
+                if (chunk_type_str === "IEND") {
+                    break;
+                }
+            }
+
+            // Create output file
+            let outBuf = new Uint8Array(png_out_tell);
+            let writePos = 0;
+            for(let c of png_out_chunks) {
+                outBuf.set(c, writePos);
+                writePos += c.length;
+            }
+
+            print("Done! Triggering download...");
+            let blob = new Blob([outBuf], {type: "application/octet-stream"});
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement("a");
+            a.href = url;
+            a.download = "output.png";
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+    </script>
+</body>
+</html>
