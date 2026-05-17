@@ -6,6 +6,57 @@ import html
 EXCLUDE_DIRS = {'.git', '.github', '__pycache__', 'node_modules', '.venv', '.vscode'}
 EXCLUDE_FILES = {'generate_index.py', 'index_all.html', '.gitignore', 'package-lock.json'}
 
+def generate_tree(dir_path, level=0):
+    """再帰的にディレクトリツリーを走査し、正しい入れ子構造のHTMLリストを生成する"""
+    html_lines = []
+    indent = "    " * (level + 2)
+
+    try:
+        # OSや環境による差異をなくすためソート
+        entries = sorted(os.listdir(dir_path))
+    except PermissionError:
+        return []
+
+    dirs = []
+    files = []
+    
+    for entry in entries:
+        if entry.startswith('.') or entry in EXCLUDE_DIRS or entry in EXCLUDE_FILES:
+            continue
+        full_path = os.path.join(dir_path, entry)
+        if os.path.isdir(full_path):
+            dirs.append(entry)
+        else:
+            files.append(entry)
+
+    # ディレクトリの処理（再帰的に子要素の <ul> を開閉する）
+    for d in dirs:
+        d_name = html.escape(d)
+        html_lines.append(f"{indent}<li><span class='dir-name'>{d_name}/</span>")
+        html_lines.append(f"{indent}    <ul>")
+        
+        # サブディレクトリ内を再帰処理
+        html_lines.extend(generate_tree(os.path.join(dir_path, d), level + 2))
+        
+        # バグ修正：ここで確実にタグを閉じる
+        html_lines.append(f"{indent}    </ul>")
+        html_lines.append(f"{indent}</li>")
+
+    # ファイルの処理
+    for f in files:
+        full_path = os.path.join(dir_path, f)
+        rel_path = os.path.relpath(full_path, '.')
+        # OS依存のパス区切りを URL用の "/" に統一
+        url_path = rel_path.replace(os.sep, '/')
+        
+        # urllib.parse.quote はデフォルトで safe='/' ですが、明記しておくとより安全です
+        encoded_url = urllib.parse.quote(url_path, safe='/')
+        safe_f_name = html.escape(f)
+        
+        html_lines.append(f"{indent}<li><a class='file-link' href='./{encoded_url}'>{safe_f_name}</a></li>")
+
+    return html_lines
+
 def generate_html():
     html_content = [
         "<!DOCTYPE html>",
@@ -34,43 +85,11 @@ def generate_html():
         "        <ul>"
     ]
 
-    # os.walkをソートして順序を固定（バグ抑制）
-    for root, dirs, files in os.walk('.'):
-        # 隠しディレクトリや除外ディレクトリを無視
-        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith('.')]
-        dirs.sort()
-        files.sort()
-
-        rel_path = os.path.relpath(root, '.')
-        level = 0 if rel_path == '.' else rel_path.count(os.sep) + 1
-        indent = "    " * level
-
-        # 現在のディレクトリ名を表示
-        if rel_path != '.':
-            d_name = html.escape(os.path.basename(root))
-            html_content.append(f"{indent}<li><span class='dir-name'>{d_name}/</span><ul>")
-
-        for f in files:
-            if f in EXCLUDE_FILES or f.startswith('.'):
-                continue
-            
-            # バグ対策1：OS依存のパス区切りをURL用の "/" に統一
-            file_path = os.path.join(rel_path, f) if rel_path != '.' else f
-            url_path = file_path.replace(os.sep, '/')
-            
-            # バグ対策2：日本語やスペースを正しくURLエンコード
-            encoded_url = urllib.parse.quote(url_path)
-            
-            # バグ対策3：HTMLエスケープ（ファイル名に < > & 等が含まれる場合用）
-            safe_f_name = html.escape(f)
-            
-            html_content.append(f"{indent}    <li><a class='file-link' href='./{encoded_url}'>{safe_f_name}</a></li>")
-
-        # 閉じタグの制御は os.walk の構造上、インデントで行う
-        # (実際は単純なネスト構造で出力するため、ここでは簡易化)
+    # カレントディレクトリ起点でツリーを生成して結合
+    html_content.extend(generate_tree('.'))
 
     html_content.append("        </ul>")
-    html_content.append(f"        <div class='footer'>Generated at: 2026-05-17 (Version 2026.1)</div>")
+    html_content.append("        <div class='footer'>Generated at: 2026-05-17 (Version 2026.1)</div>")
     html_content.append("    </div>")
     html_content.append("</body>")
     html_content.append("</html>")
