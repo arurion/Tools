@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang='ja'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Repository Explorer (2026 Stable)</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; padding: 20px; background: #f4f7f9; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { border-bottom: 2px solid #007bff; padding-bottom: 10px; color: #007bff; font-size: 24px; }
+        ul { list-style: none; padding-left: 20px; }
+        li { margin: 8px 0; position: relative; }
+        .dir-name { font-weight: bold; color: #e67e22; cursor: default; }
+        .dir-name::before { content: '📁 '; }
+        .file-link { color: #2980b9; text-decoration: none; transition: color 0.2s; }
+        .file-link:hover { color: #3498db; text-decoration: underline; }
+        .file-link::before { content: '📄 '; }
+        .footer { margin-top: 30px; font-size: 0.8em; color: #7f8c8d; text-align: right; }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <h1>Repository File Explorer</h1>
+        <ul>
+        <li><span class='dir-name'>MIDI系/</span>
+            <ul>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/MIDI2Audio.py'>MIDI2Audio.py</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/MIDI2Video_for_BlackMIDI.ipynb'>MIDI2Video_for_BlackMIDI.ipynb</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/SINE%20WAVE.sf2'>SINE WAVE.sf2</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/WAV2MIDIv2.ipynb'>WAV2MIDIv2.ipynb</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/midi.py'>midi.py</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/midi2.py'>midi2.py</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/midi3.py'>midi3.py</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/midi4.py'>midi4.py</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/midi5.py'>midi5.py</a></li>
+                <li><a class='file-link' href='./MIDI%E7%B3%BB/midi6.py'>midi6.py</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>PNG関連/</span>
+            <ul>
+                <li><a class='file-link' href='./PNG%E9%96%A2%E9%80%A3/5ByteMyriadColor.py'>5ByteMyriadColor.py</a></li>
+                <li><a class='file-link' href='./PNG%E9%96%A2%E9%80%A3/%E6%B1%8E%E7%94%A8%E3%82%AF%E3%82%BD%E3%83%87%E3%82%AB%E9%AB%98%E5%9C%A7%E7%B8%AEPNG%E7%94%9F%E6%88%90%E6%A9%9F.py'>汎用クソデカ高圧縮PNG生成機.py</a></li>
+                <li><a class='file-link' href='./PNG%E9%96%A2%E9%80%A3/%E6%B1%8E%E7%94%A8%E3%82%AF%E3%82%BD%E3%83%87%E3%82%AB%E9%AB%98%E5%9C%A7%E7%B8%AEPNG%E7%94%9F%E6%88%90%E6%A9%9F_Indexed-8Edition.py'>汎用クソデカ高圧縮PNG生成機_Indexed-8Edition.py</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>UTAUなど/</span>
+            <ul>
+                <li><a class='file-link' href='./UTAU%E3%81%AA%E3%81%A9/FRQ-WORLD.py'>FRQ-WORLD.py</a></li>
+                <li><a class='file-link' href='./UTAU%E3%81%AA%E3%81%A9/FRQ-crepe.py'>FRQ-crepe.py</a></li>
+                <li><a class='file-link' href='./UTAU%E3%81%AA%E3%81%A9/FRQ-pYIN.py'>FRQ-pYIN.py</a></li>
+                <li><a class='file-link' href='./UTAU%E3%81%AA%E3%81%A9/FRQ-swiftF0.py'>FRQ-swiftF0.py</a></li>
+                <li><a class='file-link' href='./UTAU%E3%81%AA%E3%81%A9/UST2VVPROJv4.3.py'>UST2VVPROJv4.3.py</a></li>
+                <li><a class='file-link' href='./UTAU%E3%81%AA%E3%81%A9/UTAU%E7%94%A8%E6%AD%8C%E8%A9%9E%E5%A4%89%E6%8F%9B.html'>UTAU用歌詞変換.html</a></li>
+                <li><a class='file-link' href='./UTAU%E3%81%AA%E3%81%A9/%E6%AD%8C%E8%A9%9E%E3%83%A9%E3%83%B3%E3%83%80%E3%83%A0%E7%94%9F%E6%88%90.html'>歌詞ランダム生成.html</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>ffmpeg/</span>
+            <ul>
+                <li><a class='file-link' href='./ffmpeg/814.ffmpeg.js'>814.ffmpeg.js</a></li>
+                <li><a class='file-link' href='./ffmpeg/LICENSE.GPL'>LICENSE.GPL</a></li>
+                <li><a class='file-link' href='./ffmpeg/LICENSE.MIT'>LICENSE.MIT</a></li>
+                <li><a class='file-link' href='./ffmpeg/ffmpeg-core.js'>ffmpeg-core.js</a></li>
+                <li><a class='file-link' href='./ffmpeg/ffmpeg-core.wasm'>ffmpeg-core.wasm</a></li>
+                <li><a class='file-link' href='./ffmpeg/ffmpeg.js'>ffmpeg.js</a></li>
+                <li><a class='file-link' href='./ffmpeg/util.js'>util.js</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>その他・遊び/</span>
+            <ul>
+                <li><a class='file-link' href='./%E3%81%9D%E3%81%AE%E4%BB%96%E3%83%BB%E9%81%8A%E3%81%B3/%E3%83%8D%E3%83%83%E3%83%88%E9%80%9F%E5%BA%A6.html'>ネット速度.html</a></li>
+                <li><a class='file-link' href='./%E3%81%9D%E3%81%AE%E4%BB%96%E3%83%BB%E9%81%8A%E3%81%B3/%E3%83%95%E3%82%A1%E3%83%93%E3%82%B3%E3%83%B3%E3%82%92%E3%82%AF%E3%83%A9%E3%82%B2%E3%81%BF%E3%81%9F%E3%81%84%E3%81%AB%E3%81%99%E3%82%8B.html'>ファビコンをクラゲみたいにする.html</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>暗号・エンコードなど/</span>
+            <ul>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/Ascii85-Z85-En-Decoder.html'>Ascii85-Z85-En-Decoder.html</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/Base26Encoder.html'>Base26Encoder.html</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/Decoder%E3%82%92%E4%BD%BF%E7%94%A8%E3%81%97%E3%81%9FSJISEncoder.js'>Decoderを使用したSJISEncoder.js</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/Latin1toUTF8.html'>Latin1toUTF8.html</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/Polyglot.html'>Polyglot.html</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/UTF8toLatin1.html'>UTF8toLatin1.html</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/base64.html'>base64.html</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/%E6%96%87%E5%AD%97%E9%9A%A0%E3%81%97%E3%83%84%E3%83%BC%E3%83%AB%28%E6%97%97%E3%81%AB%E3%81%A7%E3%81%8D%E3%82%8B%29.html'>文字隠しツール(旗にできる).html</a></li>
+                <li><a class='file-link' href='./%E6%9A%97%E5%8F%B7%E3%83%BB%E3%82%A8%E3%83%B3%E3%82%B3%E3%83%BC%E3%83%89%E3%81%AA%E3%81%A9/%E7%A7%91%E5%AD%A6%E8%A8%98%E5%8F%B7%E5%A4%89%E6%8F%9B%E3%83%84%E3%83%BC%E3%83%AB.html'>科学記号変換ツール.html</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>画像・映像系ツール/</span>
+            <ul>
+                <li><a class='file-link' href='./%E7%94%BB%E5%83%8F%E3%83%BB%E6%98%A0%E5%83%8F%E7%B3%BB%E3%83%84%E3%83%BC%E3%83%AB/256%E8%89%B2%E3%82%AB%E3%83%A1%E3%83%A9.html'>256色カメラ.html</a></li>
+                <li><a class='file-link' href='./%E7%94%BB%E5%83%8F%E3%83%BB%E6%98%A0%E5%83%8F%E7%B3%BB%E3%83%84%E3%83%BC%E3%83%AB/TDNFFmpeg.html'>TDNFFmpeg.html</a></li>
+                <li><a class='file-link' href='./%E7%94%BB%E5%83%8F%E3%83%BB%E6%98%A0%E5%83%8F%E7%B3%BB%E3%83%84%E3%83%BC%E3%83%AB/%E3%83%88%E3%83%BC%E3%83%B3%E3%82%AB%E3%83%BC%E3%83%96.html'>トーンカーブ.html</a></li>
+                <li><a class='file-link' href='./%E7%94%BB%E5%83%8F%E3%83%BB%E6%98%A0%E5%83%8F%E7%B3%BB%E3%83%84%E3%83%BC%E3%83%AB/%E3%83%89%E3%83%83%E3%83%88%E7%B5%B5%E6%8F%8F%E7%94%BB%E3%83%84%E3%83%BC%E3%83%AB.html'>ドット絵描画ツール.html</a></li>
+                <li><a class='file-link' href='./%E7%94%BB%E5%83%8F%E3%83%BB%E6%98%A0%E5%83%8F%E7%B3%BB%E3%83%84%E3%83%BC%E3%83%AB/%E3%83%89%E3%83%83%E3%83%88%E7%B5%B5%E6%8F%8F%E7%94%BB%E3%83%84%E3%83%BC%E3%83%AB%CE%94.html'>ドット絵描画ツールΔ.html</a></li>
+                <li><a class='file-link' href='./%E7%94%BB%E5%83%8F%E3%83%BB%E6%98%A0%E5%83%8F%E7%B3%BB%E3%83%84%E3%83%BC%E3%83%AB/%E6%95%B0%E5%BC%8F%E7%94%BB%E5%83%8F%E5%A4%89%E6%8F%9B%CE%9B%CE%94.html'>数式画像変換ΛΔ.html</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>音声処理/</span>
+            <ul>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/2%E7%A8%AELPC%E5%90%88%E6%88%90%E6%A9%9F.py'>2種LPC合成機.py</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/LPC%E3%81%8B%E3%82%89%E9%9F%B3%E5%A3%B0%E7%94%9F%E6%88%90.html'>LPCから音声生成.html</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/PyWORLD-LPC.py'>PyWORLD-LPC.py</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/%E3%83%9C%E3%82%A4%E3%83%81%E3%82%A7%E3%83%B3.py'>ボイチェン.py</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/%E3%83%9C%E3%82%A4%E3%83%81%E3%82%A7%E3%83%B3v2.py'>ボイチェンv2.py</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/%E5%A3%B0%E3%82%92%E7%90%86%E8%AB%96%E4%B8%8A%E3%81%8F%E3%81%A3%E3%81%8D%E3%82%8A%E3%81%95%E3%81%9B%E3%82%8B%E3%83%84%E3%83%BC%E3%83%AB.py'>声を理論上くっきりさせるツール.py</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/%E5%A3%B0%E3%82%AF%E3%83%AA%E3%82%A2%E7%90%86%E8%AB%96WORLD.py'>声クリア理論WORLD.py</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E5%87%A6%E7%90%86/%E7%90%86%E8%AB%96%E4%B8%8A%E5%A3%B0%E3%81%8F%E3%81%A3%E3%81%8D%E3%82%8Acrepe.py'>理論上声くっきりcrepe.py</a></li>
+            </ul>
+        </li>
+        <li><span class='dir-name'>音声系/</span>
+            <ul>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E7%B3%BB/abcd.vib.c0c10.html'>abcd.vib.c0c10.html</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E7%B3%BB/%E8%87%AA%E4%BD%9C%E7%96%91%E4%BC%BC%E3%83%95%E3%83%AB%E3%83%BC%E3%83%88%E9%96%A2%E6%95%B0%E7%94%9F%E6%88%90.js'>自作疑似フルート関数生成.js</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E7%B3%BB/%E9%96%A2%E6%95%B0%E9%9F%B3%E6%BA%90%E4%BD%9C%E6%88%90V10.html'>関数音源作成V10.html</a></li>
+                <li><a class='file-link' href='./%E9%9F%B3%E5%A3%B0%E7%B3%BB/%E9%96%A2%E6%95%B0%E9%9F%B3%E6%BA%90%E4%BD%9C%E6%88%90V9.html'>関数音源作成V9.html</a></li>
+            </ul>
+        </li>
+        <li><a class='file-link' href='./LICENSE'>LICENSE</a></li>
+        <li><a class='file-link' href='./README.md'>README.md</a></li>
+        <li><a class='file-link' href='./coi-serviceworker.js'>coi-serviceworker.js</a></li>
+        <li><a class='file-link' href='./%E9%9F%B3%E9%9A%8E.html'>音階.html</a></li>
+        </ul>
+        <div class='footer'>Generated at: 2026-05-17 (Version 2026.1)</div>
+    </div>
+</body>
+</html>
