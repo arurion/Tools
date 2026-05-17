@@ -1,0 +1,37 @@
+name: Update Explorer Index
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'index_all.html' # 自己更新による無限ループ防止
+
+concurrency:
+  group: "pages-explorer"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GITHUB_TOKENによるPushに必要 (正しい指定です)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 
+
+      - name: Set up Python
+        uses: actions/setup-python@v6 # Node 24対応の最新版 (正しい指定です)
+        with:
+          python-version: '3.14' 
+
+      - name: Generate Index
+        run: python generate_index.py
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "Explorer Bot v2026"
+          git config --global user.email "bot@example.com"
+          git add index_all.html
+          # 既に add されているため、stagedの差分(変更有無)だけを確認すれば安全です
+          git diff --staged --quiet || (git commit -m "Update explorer index" && git push)
