@@ -16,10 +16,12 @@ Polyglot.htmlはDavid Buchanan氏のpack.pyをもとにつくった
 ### 例外 (Exceptions)
 
 - **特定の関連ファイル**
-  以下のファイルは **FFmpeg（AGPL構成）** に依存しているため、例外として **GNU AGPLv3** が適用されます。
+  以下のファイルは **FFmpeg（GPL構成）** に依存しているため、例外として **GNU GPLv3** が適用されます。
   - `画像・映像系ツール/数式画像変換ΛΔ.html`
   - `画像・映像系ツール/TDNFFmpeg.html`
 
 - **FFmpeg.wasm 本体（ffmpegディレクトリ）**
   `ffmpeg/` ディレクトリ以下のファイルはすべて **FFmpeg.wasm の本体ファイル**です。
   これらは、当該ディレクトリ内に含まれている固有のライセンス（LICENSEファイル等）の下で公開されています。
+  ffmpeg-core.* は @ffmpeg/core 由来で GPL
+  814.ffmpeg.js / ffmpeg.js は @ffmpeg/ffmpeg 由来で MITとなっています
