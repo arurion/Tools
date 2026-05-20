@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Image Analyzer v12</title>
+<style>
+    :root {
+        --bg-color: #f6f8fa; --container-bg: #ffffff;
+        --text-main: #24292f; --border-color: #d0d7de;
+        --accent-color: #0969da; --danger-color: #cf222e;
+    }
+    [data-theme="dark"] {
+        --bg-color: #0d1117; --container-bg: #0d1117;
+        --text-main: #c9d1d9; --border-color: #30363d;
+        --accent-color: #58a6ff; --danger-color: #f85149;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg-color); color: var(--text-main);
+        line-height: 1.5; margin: 0; padding: 15px; -webkit-font-smoothing: none;
+    }
+    .container {
+        max-width: 800px; margin: 0 auto; background: var(--container-bg);
+        padding: 25px; border-radius: 8px; border: 1px solid var(--border-color);
+    }
+    
+    .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
+    h1 { margin: 0; font-size: 1.3em; font-weight: 600; letter-spacing: 0.5px; }
+    .theme-switch { display: flex; gap: 15px; font-size: 0.9em; color: var(--text-main); }
+    .theme-switch label { cursor: pointer; display: flex; align-items: center; gap: 5px; }
+    .theme-switch input[type="radio"] { accent-color: var(--accent-color); }
+
+    .upload-area { border: 1px dashed var(--border-color); border-radius: 6px; padding: 30px 15px; text-align: center; margin-bottom: 25px; }
+    input[type="file"] { font-size: 1em; cursor: pointer; color: var(--text-main); }
+
+    .alert-box { display: none; border: 1px solid var(--danger-color); padding: 12px; margin-bottom: 20px; border-radius: 6px; color: var(--danger-color); font-size: 0.9em; }
+
+    .preview-container { text-align: center; margin-bottom: 25px; }
+    #preview { max-width: 100%; max-height: 250px; border-radius: 4px; display: none; border: 1px solid var(--border-color); }
+
+    .result-list { display: none; margin-bottom: 30px; }
+    .result-row { display: flex; align-items: flex-start; padding: 16px 0; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+    .result-row:last-child { border-bottom: none; }
+    .result-row input[type="checkbox"] { margin-top: 6px; margin-right: 15px; accent-color: var(--accent-color); transform: scale(1.2); cursor: pointer; }
+    .result-content { flex: 1; min-width: 0; }
+    .result-title { font-weight: 600; color: var(--text-main); font-size: 0.85em; margin-bottom: 4px; }
+    .result-value { color: var(--text-main); font-size: 1.1em; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; word-break: break-all; }
+    
+    .calc-btn { background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em; margin-top: 6px; }
+    .calc-btn:disabled { display: none; }
+
+    .export-section { display: none; text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border-color); }
+    .generate-btn { background-color: transparent; color: var(--text-main); border: 1px solid var(--border-color); padding: 10px 20px; border-radius: 6px; font-size: 0.95em; cursor: pointer; transition: 0.2s; }
+    .generate-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+
+    #imageModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; flex-direction: column; padding: 20px; box-sizing: border-box; }
+    #generatedImage { width: 100%; max-width: 800px; height: auto; background: var(--container-bg); border-radius: 4px; image-rendering: pixelated; }
+    .modal-controls { margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+    .btn-close, .btn-download { padding: 8px 16px; border-radius: 4px; border: 1px solid #444; font-size: 0.9em; cursor: pointer; text-decoration: none; text-align: center; }
+    .btn-close { background: #222; color: #fff; }
+    .btn-download { background: var(--accent-color); color: #fff; border-color: var(--accent-color); font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-area">
+        <h1>Image Analyzer</h1>
+        <div class="theme-switch">
+            <label><input type="radio" name="theme" value="dark" checked> Dark</label>
+            <label><input type="radio" name="theme" value="light"> Light</label>
+        </div>
+    </div>
+    
+    <div class="upload-area">
+        <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <div class="alert-box" id="alertBox">非常に大きな画像です</div>
+
+    <div class="preview-container">
+        <img id="preview" alt="Preview">
+    </div>
+
+    <div class="result-list" id="results">
+        <label class="result-row"><input type="checkbox" checked value="filename">
+            <div class="result-content"><div class="result-title">ファイル名 / 形式</div><div class="result-value" id="val-filename">-</div></div>
+        </label>
+        <label class="result-row"><input type="checkbox" checked value="filesize">
+            <div class="result-content"><div class="result-title">ファイルサイズ</div><div class="result-value" id="val-filesize">-</div></div>
+        </label>
+        <label class="result-row"><input type="checkbox" checked value="dimension">
+            <div class="result-content"><div class="result-title">画像サイズ</div><div class="result-value" id="val-dimension">-</div></div>
+        </label>
+        <label class="result-row"><input type="checkbox" checked value="details">
+            <div class="result-content">
+                <div class="result-title">フォーマット詳細</div>
+                <div class="result-value" id="val-details-1">-</div>
+                <div class="result-value" id="val-details-2" style="font-size: 0.9em;">-</div>
+            </div>
+        </label>
+        <label class="result-row" id="row-exif" style="display: none;"><input type="checkbox" checked value="exif">
+            <div class="result-content">
+                <div class="result-title">Exif メタデータ</div>
+                <div class="result-value" id="val-exif-camera">-</div>
+                <div class="result-value" id="val-exif-settings" style="font-size: 0.9em;">-</div>
+            </div>
+        </label>
+        <label class="result-row"><input type="checkbox" checked value="colors">
+            <div class="result-content">
+                <div class="result-title">使用色数</div>
+                <div class="result-value" id="val-colors">
+                    <span id="text-colors">-</span><br><button id="btn-calc-colors" class="calc-btn">計算</button>
+                </div>
+            </div>
+        </label>
+        <label class="result-row"><input type="checkbox" checked value="compression">
+            <div class="result-content">
+                <div class="result-title">圧縮率 / 展開後メモリ</div>
+                <div class="result-value" id="val-compression">-</div>
+                <div class="result-value" id="val-memory" style="font-size: 0.9em;">-</div>
+            </div>
+        </label>
+    </div>
+
+    <div class="export-section" id="exportSection">
+        <button class="generate-btn" id="btn-generate">ログ画像を出力 (Indexed-2 PNG)</button>
+    </div>
+</div>
+
+<div id="imageModal">
+    <img id="generatedImage" alt="Log Image">
+    <div class="modal-controls">
+        <button class="btn-close" onclick="document.getElementById('imageModal').style.display='none'">閉じる</button>
+        <a id="btn-download" class="btn-download" download="analyzer_log.png">⬇ ダウンロード</a>
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll('input[name="theme"]').forEach(radio => radio.addEventListener('change', e => document.documentElement.setAttribute('data-theme', e.target.value)));
+
+    const BROWSER_DECODE_LIMIT = 32768; 
+    let currentImageData = null;
+
+    function formatBytes(bytes) {
+        if (!+bytes) return '0 Bytes';
+        const k = 1024; const sizes = ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+    }
+
+    function getAspectRatio(w, h) {
+        const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+        const r = gcd(w, h);
+        return (w/r > 100 || h/r > 100) ? `${(w/h).toFixed(2)}:1` : `${w/r}:${h/r}`;
+    }
+
+    // バイナリメタデータ・パーサー
+    function parseAdvancedMetadata(buffer) {
+        const view = new DataView(buffer); const bytes = new Uint8Array(buffer);
+        let meta = { format: "Unknown", width: null, height: null, details:[], exif: null };
+        try {
+            if (bytes[0]===0xFF && bytes[1]===0xD8) {
+                meta.format = "JPEG"; meta.details.push("Lossy");
+                let offset = 2; let subsampling = ""; let bitDepth = 8;
+                while(offset < bytes.length - 2) {
+                    if (bytes[offset] !== 0xFF) break;
+                    const marker = bytes[offset + 1];
+                    if (marker === 0x00 || marker === 0xFF) { offset++; continue; }
+                    const len = view.getUint16(offset + 2, false);
+                    if (marker === 0xE1 && view.getUint32(offset + 4, false) === 0x45786966) { meta.exif = extractExif(view, offset + 10); } 
+                    else if (marker === 0xC0 || marker === 0xC2) { 
+                        bitDepth = bytes[offset + 4]; meta.height = view.getUint16(offset + 5, false); meta.width = view.getUint16(offset + 7, false);  
+                        const numComps = bytes[offset + 9];
+                        if (numComps === 3) {
+                            const y = bytes[offset + 11], cb = bytes[offset + 14];
+                            const yH = y>>4, yV = y&0x0F, cbH = cb>>4, cbV = cb&0x0F;
+                            if (yH===2 && yV===2 && cbH===1 && cbV===1) subsampling = "4:2:0";
+                            else if (yH===2 && yV===1 && cbH===1 && cbV===1) subsampling = "4:2:2";
+                            else if (yH===1 && yV===1 && cbH===1 && cbV===1) subsampling = "4:4:4";
+                            meta.details.push(`YUV (${subsampling || yH+'x'+yV})`);
+                        } else if (numComps === 1) { meta.details.push(`Grayscale`); }
+                        meta.details.push(`${bitDepth}-bit`);
+                    }
+                    offset += 2 + len;
+                }
+            } else if (bytes[0]===0x89 && view.getUint32(1, false)===0x504E470D) {
+                meta.format = "PNG"; meta.details.push("Lossless");
+                if (bytes.length >= 33) {
+                    meta.width = view.getUint32(16, false); meta.height = view.getUint32(20, false);  
+                    const depth = bytes[24], ctype = bytes[25];
+                    const types = {0:"Grayscale", 2:"RGB", 3:"Indexed (Palette)", 4:"Grayscale+Alpha", 6:"RGBA"};
+                    meta.details.push(`${types[ctype] || "Unknown"}`, `${depth}-bit`);
+                }
+            } else if (bytes[0]===0x47 && bytes[1]===0x49 && bytes[2]===0x46) {
+                meta.format = "GIF"; meta.width = view.getUint16(6, true); meta.height = view.getUint16(8, true); 
+                meta.details.push("Lossless", "Indexed");
+            } else if (view.getUint32(0, false)===0x52494646 && view.getUint32(8, false)===0x57454250) {
+                meta.format = "WebP"; let offset = 12; let hasAlpha = false;
+                while(offset < bytes.length - 8) {
+                    const chunk = String.fromCharCode(...bytes.slice(offset, offset+4)); const len = view.getUint32(offset+4, true);
+                    if (chunk === "VP8X") {
+                        if (bytes[offset+8] & 0x10) hasAlpha = true;
+                        meta.width = 1 + (bytes[offset+12] | (bytes[offset+13]<<8) | (bytes[offset+14]<<16)); meta.height = 1 + (bytes[offset+15] | (bytes[offset+16]<<8) | (bytes[offset+17]<<16));
+                    }
+                    if (chunk === "VP8 ") meta.details.push("Lossy", "YUV", "8-bit");
+                    if (chunk === "VP8L") meta.details.push("Lossless", `${hasAlpha ? "RGBA" : "RGB"}`, "8-bit");
+                    if (chunk === "EXIF") meta.exif = extractExif(view, offset+8);
+                    offset += 8 + len + (len % 2);
+                }
+            }
+        } catch(e) {} return meta;
+    }
+
+    function extractExif(v, off) { try { const le = v.getUint16(off, false) === 0x4949; const ifdOff = v.getUint32(off + 4, le); let t = {}; readIFD(v, off, off + ifdOff, le, t); if (t.ExifOffset) readIFD(v, off, off + t.ExifOffset, le, t); return t; } catch(e) { return null; } }
+    function readIFD(v, tOff, iOff, le, tags) { const num = v.getUint16(iOff, le); for (let i=0; i<num; i++) { const eOff = iOff + 2 + i*12; const t = v.getUint16(eOff, le), typ = v.getUint16(eOff + 2, le), cnt = v.getUint32(eOff + 4, le); let vOff = eOff + 8; const sz = cnt * ([1,2,6,7].includes(typ)?1:[3,8].includes(typ)?2:[4,9].includes(typ)?4:8); if (sz>4) vOff = tOff + v.getUint32(vOff, le); try { let val = readTagValue(v, typ, cnt, vOff, le); if(t===0x010F) tags.Make=val; if(t===0x0110) tags.Model=val; if(t===0x9003||t===0x0132) tags.DateTimeOriginal=val; if(t===0x829A) tags.ExposureTime=val; if(t===0x829D) tags.FNumber=val; if(t===0x8827) tags.ISOSpeedRatings=val; if(t===0x920A) tags.FocalLength=val; if(t===0x8769) tags.ExifOffset=val; } catch(e){} } }
+    function readTagValue(v, typ, cnt, off, le) { if (typ===2) { let s=""; for(let i=0; i<cnt-1; i++){ const c=v.getUint8(off+i); if(c===0) break; s+=String.fromCharCode(c); } return s; } if(typ===3) return v.getUint16(off, le); if(typ===4) return v.getUint32(off, le); if(typ===5||typ===10) return [v.getInt32(off, le), v.getInt32(off+4, le)]; return v.getUint16(off, le); }
+    function formatExifUI(exif) { if (!exif||!Object.keys(exif).length) return null; let c=[]; if(exif.Make) c.push(exif.Make.trim()); if(exif.Model) { const m=exif.Model.trim(); if(c[0]&&m.startsWith(c[0])) c=[m]; else c.push(m); } let s=[]; if(exif.ExposureTime&&exif.ExposureTime[0]) { const [n,d]=exif.ExposureTime; s.push(n<d?`1/${Math.round(d/n)}s`:`${n/d}s`); } if(exif.FNumber&&exif.FNumber[0]) s.push(`f/${(exif.FNumber[0]/exif.FNumber[1]).toFixed(1)}`); if(exif.ISOSpeedRatings) s.push(`ISO ${exif.ISOSpeedRatings}`); if(exif.FocalLength&&exif.FocalLength[0]) s.push(`${(exif.FocalLength[0]/exif.FocalLength[1]).toFixed(1)}mm`); return { camera: c.join(" ")||"Unknown", settings: (exif.DateTimeOriginal ? exif.DateTimeOriginal + " | " : "") + s.join(" | ") }; }
+
+    function loadImage(file) { return new Promise((resolve, reject) => { const img = new Image(); const url = URL.createObjectURL(file); img.onload = () => resolve({ img, url }); img.onerror = () => reject(new Error("Parse Error")); img.src = url; }); }
+
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        document.getElementById('results').style.display = 'none';
+        document.getElementById('exportSection').style.display = 'none';
+        document.getElementById('alertBox').style.display = 'none';
+        document.getElementById('preview').style.display = 'none';
+        
+        const btnCalc = document.getElementById('btn-calc-colors');
+        btnCalc.style.display = 'inline-block'; btnCalc.textContent = "計算"; btnCalc.disabled = false;
+        document.getElementById('text-colors').textContent = "-";
+
+        try {
+            const buffer = await new Promise((resolve) => {
+                const reader = new FileReader(); reader.onload = e => resolve(e.target.result);
+                reader.readAsArrayBuffer(file.slice(0, 512 * 1024));
+            });
+            const meta = parseAdvancedMetadata(buffer);
+            let width = meta.width; let height = meta.height;
+
+            const isAbnormalSize = (width > BROWSER_DECODE_LIMIT || height > BROWSER_DECODE_LIMIT || (width * height) > 50000000);
+
+            if (!isAbnormalSize) {
+                try {
+                    const loaded = await loadImage(file);
+                    currentImageData = { img: loaded.img, width: loaded.img.naturalWidth, height: loaded.img.naturalHeight };
+                    if (!width || !height) { width = currentImageData.width; height = currentImageData.height; }
+                    const preview = document.getElementById('preview');
+                    preview.src = loaded.url; preview.style.display = 'inline-block';
+                } catch(e) {}
+            } else {
+                document.getElementById('alertBox').style.display = 'block';
+                btnCalc.style.display = 'none';
+                document.getElementById('text-colors').textContent = "計測不可";
+                currentImageData = null; 
+            }
+
+            if (!width || !height) throw new Error("Invalid format");
+
+            const totalPixels = width * height; const memoryBytes = totalPixels * 4; 
+            const compressionRatio = (file.size / memoryBytes) * 100;
+            const compressionMultiplier = memoryBytes / file.size;
+
+            document.getElementById('val-filename').textContent = `${file.name}  [${meta.format}]`;
+            document.getElementById('val-filesize').textContent = `${formatBytes(file.size)} (${file.size.toLocaleString()} Bytes)`;
+            document.getElementById('val-dimension').textContent = `${width.toLocaleString()} × ${height.toLocaleString()} px  (${getAspectRatio(width, height)})`;
+            document.getElementById('val-details-1').textContent = meta.details[0] || `-`;
+            document.getElementById('val-details-2').textContent = meta.details.slice(1).join(", ");
+
+            const exifInfo = formatExifUI(meta.exif);
+            const exifRow = document.getElementById('row-exif');
+            if (exifInfo && exifInfo.camera !== "Unknown") {
+                exifRow.style.display = 'flex'; document.getElementById('val-exif-camera').textContent = exifInfo.camera; document.getElementById('val-exif-settings').textContent = exifInfo.settings;
+            } else { exifRow.style.display = 'none'; }
+
+            let ratioText = compressionRatio < 0.001 ? compressionRatio.toExponential(2) : compressionRatio.toFixed(4);
+            document.getElementById('val-compression').textContent = `${ratioText} %  (1:${compressionMultiplier.toLocaleString(undefined, {maximumFractionDigits:0})})`;
+            document.getElementById('val-memory').textContent = `${formatBytes(memoryBytes)} (${memoryBytes.toLocaleString()} Bytes)`;
+
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('exportSection').style.display = 'block';
+        } catch (error) { alert('Error: ' + error.message); }
+    });
+
+    document.getElementById('btn-calc-colors').addEventListener('click', function(e) {
+        e.preventDefault(); 
+        if (!currentImageData) return;
+        this.textContent = "計算中..."; this.disabled = true;
+        setTimeout(() => {
+            const img = currentImageData.img; const width = currentImageData.width; const height = currentImageData.height;
+            const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            try {
+                ctx.drawImage(img, 0, 0);
+                const data32 = new Uint32Array(ctx.getImageData(0, 0, width, height).data.buffer);
+                let bitset = new Uint8Array(536870912); let uniqueCount = 0;
+                for (let i = 0; i < data32.length; i++) {
+                    const color = data32[i]; const byteIndex = color >>> 3; const bitMask = 1 << (color & 7); 
+                    if ((bitset[byteIndex] & bitMask) === 0) { bitset[byteIndex] |= bitMask; uniqueCount++; }
+                }
+                document.getElementById('text-colors').textContent = `${uniqueCount.toLocaleString()}`;
+            } catch (e) { document.getElementById('text-colors').textContent = "計測不可"; } 
+            finally { canvas.width = 0; canvas.height = 0; this.style.display = 'none'; }
+        }, 50);
+    });
+
+    // ==========================================
+    // 真・Indexed-2 (4色) PNGエンコーダ
+    // アンチエイリアス・ノイズ完全除去ロジック搭載
+    // ==========================================
+    const crcTable = new Uint32Array(256);
+    for(let i=0;i<256;i++){ let c=i; for(let j=0;j<8;j++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); crcTable[i]=c; }
+    function crc32(buf) { let crc = 0xFFFFFFFF; for(let i=0;i<buf.length;i++) crc=(crc>>>8)^crcTable[(crc^buf[i])&0xFF]; return (crc^0xFFFFFFFF)>>>0; }
+    function makeChunk(type, data) {
+        const chunk = new Uint8Array(8 + data.length + 4); const view = new DataView(chunk.buffer);
+        view.setUint32(0, data.length, false);
+        for(let i=0;i<4;i++) chunk[4+i] = type.charCodeAt(i);
+        chunk.set(data, 8);
+        view.setUint32(8 + data.length, crc32(chunk.subarray(4, 8 + data.length)), false);
+        return chunk;
+    }
+
+    const colorPalettes = {
+        dark: [ {r:13, g:17, b:23}, {r:201, g:209, b:217}, {r:48, g:54, b:61}, {r:88, g:166, b:255} ],
+        light: [ {r:255, g:255, b:255}, {r:36, g:41, b:47}, {r:208, g:215, b:222}, {r:9, g:105, b:218} ]
+    };
+
+    // 輝度計算
+    function getLuma(r, g, b) { return 0.299 * r + 0.587 * g + 0.114 * b; }
+    // 距離計算
+    function colorDist(r, g, b, p) { return (r - p.r)**2 + (g - p.g)**2 + (b - p.b)**2; }
+
+    async function exportToIndexed2PNG(canvas, ctx, themeName) {
+        const width = canvas.width, height = canvas.height;
+        const imgData = ctx.getImageData(0, 0, width, height).data;
+        const pal = colorPalettes[themeName] || colorPalettes.dark;
+        const bgLuma = getLuma(pal[0].r, pal[0].g, pal[0].b);
+        const textLuma = getLuma(pal[1].r, pal[1].g, pal[1].b);
+        
+        const indices = new Uint8Array(width * height);
+        
+        // 【ノイズ完全除去アルゴリズム】
+        // Canvasのピクセル情報を4色パレットに確実に振り分ける
+        for (let i = 0; i < imgData.length; i += 4) {
+            const r = imgData[i], g = imgData[i+1], b = imgData[i+2];
+            
+            // 1. アクセント（青）とボーダー（灰）は矩形描画なので色がほぼ完全一致する
+            if (colorDist(r, g, b, pal[3]) < 50) { indices[i/4] = 3; continue; }
+            if (colorDist(r, g, b, pal[2]) < 50) { indices[i/4] = 2; continue; }
+            
+            // 2. それ以外（文字やそのフチのノイズ）はすべて輝度による二値化
+            //    文字の色ズレがボーダー色などに誤判定されるのを防ぐ
+            const pLuma = getLuma(r, g, b);
+            if (Math.abs(pLuma - bgLuma) < Math.abs(pLuma - textLuma)) {
+                indices[i/4] = 0; // 背景にスナップ
+            } else {
+                indices[i/4] = 1; // テキスト色にスナップ
+            }
+        }
+
+        const ihdrData = new Uint8Array(13); const ihdrView = new DataView(ihdrData.buffer);
+        ihdrView.setUint32(0, width, false); ihdrView.setUint32(4, height, false);
+        // Bit Depth = 2 (Indexed-2), Color Type = 3
+        ihdrData[8] = 2; ihdrData[9] = 3; ihdrData[10] = 0; ihdrData[11] = 0; ihdrData[12] = 0;
+        const ihdr = makeChunk('IHDR', ihdrData);
+        
+        const plteData = new Uint8Array(12);
+        for(let i=0; i<4; i++) { plteData[i*3]=pal[i].r; plteData[i*3+1]=pal[i].g; plteData[i*3+2]=pal[i].b; }
+        const plte = makeChunk('PLTE', plteData);
+        
+        const widthBytes = Math.ceil(width / 4);
+        const scanlines = new Uint8Array(height * (1 + widthBytes));
+        
+        for (let y = 0; y < height; y++) {
+            let offset = y * (1 + widthBytes);
+            scanlines[offset++] = 0; // Filter Type 0
+            for (let x = 0; x < width; x += 4) {
+                let byte = 0;
+                for (let i = 0; i < 4; i++) {
+                    if (x + i < width) byte |= (indices[y * width + x + i] & 3) << (6 - i * 2);
+                }
+                scanlines[offset++] = byte;
+            }
+        }
+        
+        const stream = new CompressionStream('deflate');
+        const writer = stream.writable.getWriter();
+        writer.write(scanlines); writer.close();
+        
+        const reader = stream.readable.getReader(); const chunks =[];
+        while(true) { const {done, value} = await reader.read(); if(done) break; chunks.push(value); }
+        const idatLen = chunks.reduce((a,b)=>a+b.length, 0); const idatData = new Uint8Array(idatLen);
+        let off = 0; for(let c of chunks) { idatData.set(c, off); off += c.length; }
+        const idat = makeChunk('IDAT', idatData);
+        
+        const iend = makeChunk('IEND', new Uint8Array(0));
+        
+        const sig = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        const totalLen = sig.length + ihdr.length + plte.length + idat.length + iend.length;
+        const png = new Uint8Array(totalLen); off = 0;
+        png.set(sig, off); off += sig.length; png.set(ihdr, off); off += ihdr.length;
+        png.set(plte, off); off += plte.length; png.set(idat, off); off += idat.length; png.set(iend, off);
+        
+        return new Blob([png], {type: 'image/png'});
+    }
+
+    document.getElementById('btn-generate').addEventListener('click', async () => {
+        const btn = document.getElementById('btn-generate');
+        const originalText = btn.textContent;
+        btn.textContent = "生成中..."; btn.disabled = true;
+
+        try {
+            const rows = document.querySelectorAll('.result-row'); const extractData =[];
+            rows.forEach(row => {
+                if (window.getComputedStyle(row).display === 'none') return;
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if(checkbox.checked) {
+                    const title = row.querySelector('.result-title').innerText;
+                    const contentDiv = row.querySelector('.result-content');
+                    const values = contentDiv.querySelectorAll('.result-value');
+                    let main = ""; let subs =[];
+                    if(checkbox.value === "colors") main = document.getElementById('text-colors').innerText;
+                    else if (values.length > 0) { main = values[0].innerText; for(let i=1; i<values.length; i++) if(values[i].innerText.trim() !== "" && values[i].innerText.trim() !== "-") subs.push(values[i].innerText); }
+                    extractData.push({ title, main, subs });
+                }
+            });
+            if(extractData.length === 0) throw new Error("出力する項目がありません");
+
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const pal = colorPalettes[currentTheme];
+            const bgColor = `rgb(${pal[0].r}, ${pal[0].g}, ${pal[0].b})`;
+            const textColor = `rgb(${pal[1].r}, ${pal[1].g}, ${pal[1].b})`;
+            const borderColor = `rgb(${pal[2].r}, ${pal[2].g}, ${pal[2].b})`;
+            const accentColor = `rgb(${pal[3].r}, ${pal[3].g}, ${pal[3].b})`;
+
+            let totalHeight = 120; extractData.forEach(item => { totalHeight += 120 + (item.subs.length * 45); });
+            
+            const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = totalHeight; const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = bgColor; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            let currentY = 60;
+            extractData.forEach((item, index) => {
+                let itemHeight = 120 + (item.subs.length * 45); let lineH = 50 + (item.subs.length * 45);
+                ctx.fillStyle = accentColor;
+                ctx.fillRect(80, currentY, 6, lineH);
+                
+                ctx.font = "bold 22px sans-serif"; ctx.fillStyle = textColor; ctx.fillText(item.title, 110, currentY + 18);
+                ctx.font = "36px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = textColor; ctx.fillText(item.main, 110, currentY + 62, 1000);
+                
+                let nextY = currentY + 62;
+                if (item.subs.length > 0) {
+                    ctx.font = "28px ui-monospace, SFMono-Regular, monospace"; ctx.fillStyle = textColor;
+                    item.subs.forEach(sub => { nextY += 45; ctx.fillText(sub, 110, nextY, 1000); });
+                }
+                if (index < extractData.length - 1) { ctx.fillStyle = borderColor; ctx.fillRect(80, currentY + itemHeight - 20, 1040, 2); }
+                currentY += itemHeight;
+            });
+
+            const blob = await exportToIndexed2PNG(canvas, ctx, currentTheme);
+            const objectUrl = URL.createObjectURL(blob);
+            
+            document.getElementById('generatedImage').src = objectUrl;
+            document.getElementById('btn-download').href = objectUrl;
+            document.getElementById('imageModal').style.display = 'flex';
+
+        } catch (e) { alert(e.message); } 
+        finally { btn.textContent = originalText; btn.disabled = false; }
+    });
+</script>
+
+</body>
+</html>
