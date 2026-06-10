@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PNG Resizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<style>
+    /* Minimalist & Professional UI */
+    :root {
+        --bg-color: #f5f5f7;
+        --panel-bg: #ffffff;
+        --text-main: #1d1d1f;
+        --text-muted: #86868b;
+        --border-color: #d2d2d7;
+        --accent-color: #0071e3;
+        --accent-hover: #0077ed;
+        --error-color: #e30000;
+        --focus-ring: rgba(0, 113, 227, 0.3);
+        --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+        font-family: var(--font-family);
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        margin: 0;
+        padding: 40px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    .header-section {
+        text-align: center;
+        margin-bottom: 30px;
+        max-width: 600px;
+    }
+
+    h1 {
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        margin: 0 0 8px 0;
+    }
+
+    p.desc {
+        color: var(--text-muted);
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .container {
+        display: flex;
+        gap: 24px;
+        width: 100%;
+        max-width: 900px;
+        align-items: stretch;
+    }
+
+    .panel {
+        background: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 24px;
+        flex: 1;
+        min-width: 320px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group:last-of-type {
+        margin-bottom: 24px;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    input[type="file"] {
+        font-size: 13px;
+    }
+
+    input[type="file"]::file-selector-button {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 6px 12px;
+        color: var(--text-main);
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        margin-right: 12px;
+    }
+
+    input[type="file"]::file-selector-button:hover {
+        background: #e8e8ed;
+    }
+
+    input[type="number"], select {
+        width: 100%;
+        padding: 8px 12px;
+        background: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        border-radius: 6px;
+        font-size: 14px;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+    }
+
+    input[type="number"]:focus, select:focus {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+
+    .flex-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .flex-row span {
+        color: var(--text-muted);
+        font-size: 14px;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: normal;
+        color: var(--text-muted);
+        font-size: 13px;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    button {
+        background-color: var(--accent-color);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        transition: background-color 0.2s;
+        width: 100%;
+    }
+
+    button:hover {
+        background-color: var(--accent-hover);
+    }
+
+    button:disabled {
+        background-color: #e5e5ea;
+        color: #aeaeb2;
+        cursor: not-allowed;
+    }
+
+    .preview-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3hFxQJABDBiJkUEzxmgahqEwGCrDMBRGGArDwPIMjA0MAABj4h0F3PylhQAAAABJRU5ErkJggg==');
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+        min-height: 240px;
+        margin-top: 8px;
+        position: relative;
+    }
+
+    img#outputImage {
+        max-width: 100%;
+        height: auto;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    #downloadLink {
+        display: none;
+        text-align: center;
+        margin-top: 12px;
+        color: var(--accent-color);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    #downloadLink:hover {
+        text-decoration: underline;
+    }
+
+    .note {
+        font-size: 12px;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    #logOutput {
+        margin-top: 12px;
+        font-size: 13px;
+        color: var(--error-color);
+        white-space: pre-wrap;
+    }
+
+    #fileInfo {
+        text-align: center;
+        margin-top: 12px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .container {
+            flex-direction: column;
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="header-section">
+    <h1>PNG Header Hacker & Resizer</h1>
+    <p class="desc">
+        基本的なリサイズが可能<br>
+        1〜16bit深度、グレースケール、パレットカラーの変更が可能
+    </p>
+</div>
+
+<div class="container">
+    <div class="panel">
+        <div class="form-group">
+            <label>1. 画像ソース</label>
+            <input type="file" id="imageInput" accept="image/png, image/gif, image/jpeg, image/webp">
+        </div>
+
+        <div class="form-group">
+            <label>2. リサイズ設定</label>
+            <div class="control-group">
+                <div class="flex-row">
+                    <input type="number" id="targetWidth" placeholder="Width" min="1">
+                    <span>x</span>
+                    <input type="number" id="targetHeight" placeholder="Height" min="1">
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="keepAspect" checked> アスペクト比を維持
+                </label>
+                <select id="algorithm">
+                    <option value="nearest">Nearest Neighbor (ニアレストネイバー / エッジ保持)</option>
+                    <option value="bilinear">Bilinear (ブラウザ標準)</option>
+                    <option value="bicubic">Bicubic (バイキュービック補間 / 高品質)</option>
+                    <option value="lanczos3">Lanczos-3 (ランチョス補間 / 最高品質)</option>
+                    <option value="ssaa8">SSAA x8 (内部16bit / ガンマ補正平均化)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>3. 出力フォーマットと圧縮</label>
+            <div class="control-group">
+                <select id="colorType">
+                    <option value="3">Indexed (Type 3 / パレットカラー)</option>
+                    <option value="0">Grayscale (Type 0)</option>
+                    <option value="4">Grayscale + Alpha (Type 4)</option>
+                    <option value="2">True Color (Type 2 / RGB)</option>
+                    <option value="6" selected>True Color + Alpha (Type 6 / RGBA)</option>
+                </select>
+                <select id="bitDepth">
+                    <!-- JavaScriptで動的生成 -->
+                </select>
+                <div class="flex-row" style="margin-top: 4px;">
+                    <span style="min-width: 80px; font-weight: 500;">圧縮レベル:</span>
+                    <input type="range" id="compressionLevel" min="0" max="9" value="9" style="flex:1; cursor:pointer;">
+                    <span id="compressionValue" style="min-width: 20px; text-align: right; font-family: monospace;">9</span>
+                </div>
+            </div>
+        </div>
+
+        <button id="processBtn" disabled>エンコード実行</button>
+        <div id="logOutput"></div>
+        <a id="downloadLink" download="encoded.png">ダウンロード</a>
+    </div>
+
+    <div class="panel">
+        <label>プレビュー</label>
+        <div class="preview-container">
+            <img id="outputImage" />
+        </div>
+        <div id="fileInfo" class="note"></div>
+    </div>
+</div>
+
+<script>
+    // --- UI Elements ---
+    const imageInput = document.getElementById('imageInput');
+    const targetWidth = document.getElementById('targetWidth');
+    const targetHeight = document.getElementById('targetHeight');
+    const keepAspect = document.getElementById('keepAspect');
+    const algorithm = document.getElementById('algorithm');
+    const colorTypeSel = document.getElementById('colorType');
+    const bitDepthSel = document.getElementById('bitDepth');
+    const compressionLevel = document.getElementById('compressionLevel');
+    const compressionValue = document.getElementById('compressionValue');
+    const processBtn = document.getElementById('processBtn');
+
+    compressionLevel.addEventListener('input', (e) => {
+        compressionValue.innerText = e.target.value;
+    });
+    const outputImage = document.getElementById('outputImage');
+    const downloadLink = document.getElementById('downloadLink');
+    const logOutput = document.getElementById('logOutput');
+    const fileInfo = document.getElementById('fileInfo');
+
+    let sourceImage = new Image();
+    let currentFile = null;
+    let originalWidth = 0;
+    let originalHeight = 0;
+
+    // --- ColorType / BitDepth Dependency ---
+    const validBitDepths = {
+        "0": [1, 2, 4, 8, 16],
+        "2": [8, 16],
+        "3": [1, 2, 4, 8],
+        "4": [8, 16],
+        "6": [8, 16]
+    };
+
+    function updateBitDepths() {
+        const ct = colorTypeSel.value;
+        const depths = validBitDepths[ct];
+        bitDepthSel.innerHTML = "";
+        depths.forEach(d => {
+            const opt = document.createElement("option");
+            opt.value = d;
+            opt.text = `${d} bit ` + (ct === "3" ? `(Max ${1 << d} colors)` : `per channel`);
+            if (d === 8) opt.selected = true;
+            bitDepthSel.appendChild(opt);
+        });
+    }
+    colorTypeSel.addEventListener('change', updateBitDepths);
+    updateBitDepths(); // init
+
+    // --- Image Loading ---
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        currentFile = file;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            sourceImage.onload = function() {
+                originalWidth = sourceImage.width;
+                originalHeight = sourceImage.height;
+                targetWidth.value = originalWidth;
+                targetHeight.value = originalHeight;
+                processBtn.disabled = false;
+                logOutput.innerText = "";
+            };
+            sourceImage.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    targetWidth.addEventListener('input', () => {
+        if (keepAspect.checked && originalWidth > 0) {
+            targetHeight.value = Math.round(targetWidth.value * (originalHeight / originalWidth));
+        }
+    });
+    targetHeight.addEventListener('input', () => {
+        if (keepAspect.checked && originalHeight > 0) {
+            targetWidth.value = Math.round(targetHeight.value * (originalWidth / originalHeight));
+        }
+    });
+
+    // --- Core Processing Algorithms (Output: 16bit Typed Array) ---
+
+    function resizeNearest(srcCanvas, tw, th) {
+        const sw = srcCanvas.width;
+        const sh = srcCanvas.height;
+        const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
+        const srcData = ctx.getImageData(0, 0, sw, sh).data;
+        const dst = new Uint16Array(tw * th * 4);
+        
+        for (let y = 0; y < th; y++) {
+            for (let x = 0; x < tw; x++) {
+                const sx = Math.floor(x * sw / tw);
+                const sy = Math.floor(y * sh / th);
+                const srcIdx = (sy * sw + sx) * 4;
+                const dstIdx = (y * tw + x) * 4;
+                dst[dstIdx]   = (srcData[srcIdx] << 8) | srcData[srcIdx];
+                dst[dstIdx+1] = (srcData[srcIdx+1] << 8) | srcData[srcIdx+1];
+                dst[dstIdx+2] = (srcData[srcIdx+2] << 8) | srcData[srcIdx+2];
+                dst[dstIdx+3] = (srcData[srcIdx+3] << 8) | srcData[srcIdx+3];
+            }
+        }
+        return { width: tw, height: th, data: dst };
+    }
+
+    function resizeSSAA8(imgElement, tw, th) {
+        const factor = 8;
+        const bigW = tw * factor;
+        const bigH = th * factor;
+
+        const tmp = document.createElement('canvas');
+        tmp.width = bigW;
+        tmp.height = bigH;
+        const tCtx = tmp.getContext('2d', { willReadFrequently: true });
+        tCtx.imageSmoothingEnabled = true;
+        tCtx.imageSmoothingQuality = 'high';
+        tCtx.drawImage(imgElement, 0, 0, bigW, bigH);
+
+        const srcData = tCtx.getImageData(0, 0, bigW, bigH).data;
+        const dst = new Uint16Array(tw * th * 4);
+
+        const toLinear = (c) => {
+            let v = c / 255.0;
+            return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        };
+        const toSRGB = (c) => {
+            let v = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+            return Math.max(0, Math.min(1, v));
+        };
+
+        for (let y = 0; y < th; y++) {
+            for (let x = 0; x < tw; x++) {
+                let rSum = 0, gSum = 0, bSum = 0, aSum = 0;
+                for (let dy = 0; dy < factor; dy++) {
+                    for (let dx = 0; dx < factor; dx++) {
+                        const sx = x * factor + dx;
+                        const sy = y * factor + dy;
+                        const idx = (sy * bigW + sx) * 4;
+                        const a = srcData[idx + 3] / 255.0;
+                        rSum += toLinear(srcData[idx]) * a;
+                        gSum += toLinear(srcData[idx + 1]) * a;
+                        bSum += toLinear(srcData[idx + 2]) * a;
+                        aSum += a;
+                    }
+                }
+
+                const dstIdx = (y * tw + x) * 4;
+                if (aSum > 0) {
+                    const r = toSRGB(rSum / aSum);
+                    const g = toSRGB(gSum / aSum);
+                    const b = toSRGB(bSum / aSum);
+                    const a = aSum / (factor * factor);
+                    dst[dstIdx]   = Math.round(r * 65535);
+                    dst[dstIdx+1] = Math.round(g * 65535);
+                    dst[dstIdx+2] = Math.round(b * 65535);
+                    dst[dstIdx+3] = Math.round(a * 65535);
+                } else {
+                    dst[dstIdx] = dst[dstIdx+1] = dst[dstIdx+2] = dst[dstIdx+3] = 0;
+                }
+            }
+        }
+        return { width: tw, height: th, data: dst };
+    }
+
+    function resizeBilinear(imgElement, tw, th) {
+        const tmp = document.createElement('canvas');
+        tmp.width = tw;
+        tmp.height = th;
+        const tCtx = tmp.getContext('2d', { willReadFrequently: true });
+        tCtx.imageSmoothingEnabled = true;
+        tCtx.imageSmoothingQuality = 'high';
+        tCtx.drawImage(imgElement, 0, 0, tw, th);
+        
+        const srcData = tCtx.getImageData(0, 0, tw, th).data;
+        const dst = new Uint16Array(tw * th * 4);
+        for (let i = 0; i < srcData.length; i++) {
+            dst[i] = (srcData[i] << 8) | srcData[i];
+        }
+        return { width: tw, height: th, data: dst };
+    }
+
+    // 4. Advanced Filters (Bicubic / Lanczos-3)
+    function resizeAdvanced(srcCanvas, tw, th, filterType) {
+        const sw = srcCanvas.width;
+        const sh = srcCanvas.height;
+        const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
+        const srcData = ctx.getImageData(0, 0, sw, sh).data;
+        const dst = new Uint16Array(tw * th * 4);
+
+        let filterFunc, support;
+        if (filterType === 'bicubic') {
+            support = 2.0;
+            filterFunc = (x) => {
+                const a = -0.5;
+                x = Math.abs(x);
+                if (x <= 1.0) return (a + 2.0) * x * x * x - (a + 3.0) * x * x + 1.0;
+                if (x < 2.0) return a * x * x * x - 5.0 * a * x * x + 8.0 * a * x - 4.0 * a;
+                return 0.0;
+            };
+        } else if (filterType === 'lanczos3') {
+            support = 3.0;
+            const sinc = (x) => x === 0 ? 1.0 : Math.sin(Math.PI * x) / (Math.PI * x);
+            filterFunc = (x) => {
+                x = Math.abs(x);
+                return x < 3.0 ? sinc(x) * sinc(x / 3.0) : 0.0;
+            };
+        }
+
+        const scaleX = tw / sw;
+        const scaleY = th / sh;
+        
+        // 縮小時はサンプリング範囲を広げてモアレを防ぐ
+        const stepX = Math.min(1.0, scaleX);
+        const stepY = Math.min(1.0, scaleY);
+        const supportX = support / stepX;
+        const supportY = support / stepY;
+
+        for (let y = 0; y < th; y++) {
+            const centerY = (y + 0.5) / scaleY;
+            const startY = Math.max(0, Math.floor(centerY - supportY));
+            const endY = Math.min(sh - 1, Math.ceil(centerY + supportY));
+
+            for (let x = 0; x < tw; x++) {
+                const centerX = (x + 0.5) / scaleX;
+                const startX = Math.max(0, Math.floor(centerX - supportX));
+                const endX = Math.min(sw - 1, Math.ceil(centerX + supportX));
+
+                let r = 0, g = 0, b = 0, a = 0, weightSum = 0;
+
+                for (let sy = startY; sy <= endY; sy++) {
+                    const weightY = filterFunc((sy + 0.5 - centerY) * stepY);
+                    if (weightY === 0) continue;
+
+                    for (let sx = startX; sx <= endX; sx++) {
+                        const weightX = filterFunc((sx + 0.5 - centerX) * stepX);
+                        const weight = weightX * weightY;
+                        if (weight === 0) continue;
+
+                        const srcIdx = (sy * sw + sx) * 4;
+                        const srcA = srcData[srcIdx + 3] / 255.0; // Alpha premultiply
+                        
+                        r += srcData[srcIdx] * weight * srcA;
+                        g += srcData[srcIdx + 1] * weight * srcA;
+                        b += srcData[srcIdx + 2] * weight * srcA;
+                        a += srcA * weight;
+                        weightSum += weight;
+                    }
+                }
+
+                const dstIdx = (y * tw + x) * 4;
+                if (a > 0) {
+                    const finalA = Math.max(0, Math.min(1, a / weightSum));
+                    // 16bit空間へ正確にマッピング (* 257は * 65535 / 255 と等価)
+                    dst[dstIdx]   = Math.max(0, Math.min(65535, Math.round((r / a) * 257)));
+                    dst[dstIdx+1] = Math.max(0, Math.min(65535, Math.round((g / a) * 257)));
+                    dst[dstIdx+2] = Math.max(0, Math.min(65535, Math.round((b / a) * 257)));
+                    dst[dstIdx+3] = Math.max(0, Math.min(65535, Math.round(finalA * 65535)));
+                } else {
+                    dst[dstIdx] = dst[dstIdx+1] = dst[dstIdx+2] = dst[dstIdx+3] = 0;
+                }
+            }
+        }
+        return { width: tw, height: th, data: dst };
+    }
+
+    // --- Custom PNG Encoder (Binary Level) ---
+    const crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crcTable[i] = c;
+    }
+    function crc32(data) {
+        let crc = 0xFFFFFFFF;
+        for (let i = 0; i < data.length; i++) {
+            crc = crcTable[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+        }
+        return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    function createChunk(typeStr, data) {
+        const type = new TextEncoder().encode(typeStr);
+        const length = data.length;
+        const chunk = new Uint8Array(4 + 4 + length + 4);
+        const view = new DataView(chunk.buffer);
+        view.setUint32(0, length, false);
+        chunk.set(type, 4);
+        chunk.set(data, 8);
+        const crc = crc32(chunk.subarray(4, 4 + 4 + length));
+        view.setUint32(8 + length, crc, false);
+        return chunk;
+    }
+
+    function packBits(rowPixels, bitDepth) {
+        const pixelsPerByte = 8 / bitDepth;
+        const byteLength = Math.ceil(rowPixels.length / pixelsPerByte);
+        const out = new Uint8Array(byteLength);
+        for (let i = 0; i < rowPixels.length; i++) {
+            const byteIdx = Math.floor(i / pixelsPerByte);
+            const bitShift = 8 - bitDepth - (i % pixelsPerByte) * bitDepth;
+            out[byteIdx] |= (rowPixels[i] & ((1 << bitDepth) - 1)) << bitShift;
+        }
+        return out;
+    }
+
+    function buildScanlines(img16, colorType, bitDepth) {
+        const { width, height, data } = img16;
+        const maxOut = (1 << bitDepth) - 1;
+        let bpp; 
+        
+        let palette = [];
+        let paletteMap = new Map();
+        let trns = [];
+        let hasTrans = false;
+
+        if (colorType === 3) {
+            bpp = bitDepth;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = Math.round(data[i] * 255 / 65535);
+                const g = Math.round(data[i+1] * 255 / 65535);
+                const b = Math.round(data[i+2] * 255 / 65535);
+                const a = Math.round(data[i+3] * 255 / 65535);
+                const key = (a << 24) | (b << 16) | (g << 8) | r;
+                if (!paletteMap.has(key)) {
+                    paletteMap.set(key, palette.length);
+                    palette.push({ r, g, b, a });
+                    if (a < 255) hasTrans = true;
+                }
+            }
+            if (palette.length > (1 << bitDepth)) {
+                throw new Error(`[エラー] 色数が多すぎます (${palette.length}色)。\nBit Depth ${bitDepth} (最大 ${1 << bitDepth} 色) のIndexedには収まりません。True Colorに変更するか、アルゴリズムをNearestにしてください。`);
+            }
+            
+            if (hasTrans) {
+                let lastTransIdx = 0;
+                for (let i = 0; i < palette.length; i++) {
+                    if (palette[i].a < 255) lastTransIdx = i;
+                }
+                for (let i = 0; i <= lastTransIdx; i++) trns.push(palette[i].a);
+            }
+        } 
+        else if (colorType === 0) bpp = bitDepth;
+        else if (colorType === 2) bpp = bitDepth * 3;
+        else if (colorType === 4) bpp = bitDepth * 2;
+        else if (colorType === 6) bpp = bitDepth * 4;
+
+        const rowBytes = Math.ceil((width * bpp) / 8);
+        const rawData = new Uint8Array(height * (1 + rowBytes));
+
+        for (let y = 0; y < height; y++) {
+            const rowStart = y * (1 + rowBytes);
+            rawData[rowStart] = 0; 
+            let rowPixels = []; 
+            
+            for (let x = 0; x < width; x++) {
+                const idx = (y * width + x) * 4;
+                const r16 = data[idx], g16 = data[idx+1], b16 = data[idx+2], a16 = data[idx+3];
+                
+                if (colorType === 3) {
+                    const r8 = Math.round(r16 * 255 / 65535);
+                    const g8 = Math.round(g16 * 255 / 65535);
+                    const b8 = Math.round(b16 * 255 / 65535);
+                    const a8 = Math.round(a16 * 255 / 65535);
+                    const key = (a8 << 24) | (b8 << 16) | (g8 << 8) | r8;
+                    const palIdx = paletteMap.get(key);
+                    
+                    if (bitDepth < 8) rowPixels.push(palIdx);
+                    else rawData[rowStart + 1 + x] = palIdx;
+                } else {
+                    const rVal = Math.round(r16 * maxOut / 65535);
+                    const gVal = Math.round(g16 * maxOut / 65535);
+                    const bVal = Math.round(b16 * maxOut / 65535);
+                    const aVal = Math.round(a16 * maxOut / 65535);
+                    
+                    const yVal = Math.round((r16 * 0.299 + g16 * 0.587 + b16 * 0.114) * maxOut / 65535);
+
+                    if (colorType === 0) {
+                        if (bitDepth < 8) rowPixels.push(yVal);
+                        else if (bitDepth === 8) rawData[rowStart + 1 + x] = yVal;
+                        else {
+                            rawData[rowStart + 1 + x * 2] = (yVal >> 8) & 0xFF;
+                            rawData[rowStart + 1 + x * 2 + 1] = yVal & 0xFF;
+                        }
+                    } else if (colorType === 2) {
+                        if (bitDepth === 8) {
+                            rawData[rowStart + 1 + x * 3] = rVal;
+                            rawData[rowStart + 1 + x * 3 + 1] = gVal;
+                            rawData[rowStart + 1 + x * 3 + 2] = bVal;
+                        } else {
+                            rawData[rowStart + 1 + x * 6] = (rVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 6 + 1] = rVal & 0xFF;
+                            rawData[rowStart + 1 + x * 6 + 2] = (gVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 6 + 3] = gVal & 0xFF;
+                            rawData[rowStart + 1 + x * 6 + 4] = (bVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 6 + 5] = bVal & 0xFF;
+                        }
+                    } else if (colorType === 4) {
+                        if (bitDepth === 8) {
+                            rawData[rowStart + 1 + x * 2] = yVal;
+                            rawData[rowStart + 1 + x * 2 + 1] = aVal;
+                        } else {
+                            rawData[rowStart + 1 + x * 4] = (yVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 4 + 1] = yVal & 0xFF;
+                            rawData[rowStart + 1 + x * 4 + 2] = (aVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 4 + 3] = aVal & 0xFF;
+                        }
+                    } else if (colorType === 6) {
+                        if (bitDepth === 8) {
+                            rawData[rowStart + 1 + x * 4] = rVal; rawData[rowStart + 1 + x * 4 + 1] = gVal;
+                            rawData[rowStart + 1 + x * 4 + 2] = bVal; rawData[rowStart + 1 + x * 4 + 3] = aVal;
+                        } else {
+                            rawData[rowStart + 1 + x * 8] = (rVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 8 + 1] = rVal & 0xFF;
+                            rawData[rowStart + 1 + x * 8 + 2] = (gVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 8 + 3] = gVal & 0xFF;
+                            rawData[rowStart + 1 + x * 8 + 4] = (bVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 8 + 5] = bVal & 0xFF;
+                            rawData[rowStart + 1 + x * 8 + 6] = (aVal >> 8) & 0xFF;     rawData[rowStart + 1 + x * 8 + 7] = aVal & 0xFF;
+                        }
+                    }
+                }
+            }
+            if (rowPixels.length > 0) {
+                const packed = packBits(rowPixels, bitDepth);
+                rawData.set(packed, rowStart + 1);
+            }
+        }
+        return { rawData, palette, trns };
+    }
+
+    function encodePNG(img16, colorType, bitDepth, compLevel = 9) {
+        const { width, height } = img16;
+        const { rawData, palette, trns } = buildScanlines(img16, colorType, bitDepth);
+        const chunks = [];
+
+        chunks.push(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+
+        const ihdr = new Uint8Array(13);
+        const ihdrView = new DataView(ihdr.buffer);
+        ihdrView.setUint32(0, width, false);
+        ihdrView.setUint32(4, height, false);
+        ihdr[8] = bitDepth;
+        ihdr[9] = colorType;
+        ihdr[10] = 0; 
+        ihdr[11] = 0; 
+        ihdr[12] = 0; 
+        chunks.push(createChunk("IHDR", ihdr));
+
+        if (colorType === 3) {
+            const plte = new Uint8Array(palette.length * 3);
+            for (let i = 0; i < palette.length; i++) {
+                plte[i*3] = palette[i].r;
+                plte[i*3+1] = palette[i].g;
+                plte[i*3+2] = palette[i].b;
+            }
+            chunks.push(createChunk("PLTE", plte));
+            if (trns.length > 0) chunks.push(createChunk("tRNS", new Uint8Array(trns)));
+        }
+
+        // UIで指定された圧縮レベル(0〜9)を適用
+        const zlibData = pako.deflate(rawData, { level: compLevel });
+        chunks.push(createChunk("IDAT", zlibData));
+        chunks.push(createChunk("IEND", new Uint8Array(0)));
+
+        let totalLen = 0;
+        for (let c of chunks) totalLen += c.length;
+        const finalBuffer = new Uint8Array(totalLen);
+        let offset = 0;
+        for (let c of chunks) {
+            finalBuffer.set(c, offset);
+            offset += c.length;
+        }
+        return { buffer: finalBuffer, size: finalBuffer.length, colors: palette.length };
+    }
+
+    // --- Main Execution ---
+    processBtn.addEventListener('click', async () => {
+        const tw = parseInt(targetWidth.value);
+        const th = parseInt(targetHeight.value);
+        if (isNaN(tw) || isNaN(th) || tw <= 0 || th <= 0) {
+            alert("無効なサイズです。");
+            return;
+        }
+
+        processBtn.disabled = true;
+        processBtn.innerText = "処理中...";
+        logOutput.innerText = "";
+        
+        await new Promise(r => setTimeout(r, 50)); 
+
+        try {
+            const algo = algorithm.value;
+            let img16;
+
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width = originalWidth;
+            tmpCanvas.height = originalHeight;
+            const tmpCtx = tmpCanvas.getContext('2d');
+            tmpCtx.drawImage(sourceImage, 0, 0);
+
+            if (algo === 'nearest') img16 = resizeNearest(tmpCanvas, tw, th);
+            else if (algo === 'ssaa8') img16 = resizeSSAA8(sourceImage, tw, th);
+            else if (algo === 'bilinear') img16 = resizeBilinear(sourceImage, tw, th);
+            else img16 = resizeAdvanced(tmpCanvas, tw, th, algo); // Bicubic & Lanczos3
+
+            const ct = parseInt(colorTypeSel.value);
+            const bd = parseInt(bitDepthSel.value);
+            const compLvl = parseInt(compressionLevel.value);
+
+            // 圧縮レベルを引数として渡す
+            const result = encodePNG(img16, ct, bd, compLvl);
+
+            const blob = new Blob([result.buffer], { type: "image/png" });
+            const url = URL.createObjectURL(blob);
+            
+            outputImage.src = url;
+            outputImage.style.display = 'block';
+            
+            downloadLink.href = url;
+            let origName = currentFile ? currentFile.name.split('.').slice(0, -1).join('.') : 'image';
+            let ctName = ct===0?"Gray":ct===2?"RGB":ct===3?"Idx":ct===4?"GrayA":"RGBA";
+            
+            downloadLink.download = `${origName}_${tw}x${th}_${ctName}_${bd}bit.png`;
+            downloadLink.style.display = 'block';
+
+            fileInfo.innerHTML = `Size: ${(result.size / 1024).toFixed(2)} KB | Type: ${ct} | Depth: ${bd}` + (ct === 3 ? ` (${result.colors} colors)` : '');
+            
+        } catch (err) {
+            logOutput.innerText = err.message || err;
+            console.error(err);
+        }
+
+        processBtn.disabled = false;
+        processBtn.innerText = "エンコード実行";
+    });
+</script>
+
+</body>
+</html>
