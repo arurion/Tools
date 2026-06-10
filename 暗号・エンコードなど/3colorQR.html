@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RGB多重 ＆ 自動分割QRコード ジェネレーター (バイナリ対応版)</title>
+    <!-- 標準QRコード生成ライブラリ (Arase氏作 qrcode-generator) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f3f4f6;
+            --panel-bg: #ffffff;
+            --text-color: #1f2937;
+            --border-color: #e5e7eb;
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            background: var(--panel-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            box-sizing: border-box;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 26px;
+        }
+
+        p.subtitle {
+            margin: 0;
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 950px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* モード切り替えタブ */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #6b7280;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .settings-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .channel-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .indicator.red { background-color: #ef4444; }
+        .indicator.green { background-color: #10b981; }
+        .indicator.blue { background-color: #3b82f6; }
+
+        input[type="text"], select, input[type="number"], textarea, input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+        }
+
+        textarea {
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .file-info-box {
+            background-color: #f3f4f6;
+            border: 1px dashed var(--border-color);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        button.btn-generate {
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            padding: 14px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button.btn-generate:hover {
+            background-color: var(--primary-hover);
+        }
+
+        /* プレビュー側（動的に増殖するためコンテナに） */
+        .preview-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            background: #fafafa;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .info-badge {
+            background-color: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .qr-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .qr-card-title {
+            font-weight: bold;
+            font-size: 16px;
+            color: #374151;
+            border-bottom: 1px dashed var(--border-color);
+            width: 100%;
+            text-align: center;
+            padding-bottom: 8px;
+        }
+
+        .canvas-holder {
+            padding: 8px;
+            border: 1px solid #f3f4f6;
+            background: #fff;
+            border-radius: 4px;
+        }
+
+        .btn-download {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-download:hover {
+            background-color: #059669;
+        }
+
+        .channel-details {
+            width: 100%;
+            background: #f9fafb;
+            border-radius: 6px;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .channel-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .channel-text {
+            color: #4b5563;
+            word-break: break-all;
+            font-family: monospace;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            padding: 4px 6px;
+            border-radius: 4px;
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>RGB多重 ＆ 自動分割連結QRコード ジェネレーター</h1>
+        <p class="subtitle">長文データや、画像・音声・ZIP等のバイナリファイルをQR規格に基づいて各色チャネルへ自動配分し、多重圧縮します。</p>
+    </header>
+
+    <div class="main-layout">
+        <!-- 入力コントロール -->
+        <div class="settings-panel">
+            <div class="tabs">
+                <button id="tab-split" class="tab-btn active" onclick="switchMode('split')">長文自動分割・多重化</button>
+                <button id="tab-file" class="tab-btn" onclick="switchMode('file')">ファイル分割・多重化</button>
+                <button id="tab-manual" class="tab-btn" onclick="switchMode('manual')">個別チャネル直接指定</button>
+            </div>
+
+            <!-- モード1: 自動分割長文入力 -->
+            <div id="panel-split" class="mode-panel">
+                <div class="input-group">
+                    <label for="long-text">連結・多重化する元の長文テキスト</label>
+                    <textarea id="long-text" rows="8" placeholder="長い文章を入力してください。">葛飾北斎は、江戸時代後期の浮世絵師。代表作に『富嶽三十六景』や『北斎漫画』があり、世界的にも著名な画家である。生涯に約3万点を超える膨大な数の作品を残した。この文章のような長いテキストも、QRコード規格に基づいて細かく分割され、RGBの三原色レイヤーに隙間なくパッキングされることで、最小限の画像枚数の中に圧縮・記録されます。</textarea>
+                </div>
+            </div>
+
+            <!-- モード3: ファイル分割入力 (新規) -->
+            <div id="panel-file" class="mode-panel" style="display: none;">
+                <div class="input-group">
+                    <label for="file-input">多重化するバイナリファイルを選択</label>
+                    <input type="file" id="file-input" onchange="handleFileSelect()">
+                </div>
+                <div style="margin-top: 10px;" id="file-info" class="file-info-box">
+                    ファイルが選択されていません。（推奨サイズ: 1KB〜30KB）
+                </div>
+            </div>
+
+            <!-- モード2: 手動個別入力 -->
+            <div id="panel-manual" class="mode-panel" style="display: none;">
+                <div class="input-group">
+                    <label class="channel-label"><span class="indicator red"></span>赤（Red）チャンネル</label>
+                    <input type="text" id="manual-r" value="個別のデータR: 赤チャネルに書き込まれます。">
+                </div>
+                <div class="input-group" style="margin-top:15px;">
+                    <label class="channel-label"><span class="indicator green"></span>緑（Green）チャンネル</label>
+                    <input type="text" id="manual-g" value="個別のデータG: 緑チャネルに書き込まれます。">
+                </div>
+                <div class="input-group" style="margin-top:15px;">
+                    <label class="channel-label"><span class="indicator blue"></span>青（Blue）チャンネル</label>
+                    <input type="text" id="manual-b" value="個別のデータB: 青チャネルに書き込まれます。">
+                </div>
+            </div>
+
+            <!-- 共通QR設定項目 -->
+            <div class="grid-2col">
+                <div class="input-group">
+                    <label for="ecl">誤り訂正レベル</label>
+                    <select id="ecl">
+                        <option value="L">Level L (約7%復元)</option>
+                        <option value="M" selected>Level M (約15%復元)</option>
+                        <option value="Q">Level Q (約25%復元)</option>
+                        <option value="H">Level H (約30%復元)</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label for="version">基準バージョン（型番）</label>
+                    <select id="version">
+                        <option value="0">自動判別（個別時のみ有効）</option>
+                        <!-- 1〜40 -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2col">
+                <div class="input-group">
+                    <label for="cell-size">セルサイズ (px)</label>
+                    <input type="number" id="cell-size" value="10" min="1" max="50">
+                </div>
+
+                <div class="input-group">
+                    <label for="margin">静音領域 / 余白 (セル数)</label>
+                    <input type="number" id="margin" value="4" min="0" max="20">
+                </div>
+            </div>
+
+            <button class="btn-generate" onclick="processAndGenerate()">カラーQRコードを生成</button>
+        </div>
+
+        <!-- プレビュー出力コンテナ -->
+        <div class="preview-container" id="preview-container">
+            <!-- JavaScriptで動的に生成されたQRコードカードがここに並びます -->
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentMode = 'split'; // 'split', 'file', 'manual'
+    let fileBinaryString = null; // ファイルからロードしたバイナリストリング
+    let selectedFileName = "";
+
+    // バージョンセレクトボックス生成
+    const versionSelect = document.getElementById('version');
+    for (let i = 1; i <= 40; i++) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Version ${i} (${4*i+17}x${4*i+17})`;
+        versionSelect.appendChild(opt);
+    }
+
+    // 文字コード設定(UTF-8)を固定
+    if (window.qrcode) {
+        qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+    }
+
+    function switchMode(mode) {
+        currentMode = mode;
+        document.getElementById('tab-split').classList.toggle('active', mode === 'split');
+        document.getElementById('tab-file').classList.toggle('active', mode === 'file');
+        document.getElementById('tab-manual').classList.toggle('active', mode === 'manual');
+        
+        document.getElementById('panel-split').style.display = mode === 'split' ? 'block' : 'none';
+        document.getElementById('panel-file').style.display = mode === 'file' ? 'block' : 'none';
+        document.getElementById('panel-manual').style.display = mode === 'manual' ? 'block' : 'none';
+
+        const verSelect = document.getElementById('version');
+        if (mode === 'split' || mode === 'file') {
+            // 分割モード・ファイルモード時は自動判別(0)を禁止し、固定型番に強制変更（デフォルト15）
+            if (verSelect.value === "0") {
+                verSelect.value = "15"; 
+            }
+            verSelect.options[0].disabled = true;
+        } else {
+            verSelect.options[0].disabled = false;
+        }
+        processAndGenerate();
+    }
+
+    // ファイル選択ハンドラ
+    function handleFileSelect() {
+        const fileInput = document.getElementById('file-input');
+        const file = fileInput.files[0];
+        const infoBox = document.getElementById('file-info');
+        
+        if (!file) {
+            infoBox.innerHTML = "ファイルが選択されていません。";
+            fileBinaryString = null;
+            return;
+        }
+
+        selectedFileName = file.name;
+        infoBox.innerHTML = `⏳ ファイルの読み込み中... (${file.name})`;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const arrayBuffer = e.target.result;
+            const uint8 = new Uint8Array(arrayBuffer);
+            
+            // バイナリデータを互換性の高いLatin-1（1バイト=1文字）の文字列に変換
+            let binStr = "";
+            const len = uint8.length;
+            for (let i = 0; i < len; i++) {
+                binStr += String.fromCharCode(uint8[i]);
+            }
+            
+            fileBinaryString = binStr;
+            infoBox.innerHTML = `<strong>ファイル:</strong> ${file.name}<br><strong>サイズ:</strong> ${file.size.toLocaleString()} bytes (バイナリロード完了)`;
+            processAndGenerate();
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // 指定テキスト/バイナリを、指定されたQRバージョン・誤り訂正レベルの最大容量で分割する関数
+    function sliceIntoMaxChunks(data, version, ecl, mode = 'Byte') {
+        const chunks = [];
+        let currentChunk = "";
+        const safeVersion = version > 0 ? version : 5;
+
+        for (let i = 0; i < data.length; i++) {
+            const testChunk = currentChunk + data[i];
+            try {
+                const testQR = qrcode(safeVersion, ecl);
+                testQR.addData(testChunk, mode);
+                testQR.make();
+                currentChunk = testChunk;
+            } catch (e) {
+                if (currentChunk !== "") {
+                    chunks.push(currentChunk);
+                }
+                currentChunk = data[i];
+            }
+        }
+        if (currentChunk !== "") {
+            chunks.push(currentChunk);
+        }
+        return chunks;
+    }
+
+    // 個別モード用の最小バージョン検索
+    function findMinVersionForStrings(strs, ecl) {
+        let maxV = 1;
+        for (const str of strs) {
+            let found = false;
+            for (let v = 1; v <= 40; v++) {
+                try {
+                    const test = qrcode(v, ecl);
+                    test.addData(str);
+                    test.make();
+                    if (v > maxV) maxV = v;
+                    found = true;
+                    break;
+                } catch(e) {}
+            }
+            if (!found) throw new Error("データサイズがQRコードの最大容量(Version 40)を超えています。");
+        }
+        return maxV;
+    }
+
+    function processAndGenerate() {
+        const previewContainer = document.getElementById('preview-container');
+        previewContainer.innerHTML = ""; // クリア
+
+        const ecl = document.getElementById('ecl').value;
+        const cellSize = parseInt(document.getElementById('cell-size').value) || 10;
+        const margin = parseInt(document.getElementById('margin').value) || 0;
+        let version = parseInt(document.getElementById('version').value);
+
+        let datasets = [];
+        let isBinaryMode = false;
+
+        if (currentMode === 'split') {
+            const longText = document.getElementById('long-text').value;
+            if (!longText) {
+                previewContainer.innerHTML = "<p style='color:gray;'>テキストを入力してください。</p>";
+                return;
+            }
+            if (version === 0) { version = 15; document.getElementById('version').value = "15"; }
+
+            const chunks = sliceIntoMaxChunks(longText, version, ecl, 'Byte');
+            for (let i = 0; i < chunks.length; i += 3) {
+                datasets.push({
+                    r: chunks[i] || "", g: chunks[i+1] || "", b: chunks[i+2] || "",
+                    chunkIndices: [i+1, chunks[i+1]?i+2:null, chunks[i+2]?i+3:null],
+                    totalChunks: chunks.length
+                });
+            }
+
+            const info = document.createElement('div');
+            info.className = 'info-badge';
+            info.innerHTML = `📝 <strong>長文自動分割・多重化の実行結果:</strong><br>` +
+                             `型番 <strong>Version ${version}</strong> (訂正レベル ${ecl}) を基準とし、` +
+                             `<strong>合計 ${chunks.length} 個のチャンク</strong>に自動分割し、<strong>計 ${datasets.length} 枚の多重QR</strong>に圧縮しました。`;
+            previewContainer.appendChild(info);
+
+        } else if (currentMode === 'file') {
+            if (!fileBinaryString) {
+                previewContainer.innerHTML = "<p style='color:gray;'>ファイルをアップロードすると、ここにカラー多重QRが生成されます。</p>";
+                return;
+            }
+            isBinaryMode = true;
+            if (version === 0) { version = 15; document.getElementById('version').value = "15"; }
+
+            // バイナリモードとしてByteモード(8-bit)で厳格スライス
+            const chunks = sliceIntoMaxChunks(fileBinaryString, version, ecl, 'Byte');
+            for (let i = 0; i < chunks.length; i += 3) {
+                datasets.push({
+                    r: chunks[i] || "", g: chunks[i+1] || "", b: chunks[i+2] || "",
+                    chunkIndices: [i+1, chunks[i+1]?i+2:null, chunks[i+2]?i+3:null],
+                    totalChunks: chunks.length
+                });
+            }
+
+            const info = document.createElement('div');
+            info.className = 'info-badge';
+            info.innerHTML = `📂 <strong>ファイル多重化の実行結果:</strong><br>` +
+                             `ファイル <strong>${selectedFileName}</strong> を` +
+                             `型番 <strong>Version ${version}</strong> (訂正レベル ${ecl}) のバイナリ容量制限に基づいて` +
+                             `<strong>合計 ${chunks.length} 個のファイルブロック</strong>に分割しました。<br>` +
+                             `これらをRGB各層へ高密度に充填し、<strong>計 ${datasets.length} 枚のカラー多重QRコード</strong>に圧縮・格納しました。`;
+            previewContainer.appendChild(info);
+
+        } else {
+            // 個別直接指定
+            const rData = document.getElementById('manual-r').value || " ";
+            const gData = document.getElementById('manual-g').value || " ";
+            const bData = document.getElementById('manual-b').value || " ";
+
+            if (version === 0) {
+                try {
+                    version = findMinVersionForStrings([rData, gData, bData], ecl);
+                } catch(e) {
+                    alert(e.message);
+                    return;
+                }
+            }
+
+            datasets.push({
+                r: rData, g: gData, b: bData,
+                chunkIndices: [1, 2, 3], totalChunks: 3
+            });
+        }
+
+        // 各カードを描画
+        datasets.forEach((data, index) => {
+            createQRCard(data, version, ecl, cellSize, margin, index + 1, datasets.length, isBinaryMode);
+        });
+    }
+
+    function createQRCard(dataset, version, ecl, cellSize, margin, cardIndex, totalCards, isBinary) {
+        const previewContainer = document.getElementById('preview-container');
+
+        const card = document.createElement('div');
+        card.className = 'qr-card';
+
+        const title = document.createElement('div');
+        title.className = 'qr-card-title';
+        title.innerHTML = `カラー多重QRコード [ ${cardIndex} / ${totalCards} 枚目 ] (Version ${version})`;
+        card.appendChild(title);
+
+        const holder = document.createElement('div');
+        holder.className = 'canvas-holder';
+        const canvasId = `canvas-${cardIndex}`;
+        const canvas = document.createElement('canvas');
+        canvas.id = canvasId;
+        holder.appendChild(canvas);
+        card.appendChild(holder);
+
+        const dlBtn = document.createElement('button');
+        dlBtn.className = 'btn-download';
+        dlBtn.textContent = '画像をPNGとして保存';
+        dlBtn.onclick = () => downloadImage(canvasId, `color_multiplex_file_qr_${cardIndex}.png`);
+        card.appendChild(dlBtn);
+
+        const details = document.createElement('div');
+        details.className = 'channel-details';
+
+        const rIdxStr = dataset.chunkIndices[0] ? `[Block ${dataset.chunkIndices[0]}/${dataset.totalChunks}] ` : '';
+        const gIdxStr = dataset.chunkIndices[1] ? `[Block ${dataset.chunkIndices[1]}/${dataset.totalChunks}] ` : '（空きチャネル）';
+        const bIdxStr = dataset.chunkIndices[2] ? `[Block ${dataset.chunkIndices[2]}/${dataset.totalChunks}] ` : '（空きチャネル）';
+
+        // バイナリの場合は生データの代わりにサイズを表示
+        const rDisplay = isBinary ? `バイナリブロック (${dataset.r.length} bytes)` : escapeHtml(dataset.r);
+        const gDisplay = isBinary ? (dataset.g ? `バイナリブロック (${dataset.g.length} bytes)` : '') : escapeHtml(dataset.g);
+        const bDisplay = isBinary ? (dataset.b ? `バイナリブロック (${dataset.b.length} bytes)` : '') : escapeHtml(dataset.b);
+
+        details.innerHTML = `
+            <div class="channel-row">
+                <span class="indicator red" style="margin-top:3px;"></span>
+                <strong>赤 (R):</strong> <div class="channel-text">${rIdxStr}${rDisplay}</div>
+            </div>
+            <div class="channel-row">
+                <span class="indicator green" style="margin-top:3px;"></span>
+                <strong>緑 (G):</strong> <div class="channel-text">${gIdxStr}${gDisplay || '空き'}</div>
+            </div>
+            <div class="channel-row">
+                <span class="indicator blue" style="margin-top:3px;"></span>
+                <strong>青 (B):</strong> <div class="channel-text">${bIdxStr}${bDisplay || '空き'}</div>
+            </div>
+        `;
+        card.appendChild(details);
+
+        previewContainer.appendChild(card);
+
+        drawColorQR(canvas, dataset, version, ecl, cellSize, margin);
+    }
+
+    function drawColorQR(canvas, dataset, version, ecl, cellSize, margin) {
+        const safeVersion = version > 0 ? version : 5;
+
+        const rText = dataset.r || " ";
+        const gText = dataset.g || " ";
+        const bText = dataset.b || " ";
+
+        // すべてByteモード(8-bit)で生成してバイナリ配列を高効率でエンコード
+        const qrR = qrcode(safeVersion, ecl); qrR.addData(rText, 'Byte'); qrR.make();
+        const qrG = qrcode(safeVersion, ecl); qrG.addData(gText, 'Byte'); qrG.make();
+        const qrB = qrcode(safeVersion, ecl); qrB.addData(bText, 'Byte'); qrB.make();
+
+        const moduleCount = qrR.getModuleCount();
+        const ctx = canvas.getContext('2d');
+        const totalModules = moduleCount + 2 * margin;
+        const imgSize = totalModules * cellSize;
+
+        canvas.width = imgSize;
+        canvas.height = imgSize;
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, imgSize, imgSize);
+
+        for (let r = 0; r < moduleCount; r++) {
+            for (let c = 0; c < moduleCount; c++) {
+                const isDarkR = qrR.isDark(r, c);
+                const isDarkG = qrG.isDark(r, c);
+                const isDarkB = qrB.isDark(r, c);
+
+                const rVal = isDarkR ? 0 : 255;
+                const gVal = isDarkG ? 0 : 255;
+                const bVal = isDarkB ? 0 : 255;
+
+                ctx.fillStyle = `rgb(${rVal}, ${gVal}, ${bVal})`;
+
+                const x = (c + margin) * cellSize;
+                const y = (r + margin) * cellSize;
+                ctx.fillRect(x, y, cellSize, cellSize);
+            }
+        }
+    }
+
+    function downloadImage(canvasId, filename) {
+        const canvas = document.getElementById(canvasId);
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    window.onload = function() {
+        switchMode('split');
+    };
+</script>
+
+</body>
+</html>
