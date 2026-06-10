@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>厳密判定機能付き RAW 変換ツール</title>
+    <style>
+        :root {
+            --primary-color: #34495e;
+            --success-color: #2ecc71;
+            --warning-color: #e67e22;
+            --danger-color: #e74c3c;
+            --bg-color: #f5f6fa;
+            --card-bg: #ffffff;
+            --text-color: #2c3e50;
+            --border-color: #dcdde1;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            margin-top: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+
+        @media (min-width: 768px) {
+            .grid {
+                grid-template-columns: 1.1fr 0.9fr;
+            }
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: #57606f;
+        }
+
+        label {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        input[type="file"],
+        input[type="number"],
+        select {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            width: 100%;
+            box-sizing: border-box;
+            background-color: #fff;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-row .input-group {
+            flex: 1;
+        }
+
+        /* 厳密判定インジケーター */
+        .match-indicator {
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        .match-init {
+            background-color: #f1f2f6;
+            color: #57606f;
+            border-color: var(--border-color);
+        }
+        .match-success {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        .match-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border-color: #ffeeba;
+        }
+
+        /* 数学的候補リスト */
+        .presets-area {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .presets-title {
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .presets-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 120px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .preset-btn {
+            background-color: #fff;
+            border: 1px solid var(--border-color);
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--success-color);
+            background-color: #e8f8f0;
+        }
+
+        /* ボタン */
+        .btn-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        button.primary-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: bold;
+            flex: 1;
+        }
+
+        button.primary-btn:hover {
+            background-color: #2c3e50;
+        }
+
+        .download-btn {
+            background-color: var(--success-color);
+            text-align: center;
+            text-decoration: none;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            flex: 1;
+            display: none;
+        }
+
+        .download-btn:hover {
+            background-color: #27ae60;
+        }
+
+        /* プレビュー */
+        .preview-area {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .canvas-container {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            overflow: auto;
+            max-width: 100%;
+            height: 480px;
+            background-color: #e0e0e0;
+            background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+                              linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+                              linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+                              linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .status-box {
+            background-color: #fff;
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>厳密判定機能付き RAW 変換ツール</h1>
+    
+    <div class="grid">
+        <!-- 操作・設定 -->
+        <div class="control-panel">
+            <div class="input-group">
+                <label for="rawFile">RAWファイルを選択:</label>
+                <input type="file" id="rawFile">
+            </div>
+
+            <div class="input-group">
+                <label for="format">カラーフォーマット:</label>
+                <select id="format">
+                    <option value="rgb">RGB (24-bit)</option>
+                    <option value="rgba">RGBA (32-bit)</option>
+                    <option value="bgr">BGR (24-bit)</option>
+                    <option value="bgra">BGRA (32-bit)</option>
+                </select>
+            </div>
+
+            <!-- 数学的候補リスト（新規追加） -->
+            <div class="presets-area" id="divisorsArea" style="display: none;">
+                <div class="presets-title">📐 1バイトも余らない「幅」の数学的候補 (120px〜4096px):</div>
+                <div class="presets-list" id="divisorsList"></div>
+            </div>
+
+            <!-- 判定インジケーター（新規追加） -->
+            <div id="matchIndicator" class="match-indicator match-init">
+                ファイルが選択されていません
+            </div>
+
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="width">幅 (Width / px):</label>
+                    <input type="number" id="width" value="1920" min="1">
+                </div>
+                <div class="input-group">
+                    <label for="height">高さ (Height / px):</label>
+                    <input type="number" id="height" value="1080" min="1">
+                </div>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="autoHeight" checked>
+                <label for="autoHeight">高さをファイルサイズから自動計算する</label>
+            </div>
+
+            <div class="input-group">
+                <label for="widthSlider" id="sliderLabel">幅のリアルタイム調整スライダー (1920 px):</label>
+                <input type="range" id="widthSlider" min="10" max="4000" value="1920" disabled>
+            </div>
+
+            <div class="btn-container">
+                <button id="convertBtn" class="primary-btn">描画する</button>
+                <a id="downloadBtn" class="download-btn">PNGを保存</a>
+            </div>
+        </div>
+
+        <!-- プレビューとステータス -->
+        <div class="preview-area">
+            <div class="canvas-container">
+                <canvas id="canvas"></canvas>
+            </div>
+            <div id="statusBox" class="status-box">
+                RAWデータを選択すると、解析が始まります。
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const rawFileInput = document.getElementById('rawFile');
+    const widthInput = document.getElementById('width');
+    const heightInput = document.getElementById('height');
+    const formatSelect = document.getElementById('format');
+    const autoHeightCheckbox = document.getElementById('autoHeight');
+    const widthSlider = document.getElementById('widthSlider');
+    const sliderLabel = document.getElementById('sliderLabel');
+    const convertBtn = document.getElementById('convertBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const divisorsArea = document.getElementById('divisorsArea');
+    const divisorsList = document.getElementById('divisorsList');
+    const matchIndicator = document.getElementById('matchIndicator');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusBox = document.getElementById('statusBox');
+
+    let rawBuffer = null;
+
+    function getBytesPerPixel() {
+        const fmt = formatSelect.value;
+        return (fmt === 'rgba' || fmt === 'bgra') ? 4 : 3;
+    }
+
+    // 数学的約数（割り切れる「幅」）の算出
+    function calculateExactDivisors(totalPixels) {
+        const divisors = [];
+        const limit = Math.sqrt(totalPixels);
+        for (let i = 1; i <= limit; i++) {
+            if (totalPixels % i === 0) {
+                divisors.push(i);
+                const pair = totalPixels / i;
+                if (pair !== i) {
+                    divisors.push(pair);
+                }
+            }
+        }
+        // 実用的な画像サイズ範囲（120px〜4096px）に絞り込んで昇順ソート
+        return divisors
+            .filter(d => d >= 120 && d <= 4096)
+            .sort((a, b) => a - b);
+    }
+
+    // 高さを自動計算
+    function calcAutoHeight() {
+        if (!rawBuffer) return;
+        const bpp = getBytesPerPixel();
+        const totalPixels = Math.floor(rawBuffer.byteLength / bpp);
+        const w = parseInt(widthInput.value, 10);
+        
+        if (autoHeightCheckbox.checked && w > 0) {
+            const h = Math.floor(totalPixels / w);
+            heightInput.value = h;
+            heightInput.disabled = true;
+        } else {
+            heightInput.disabled = false;
+        }
+    }
+
+    // 1バイトの狂いもないかを判定するインジケーターの更新
+    function updateMatchIndicator() {
+        if (!rawBuffer) return;
+        const bpp = getBytesPerPixel();
+        const w = parseInt(widthInput.value, 10);
+        const h = parseInt(heightInput.value, 10);
+
+        if (isNaN(w) || w <= 0 || isNaN(h) || h <= 0) {
+            matchIndicator.className = 'match-indicator match-init';
+            matchIndicator.textContent = '寸法が未入力です';
+            return;
+        }
+
+        const expectedBytes = w * h * bpp;
+        const diff = rawBuffer.byteLength - expectedBytes;
+
+        if (diff === 0) {
+            matchIndicator.className = 'match-indicator match-success';
+            matchIndicator.innerHTML = '🟢 1バイトの過不足なし！完全一致（余り 0 バイト）';
+        } else if (diff > 0) {
+            matchIndicator.className = 'match-indicator match-warning';
+            matchIndicator.innerHTML = `⚠️ 不一致：あと ${diff.toLocaleString()} バイト余っています`;
+        } else {
+            matchIndicator.className = 'match-indicator match-warning';
+            matchIndicator.innerHTML = `❌ 不足：データが ${(Math.abs(diff)).toLocaleString()} バイト足りません`;
+        }
+    }
+
+    // 割り切れる「幅」候補を一覧表示
+    function showExactDivisors() {
+        if (!rawBuffer) return;
+        const bpp = getBytesPerPixel();
+        const totalPixels = Math.floor(rawBuffer.byteLength / bpp);
+        
+        divisorsList.innerHTML = '';
+        
+        // 元のファイルがBPPでそもそも割り切れるかもチェック
+        const isBppMatch = (rawBuffer.byteLength % bpp === 0);
+
+        if (!isBppMatch) {
+            divisorsArea.style.display = 'block';
+            divisorsList.innerHTML = `<span style="font-size:0.8rem; color:var(--danger-color);">⚠️ 警告：ファイルサイズがカラーフォーマット（${bpp}バイト/px）で割り切れません。ヘッダー（ゴミデータ）が含まれている可能性があります。</span>`;
+            return;
+        }
+
+        const candidates = calculateExactDivisors(totalPixels);
+
+        if (candidates.length > 0) {
+            candidates.forEach(w => {
+                const h = totalPixels / w;
+                const btn = document.createElement('button');
+                btn.className = 'preset-btn';
+                btn.textContent = `${w} x ${h}`;
+                btn.onclick = () => {
+                    widthInput.value = w;
+                    widthSlider.value = w;
+                    autoHeightCheckbox.checked = true;
+                    calcAutoHeight();
+                    updateMatchIndicator();
+                    drawRaw();
+                };
+                divisorsList.appendChild(btn);
+            });
+            divisorsArea.style.display = 'block';
+        } else {
+            divisorsArea.style.display = 'none';
+        }
+    }
+
+    // 情報更新
+    function updateStatus() {
+        if (!rawBuffer) return;
+        const bpp = getBytesPerPixel();
+        const totalPixels = Math.floor(rawBuffer.byteLength / bpp);
+        statusBox.innerHTML = `<strong>ファイル情報:</strong><br>` +
+                              `・ファイル容量: ${rawBuffer.byteLength.toLocaleString()} バイト<br>` +
+                              `・割り切れる場合の総画素数: ${totalPixels.toLocaleString()} px`;
+    }
+
+    // イベント関係
+    rawFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            rawBuffer = evt.target.result;
+            
+            const bpp = getBytesPerPixel();
+            const totalPixels = Math.floor(rawBuffer.byteLength / bpp);
+            widthSlider.max = Math.min(totalPixels, 4000);
+            widthSlider.disabled = false;
+
+            updateStatus();
+            showExactDivisors();
+            calcAutoHeight();
+            updateMatchIndicator();
+            drawRaw();
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    formatSelect.addEventListener('change', () => {
+        updateStatus();
+        showExactDivisors();
+        calcAutoHeight();
+        updateMatchIndicator();
+        drawRaw();
+    });
+
+    autoHeightCheckbox.addEventListener('change', () => {
+        calcAutoHeight();
+        updateMatchIndicator();
+    });
+
+    widthInput.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value, 10);
+        if (isNaN(val) || val < 10) val = 10;
+        widthSlider.value = val;
+        sliderLabel.textContent = `幅のリアルタイム調整スライダー (${val} px):`;
+        calcAutoHeight();
+        updateMatchIndicator();
+        drawRaw();
+    });
+
+    widthSlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        widthInput.value = val;
+        sliderLabel.textContent = `幅のリアルタイム調整スライダー (${val} px):`;
+        calcAutoHeight();
+        updateMatchIndicator();
+        drawRaw();
+    });
+
+    heightInput.addEventListener('input', () => {
+        if (!autoHeightCheckbox.checked) {
+            updateMatchIndicator();
+            drawRaw();
+        }
+    });
+
+    convertBtn.addEventListener('click', drawRaw);
+
+    // 描画
+    function drawRaw() {
+        if (!rawBuffer) return;
+
+        const width = parseInt(widthInput.value, 10);
+        const height = parseInt(heightInput.value, 10);
+        const format = formatSelect.value;
+
+        if (isNaN(width) || width <= 0 || isNaN(height) || height <= 0) return;
+
+        try {
+            canvas.width = width;
+            canvas.height = height;
+
+            const imgData = ctx.createImageData(width, height);
+            const data = imgData.data;
+            const srcData = new Uint8Array(rawBuffer);
+
+            let srcIdx = 0;
+            let destIdx = 0;
+            const totalPixels = width * height;
+
+            if (format === 'rgb') {
+                for (let i = 0; i < totalPixels; i++) {
+                    if (srcIdx + 2 < srcData.length) {
+                        data[destIdx]     = srcData[srcIdx];
+                        data[destIdx + 1] = srcData[srcIdx + 1];
+                        data[destIdx + 2] = srcData[srcIdx + 2];
+                        data[destIdx + 3] = 255;
+                    } else { break; }
+                    srcIdx += 3; destIdx += 4;
+                }
+            } else if (format === 'rgba') {
+                for (let i = 0; i < totalPixels; i++) {
+                    if (srcIdx + 3 < srcData.length) {
+                        data[destIdx]     = srcData[srcIdx];
+                        data[destIdx + 1] = srcData[srcIdx + 1];
+                        data[destIdx + 2] = srcData[srcIdx + 2];
+                        data[destIdx + 3] = srcData[srcIdx + 3];
+                    } else { break; }
+                    srcIdx += 4; destIdx += 4;
+                }
+            } else if (format === 'bgr') {
+                for (let i = 0; i < totalPixels; i++) {
+                    if (srcIdx + 2 < srcData.length) {
+                        data[destIdx]     = srcData[srcIdx + 2];
+                        data[destIdx + 1] = srcData[srcIdx + 1];
+                        data[destIdx + 2] = srcData[srcIdx];
+                        data[destIdx + 3] = 255;
+                    } else { break; }
+                    srcIdx += 3; destIdx += 4;
+                }
+            } else if (format === 'bgra') {
+                for (let i = 0; i < totalPixels; i++) {
+                    if (srcIdx + 3 < srcData.length) {
+                        data[destIdx]     = srcData[srcIdx + 2];
+                        data[destIdx + 1] = srcData[srcIdx + 1];
+                        data[destIdx + 2] = srcData[srcIdx];
+                        data[destIdx + 3] = srcData[srcIdx + 3];
+                    } else { break; }
+                    srcIdx += 4; destIdx += 4;
+                }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                downloadBtn.href = url;
+                downloadBtn.download = `raw_${width}x${height}.png`;
+                downloadBtn.style.display = 'inline-block';
+            }, 'image/png');
+
+        } catch (err) {
+            console.error(err);
+        }
+    }
+</script>
+
+</body>
+</html>
