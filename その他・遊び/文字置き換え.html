@@ -13,7 +13,7 @@
             color: #333;
         }
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: #ffffff;
             padding: 20px 30px;
@@ -56,9 +56,11 @@
             align-items: center;
             margin-bottom: 10px;
             gap: 10px;
+            flex-wrap: wrap;
         }
         .rule-row input[type="text"] {
             flex: 1;
+            min-width: 120px;
             padding: 8px;
             border: 1px solid #ccc;
             border-radius: 4px;
@@ -67,6 +69,14 @@
         .arrow {
             font-weight: bold;
             color: #666;
+        }
+        .rule-option {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85rem;
+            user-select: none;
+            cursor: pointer;
         }
         button {
             padding: 8px 16px;
@@ -143,6 +153,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputText = document.getElementById('input-text');
     const outputText = document.getElementById('output-text');
 
+    // Unicodeエスケープ（\uXXXX や \u{XXXX}）を実際の文字に変換する関数
+    function decodeUnicodeEscapes(str) {
+        let decoded = str;
+        // \u{XXXXXX} 形式のデコード
+        decoded = decoded.replace(/\\u\{([0-9a-fA-F]+)\}/g, (match, hex) => {
+            return String.fromCodePoint(parseInt(hex, 16));
+        });
+        // \uXXXX 形式のデコード
+        decoded = decoded.replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => {
+            return String.fromCharCode(parseInt(hex, 16));
+        });
+        return decoded;
+    }
+
     // ルール入力欄を追加する関数
     function addRule() {
         const row = document.createElement('div');
@@ -151,6 +175,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <input type="text" class="from-input" placeholder="置換前 (例: A)">
             <span class="arrow">→</span>
             <input type="text" class="to-input" placeholder="置換後 (例: B)">
+            <label class="rule-option">
+                <input type="checkbox" class="is-regex"> 正規表現
+            </label>
+            <label class="rule-option">
+                <input type="checkbox" class="is-unicode"> Unicode
+            </label>
             <button class="btn-remove" type="button">削除</button>
         `;
         
@@ -176,15 +206,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = document.querySelectorAll('.rule-row');
         
         // 上から順に置換処理を実行
-        rows.forEach(row => {
-            const fromStr = row.querySelector('.from-input').value;
-            const toStr = row.querySelector('.to-input').value;
-            
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            let fromStr = row.querySelector('.from-input').value;
+            let toStr = row.querySelector('.to-input').value;
+            const isRegex = row.querySelector('.is-regex').checked;
+            const isUnicode = row.querySelector('.is-unicode').checked;
+
             if (fromStr !== '') {
-                // すべての一致する文字を置換
-                text = text.split(fromStr).join(toStr);
+                // Unicode変換オプションが有効な場合、事前にデコード処理を行う
+                if (isUnicode) {
+                    fromStr = decodeUnicodeEscapes(fromStr);
+                    toStr = decodeUnicodeEscapes(toStr);
+                }
+
+                if (isRegex) {
+                    try {
+                        // グローバル（g）フラグを付与して置換
+                        const regex = new RegExp(fromStr, 'g');
+                        text = text.replace(regex, toStr);
+                    } catch (e) {
+                        alert(`正規表現の記述に誤りがあります。\nエラー: ${e.message}`);
+                        return; // エラー発生時は処理を中断
+                    }
+                } else {
+                    // 通常の文字列置換（すべての一致箇所を置換）
+                    text = text.split(fromStr).join(toStr);
+                }
             }
-        });
+        }
         
         outputText.value = text;
     });
