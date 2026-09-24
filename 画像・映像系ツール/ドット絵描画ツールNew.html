@@ -1,0 +1,2819 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pixel Art Animator Pro</title>
+    
+    <!-- 外部ライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+
+    <style>
+        :root {
+            --bg-base: #E8F2FA;
+            --workspace-bg: #DCE7F2;
+            --glass-header: rgba(242, 248, 254, 0.88);
+            --glass-sidebar: rgba(238, 246, 253, 0.85);
+            --glass-card: rgba(255, 255, 255, 0.60);
+            --glass-card-hover: rgba(255, 255, 255, 0.88);
+            
+            --border-subtle: rgba(100, 116, 139, 0.18);
+            --border-highlight: rgba(255, 255, 255, 0.90);
+            --shadow-glass: 0 4px 16px rgba(15, 23, 42, 0.04);
+            --shadow-float: 0 10px 28px rgba(15, 23, 42, 0.10);
+            --shadow-inset: inset 0 1px 1px rgba(255, 255, 255, 0.85);
+            
+            --text-primary: #1E293B;
+            --text-secondary: #64748B;
+            --text-tertiary: #94A3B8;
+            
+            --accent-color: #2563EB;
+            --accent-hover: #3B82F6;
+            --accent-active: #1D4ED8;
+            --accent-tint: rgba(37, 99, 235, 0.10);
+            --accent-glow: rgba(37, 99, 235, 0.25);
+
+            --danger: #DC2626;
+
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 10px;
+
+            --header-h: 42px;
+            --timeline-h: 118px;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            min-width: 0;
+        }
+
+        html, body {
+            width: 100%;
+            max-width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* SVG Icon Base */
+        .icon {
+            width: 15px;
+            height: 15px;
+            stroke-width: 2;
+            stroke: currentColor;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            display: inline-block;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+        .icon-lg { width: 17px; height: 17px; }
+        .icon-sm { width: 13px; height: 13px; }
+
+        /* Top Header */
+        header {
+            height: var(--header-h);
+            background: var(--glass-header);
+            backdrop-filter: blur(12px) saturate(135%);
+            -webkit-backdrop-filter: blur(12px) saturate(135%);
+            box-shadow: var(--shadow-inset), 0 2px 8px rgba(15, 23, 42, 0.03);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 6px;
+            z-index: 40;
+            flex-shrink: 0;
+            gap: 4px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .brand-area {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .brand-title {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: var(--radius-sm);
+            text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+            max-width: 130px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            overflow-x: hidden;
+            flex-shrink: 1;
+            justify-content: flex-end;
+        }
+
+        /* Glass Buttons */
+        button, .btn {
+            appearance: none;
+            background: var(--glass-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-inset);
+            padding: 4px 6px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            white-space: nowrap;
+            height: 28px;
+            flex-shrink: 0;
+        }
+
+        button:hover, .btn:hover {
+            background: var(--glass-card-hover);
+            border-color: rgba(100, 116, 139, 0.3);
+        }
+
+        button:active, .btn:active {
+            box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.08);
+        }
+
+        button.btn-primary {
+            background: var(--accent-color);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 8px var(--accent-glow);
+        }
+        button.btn-primary:hover { background: var(--accent-hover); }
+
+        button.active {
+            background: var(--accent-tint);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            font-weight: 600;
+            box-shadow: inset 0 0 0 1px var(--accent-color);
+        }
+
+        input[type="number"], select, input[type="text"] {
+            background: rgba(255, 255, 255, 0.75);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 3px 4px;
+            font-size: 11px;
+            height: 28px;
+            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+            outline: none;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 5px;
+            background: rgba(148, 163, 184, 0.28);
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+            cursor: pointer;
+        }
+
+        /* Layout */
+        .main-layout {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .sidebar-left, .sidebar-right {
+            width: 230px;
+            background: var(--glass-sidebar);
+            backdrop-filter: blur(14px) saturate(130%);
+            -webkit-backdrop-filter: blur(14px) saturate(130%);
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            gap: 10px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            z-index: 20;
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .sidebar-left {
+            border-right: 1px solid var(--border-subtle);
+            box-shadow: 4px 0 16px rgba(15, 23, 42, 0.02);
+        }
+        .sidebar-right {
+            border-left: 1px solid var(--border-subtle);
+            box-shadow: -4px 0 16px rgba(15, 23, 42, 0.02);
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            margin: 0 0 5px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .row-group { display: flex; flex-direction: column; gap: 5px; }
+        .inline-row { display: flex; align-items: center; gap: 4px; }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3px;
+        }
+        .tool-btn { height: 32px; padding: 0; }
+
+        /* Workspace & Canvas Viewport */
+        .workspace-viewport {
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+            position: relative;
+            background: radial-gradient(circle at center, #EAF2FA 0%, var(--workspace-bg) 100%);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+            width: 100%;
+        }
+
+        #canvasTransformLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            pointer-events: none;
+        }
+
+        #canvasArtboard {
+            position: relative;
+            box-shadow: 0 0 0 1px rgba(71, 85, 105, 0.35), 0 10px 32px rgba(15, 23, 42, 0.14);
+            background-color: #ffffff;
+            background-image: 
+                linear-gradient(45deg, #e2e8f0 25%, transparent 25%), 
+                linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #e2e8f0 75%), 
+                linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+            background-size: 16px 16px;
+            background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+            pointer-events: auto;
+        }
+
+        #drawingCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            display: block;
+        }
+
+        #selectionOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            image-rendering: pixelated;
+        }
+
+        /* Selection Floating Context Bar */
+        .selection-floating-bar {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 3px 5px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-highlight);
+            box-shadow: var(--shadow-float);
+            display: none;
+            align-items: center;
+            gap: 3px;
+            z-index: 35;
+            max-width: calc(100% - 10px);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* Bottom Floating Bar */
+        .floating-quick-bar {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 2px 6px;
+            border-radius: 20px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-float);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            z-index: 10;
+            max-width: calc(100% - 16px);
+            overflow: hidden;
+        }
+
+        .fullscreen-btn-pill {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            z-index: 50;
+            display: none;
+            background: rgba(255, 255, 255, 0.90);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 3px 8px;
+            box-shadow: var(--shadow-float);
+        }
+
+        /* 復元: セキュリティポリシー対策オーバーレイボタン */
+        #overlayBtn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-highlight);
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.25);
+            border-radius: var(--radius-lg);
+            padding: 16px 24px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            text-align: center;
+            color: var(--text-primary);
+        }
+        #overlayBtn:hover {
+            background: #ffffff;
+            box-shadow: 0 20px 48px rgba(15, 23, 42, 0.3);
+        }
+
+        /* コピー通知トースト */
+        #copyToast {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-10px);
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(8px);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 20px;
+            box-shadow: var(--shadow-float);
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        #copyToast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Colors & Swatches */
+        .color-row { display: flex; align-items: center; gap: 4px; }
+        .color-preview-wrap {
+            position: relative;
+            width: 26px; height: 26px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            border: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+            background: #fff;
+        }
+        #colorPicker {
+            position: absolute;
+            top: -10px; left: -10px;
+            width: 46px; height: 46px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+        }
+        .color-preview-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+        }
+        #paletteContainer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            max-height: 100px;
+            overflow-y: auto;
+            padding: 3px;
+            background: rgba(255, 255, 255, 0.45);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+        }
+        .palette-swatch {
+            width: 16px; height: 16px;
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            border: 1px solid rgba(0,0,0,0.15);
+            background-color: #fff;
+        }
+        .palette-swatch::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 1px;
+            background-color: var(--swatch-color);
+        }
+        .palette-swatch.selected {
+            box-shadow: 0 0 0 2px var(--accent-color);
+            transform: scale(1.12);
+            z-index: 2;
+        }
+
+        /* Layers & Timeline */
+        .layer-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-height: 70px;
+            background: rgba(255, 255, 255, 0.35);
+            border-radius: var(--radius-sm);
+            padding: 2px;
+            border: 1px solid var(--border-subtle);
+        }
+        .layer-item {
+            background: rgba(255, 255, 255, 0.65);
+            border: 1px solid transparent;
+            padding: 3px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            font-size: 11px;
+            transition: all 0.12s ease;
+        }
+        .layer-item.active {
+            background: #ffffff;
+            border-color: var(--accent-color);
+            box-shadow: 0 1px 4px rgba(37, 99, 235, 0.10);
+            font-weight: 600;
+        }
+        .layer-item .name { flex: 1; margin: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .timeline-area {
+            height: var(--timeline-h);
+            background: var(--glass-sidebar);
+            backdrop-filter: blur(14px) saturate(130%);
+            -webkit-backdrop-filter: blur(14px) saturate(130%);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 30;
+            transition: height 0.2s ease;
+            width: 100%;
+        }
+        .timeline-area.collapsed { height: 26px; }
+        .timeline-controls {
+            padding: 2px 6px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            height: 26px;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .frames-container {
+            flex: 1;
+            overflow-x: auto;
+            display: flex;
+            align-items: center;
+            padding: 4px 6px;
+            gap: 5px;
+            scrollbar-width: thin;
+        }
+        .timeline-area.collapsed .frames-container { display: none; }
+        .frame-preview {
+            width: 44px; height: 44px;
+            background: #ffffff;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            position: relative;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: var(--shadow-glass);
+        }
+        .frame-preview.active {
+            border: 2px solid var(--accent-color);
+            box-shadow: 0 2px 8px var(--accent-glow);
+        }
+        .frame-preview canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; pointer-events: none; }
+        .frame-num {
+            position: absolute; bottom: 1px; right: 1px;
+            background: rgba(15, 23, 42, 0.75); font-size: 8px; padding: 1px 3px; color: #fff; border-radius: 2px;
+        }
+
+        /* 9-Anchor Grid for Resize */
+        .anchor-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            width: 100px;
+            margin: 0 auto;
+        }
+        .anchor-btn {
+            width: 30px; height: 30px; padding: 0; font-size: 11px;
+        }
+        .anchor-btn.selected {
+            background: var(--accent-color); color: #fff; border-color: var(--accent-color);
+        }
+
+        /* Modals & Backdrop */
+        .drawer-backdrop {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.25);
+            backdrop-filter: blur(2px);
+            z-index: 15;
+        }
+        .drawer-backdrop.active { display: block; }
+
+        .modal-backdrop {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+        }
+        .modal-window {
+            width: 100%;
+            max-width: 440px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(16px);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-highlight);
+            box-shadow: var(--shadow-float);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 92vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 5px;
+        }
+        .modal-title { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 6px;
+            max-height: 340px;
+            overflow-y: auto;
+            padding: 2px;
+        }
+        .project-card {
+            background: #ffffff;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            cursor: pointer;
+            box-shadow: var(--shadow-glass);
+        }
+        .project-card.active { border: 2px solid var(--accent-color); }
+        .project-thumb {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #f1f5f9;
+            border-radius: 3px;
+            object-fit: contain;
+            image-rendering: pixelated;
+        }
+        .project-name { font-size: 10px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .project-meta { font-size: 8px; color: var(--text-tertiary); }
+
+        /* Fullscreen Mode */
+        body.mode-fullscreen header,
+        body.mode-fullscreen .timeline-area,
+        body.mode-fullscreen .sidebar-left,
+        body.mode-fullscreen .sidebar-right {
+            display: none !important;
+        }
+        body.mode-fullscreen .fullscreen-btn-pill { display: inline-flex; }
+
+        .mobile-btn { display: none; }
+
+        /* ---------------------------------------------------- */
+        /* Responsive Breakpoints & Ultra-Narrow Degradation     */
+        /* ---------------------------------------------------- */
+
+        @media (max-width: 860px) {
+            .mobile-btn { display: inline-flex; }
+            .desktop-label { display: none; }
+            .sidebar-left, .sidebar-right {
+                position: absolute;
+                top: 0; bottom: 0;
+                width: 240px;
+                max-width: 85vw;
+                box-shadow: var(--shadow-float);
+                background: rgba(248, 251, 255, 0.98);
+            }
+            .sidebar-left { left: 0; transform: translateX(-105%); }
+            .sidebar-left.open { transform: translateX(0); }
+            .sidebar-right { right: 0; transform: translateX(105%); }
+            .sidebar-right.open { transform: translateX(0); }
+        }
+
+        @media (max-width: 380px) {
+            header { padding: 0 4px; gap: 2px; }
+            .brand-title { max-width: 75px; font-size: 10px; }
+            button, .btn { padding: 2px 4px; font-size: 9px; height: 24px; }
+            .hide-on-compact { display: none !important; }
+        }
+
+        @media (max-width: 140px) {
+            :root {
+                --header-h: 30px;
+                --timeline-h: 26px;
+            }
+            header { padding: 0 2px; gap: 2px; }
+            .brand-title { display: none !important; }
+            button, .btn { padding: 0; width: 22px; height: 22px; }
+            .hide-on-ultranarrow { display: none !important; }
+
+            .sidebar-left, .sidebar-right {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                padding: 6px;
+                gap: 6px;
+            }
+            .tool-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+
+            .floating-quick-bar {
+                bottom: 4px;
+                left: 4px;
+                right: 4px;
+                width: calc(100% - 8px);
+                padding: 1px 3px;
+                gap: 2px;
+            }
+            .floating-quick-bar input[type="range"], .floating-quick-bar input[type="number"] {
+                width: 100%;
+                min-width: 18px;
+            }
+            #toolSizeLabel, #zoomLabel, .quick-zoom-btn, #btnResetSize {
+                display: none;
+            }
+
+            .timeline-area {
+                height: 26px !important;
+            }
+            .timeline-controls {
+                padding: 2px;
+                justify-content: space-around;
+            }
+            .timeline-controls button {
+                width: 22px !important;
+                height: 22px !important;
+            }
+            #fpsContainer, .timeline-controls .inline-row:last-child button:not(#timelineCollapseBtn) {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Backdrop for Drawers -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="app.closeDrawers()"></div>
+
+<!-- Fullscreen Exit Pill -->
+<button class="fullscreen-btn-pill" onclick="app.toggleFullscreenMode()" title="通常表示に戻す">
+    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+    <span style="font-size:9px; font-weight:600; margin-left:2px;">復帰</span>
+</button>
+
+<!-- 復元: セキュリティポリシー対策オーバーレイボタン -->
+<button id="overlayBtn" onclick="app.triggerXmlSelect()">
+    <svg class="icon icon-lg" viewBox="0 0 24 24" style="color:var(--accent-color);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+    <span style="font-size:13px; font-weight:700;">XML設定ファイルを選択</span>
+    <span style="font-size:10px; color:var(--text-secondary);">クリックして選択ダイアログを開きます</span>
+</button>
+
+<!-- コピー通知トースト -->
+<div id="copyToast">選択範囲をコピーしました</div>
+
+<!-- Header -->
+<header>
+    <div class="brand-area">
+        <button class="mobile-btn" onclick="app.toggleSidebar('left')" title="ツールメニュー">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+        </button>
+        <span class="brand-title" onclick="app.openGalleryModal()" title="作品ギャラリー切り替え">
+            <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-color);"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span id="headerProjectName">DotAnimPro</span>
+        </span>
+    </div>
+
+    <div class="header-actions">
+        <button class="hide-on-ultranarrow" onclick="app.togglePenEraser()" title="ペン/消しゴム切り替え (X)">
+            <svg class="icon" viewBox="0 0 24 24"><path d="m18 2 4 4-12 12H6v-4L18 2Z"/><path d="m2 22 5-1-4-4-1 5Z"/></svg>
+        </button>
+        <button onclick="app.undo()" title="元に戻す (Ctrl+Z / 2本指タップ)">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+        </button>
+        <button onclick="app.redo()" title="やり直す (Ctrl+Y / 3本指タップ)">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+        </button>
+        <button class="hide-on-compact hide-on-ultranarrow" onclick="app.openResizeModal()" title="キャンバスサイズ変更">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+            <span class="desktop-label">サイズ</span>
+        </button>
+        <button class="hide-on-compact hide-on-ultranarrow" onclick="app.exportCurrentProjectSingle()" title="この作品を単体保存 (JSON)">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span class="desktop-label">保存</span>
+        </button>
+        <button class="btn-primary" onclick="document.getElementById('exportModal').style.display='flex'" title="画像書き出し">
+            <svg class="icon" viewBox="0 0 24 24" style="color:#fff;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span class="desktop-label">出力</span>
+        </button>
+        <button class="mobile-btn" onclick="app.toggleSidebar('right')" title="レイヤーメニュー">
+            <svg class="icon" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2.6 12.5"/><path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2.6 17.5"/></svg>
+        </button>
+    </div>
+</header>
+
+<!-- Main Area -->
+<div class="main-layout">
+    <!-- Left Sidebar -->
+    <div class="sidebar-left" id="sidebarLeft">
+        <div class="row-group">
+            <div class="section-label">Tools</div>
+            <div class="tool-grid">
+                <button class="tool-btn active" data-tool="pen" onclick="app.setTool('pen')" title="ペン (P)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="eraser" onclick="app.setTool('eraser')" title="消しゴム (E)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="bucket" onclick="app.setTool('bucket')" title="塗りつぶし (F)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="m19 11-8-8-8.5 8.5a2.12 2.12 0 0 0 0 3l5 5c.8.8 2.2.8 3 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 2-4 2-4s2 2.4 2 4Z"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="picker" onclick="app.setTool('picker')" title="スポイト (I)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="m14 2 4 4-2 2-4-4 2-2Z"/><path d="m10 6-7 7a2 2 0 0 0 0 3l2 2a2 2 0 0 0 3 0l7-7-5-5Z"/><path d="m2 22 3-1-2-2-1 3Z"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="line" onclick="app.setTool('line')" title="直線 (L)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5"/><circle cx="5" cy="19" r="1.5" fill="currentColor"/><circle cx="19" cy="5" r="1.5" fill="currentColor"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="rect" onclick="app.setTool('rect')" title="矩形 (R)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="circle" onclick="app.setTool('circle')" title="円 (C)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="select" onclick="app.setTool('select')" title="選択 (S)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M4 7V4h3"/><path d="M17 4h3v3"/><path d="M20 17v3h-3"/><path d="M7 20H4v-3"/><line x1="11" y1="4" x2="13" y2="4"/><line x1="11" y1="20" x2="13" y2="20"/><line x1="4" y1="11" x2="4" y2="13"/><line x1="20" y1="11" x2="20" y2="13"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="pan" onclick="app.setTool('pan')" title="手のひら (H / Space)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v4"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 0 1 4 4 7 7 0 0 1-7 7H9a7 7 0 0 1-7-7V9a2 2 0 0 1 4 0"/></svg>
+                </button>
+                <button class="tool-btn" data-tool="shift" onclick="app.setTool('shift')" title="レイヤー全体移動 (M)">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+                </button>
+            </div>
+
+            <!-- 復元: ペン太さ (1〜50px 数値入力＋スライダー＋1pxリセット) -->
+            <div class="inline-row" style="margin-top:4px;">
+                <span style="font-size:10px; width:28px;">太さ:</span>
+                <input type="range" id="toolSize" min="1" max="50" value="1" style="flex:1;" oninput="app.syncToolSize(this.value)">
+                <input type="number" id="toolSizeInput" min="1" max="50" value="1" style="width:38px; height:22px; padding:1px 2px;" onchange="app.syncToolSize(this.value)">
+                <button id="btnResetSize" onclick="app.syncToolSize(1)" style="padding:2px 4px; height:22px; font-size:10px;" title="1pxに戻す">1</button>
+            </div>
+            
+            <label class="inline-row" style="cursor:pointer; font-size:10px; margin-top:2px;">
+                <input type="checkbox" id="pixelPerfect" checked>
+                <span>Pixel-Perfect (余分な角の除去)</span>
+            </label>
+        </div>
+
+        <div class="row-group">
+            <div class="section-label">Color & Alpha</div>
+            <div class="color-row">
+                <div class="color-preview-wrap">
+                    <input type="color" id="colorPicker" value="#000000" oninput="app.setColorFromUI()">
+                    <div class="color-preview-overlay" id="colorPreviewBox"></div>
+                </div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:2px;">
+                    <input type="range" id="alphaSlider" min="0" max="1" step="0.01" value="1" oninput="app.setColorFromUI()" title="不透明度">
+                </div>
+                <button onclick="app.addCurrentColor()" title="パレット追加">
+                    <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+            </div>
+            <div id="paletteContainer"></div>
+            
+            <!-- 復元: 画像からパレット抽出 (上限256色) -->
+            <button onclick="document.getElementById('palLoader').click()" style="margin-top:2px;">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                <span>画像からパレット抽出 (最大256色)</span>
+            </button>
+            <input type="file" id="palLoader" style="display:none" accept="image/*" onchange="app.loadPaletteFromImage(this)">
+        </div>
+
+        <div class="row-group" style="margin-top:auto;">
+            <div class="inline-row">
+                <button onclick="app.toggleFullscreenMode()" style="flex:1;" title="全画面作画">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                    <span>全画面</span>
+                </button>
+                <button onclick="app.resetView()" title="全体中央">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Center Workspace -->
+    <div class="workspace-viewport" id="viewport">
+        <!-- Floating Context Bar for Selection -->
+        <div class="selection-floating-bar" id="selectionToolbar">
+            <button onclick="app.copySelection()" title="選択範囲をコピー (Ctrl+C)">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><rect width="13" height="13" x="9" y="9" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>コピー</span>
+            </button>
+            <button onclick="app.pasteSelection()" title="新規レイヤーに貼り付け (Ctrl+V)">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="1"/></svg>
+                <span>貼付</span>
+            </button>
+            <button onclick="app.flipSelectionHorizontal()" title="左右反転">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+            </button>
+            <button onclick="app.flipSelectionVertical()" title="上下反転">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><path d="M3 16v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+            </button>
+            <button onclick="app.clearSelectionContent()" title="消去 (Delete)" style="color:var(--danger);">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+            </button>
+            <button onclick="app.deselect()" title="解除 (Ctrl+D)">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <!-- Transform Layer -->
+        <div id="canvasTransformLayer">
+            <div id="canvasArtboard">
+                <canvas id="drawingCanvas"></canvas>
+                <canvas id="selectionOverlay"></canvas>
+            </div>
+        </div>
+
+        <!-- Bottom Quick Dock -->
+        <div class="floating-quick-bar">
+            <span id="toolSizeLabel" style="font-size:9px; font-weight:700; color:var(--text-secondary);">太さ:</span>
+            <span id="toolSizeVal" style="font-size:9px; width:16px; font-weight:600;">1</span>
+
+            <div style="width:1px; height:12px; background:var(--border-subtle); margin:0 1px;"></div>
+
+            <button class="quick-zoom-btn" onclick="app.setZoom(-1)" style="padding:1px 4px; height:20px; font-size:10px;">-</button>
+            <span id="zoomLabel" style="font-size:9px; font-weight:600; width:30px; text-align:center;">100%</span>
+            <button class="quick-zoom-btn" onclick="app.setZoom(1)" style="padding:1px 4px; height:20px; font-size:10px;">+</button>
+        </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="sidebar-right" id="sidebarRight">
+        <div class="row-group">
+            <div class="section-label">Layers</div>
+            <div class="inline-row">
+                <button onclick="app.addLayer()" style="flex:1;" title="追加"><svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                <button onclick="app.moveLayerUp()" title="上へ"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button onclick="app.moveLayerDown()" title="下へ"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></button>
+                <button onclick="app.mergeDown()" title="結合"><svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+                <button onclick="app.deleteLayer()" title="削除" style="color:var(--danger);"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg></button>
+            </div>
+            <div id="layerList" class="layer-list"></div>
+        </div>
+
+        <div class="row-group">
+            <div class="section-label">File / Import</div>
+            <button onclick="document.getElementById('fileLoader').click()">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                <span>開く (画像/シート/XML/JSON)</span>
+            </button>
+            <button onclick="document.getElementById('layerLoader').click()">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>画像を新規レイヤー挿入</span>
+            </button>
+            <input type="file" id="fileLoader" multiple style="display:none" onchange="app.handleFileImport(this)">
+            <input type="file" id="layerLoader" accept="image/*" style="display:none" onchange="app.handleLayerImport(this)">
+            <input type="file" id="xmlLoader" accept=".xml" style="display:none" onchange="app.handleXmlImport(this)">
+        </div>
+
+        <div class="row-group">
+            <div class="section-label">Settings</div>
+            <button onclick="app.openResizeModal()">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                <span>キャンバスサイズ変更</span>
+            </button>
+            <label class="inline-row" style="cursor:pointer; font-size:10px;">
+                <input type="checkbox" id="onionSkin" onchange="app.renderCanvas()">
+                <span>オニオンスキン (前コマ透かし)</span>
+            </label>
+            <div class="inline-row" style="margin-top:2px;">
+                <button onclick="app.saveToStorage()" style="flex:1;">クイック保存</button>
+                <button onclick="app.loadFromStorage()" style="flex:1;">クイック読込</button>
+            </div>
+        </div>
+
+        <div class="row-group" style="margin-top:auto;">
+            <button onclick="app.newProjectConfirm()" style="color:var(--danger);">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                <span>新規キャンバス (クリア)</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Timeline Bottom -->
+<div class="timeline-area" id="timelineArea">
+    <div class="timeline-controls">
+        <div class="inline-row">
+            <button onclick="app.togglePlay()" id="playBtn" style="font-weight:600;">
+                <svg class="icon icon-sm" id="playIcon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+                <span id="playLabel" class="hide-on-compact hide-on-ultranarrow">再生</span>
+            </button>
+            <div id="fpsContainer" class="inline-row hide-on-ultranarrow" style="font-size:10px; color:var(--text-secondary);">
+                <span>FPS</span>
+                <input type="number" id="fps" value="12" min="1" max="60" style="width:32px; height:20px;" onchange="app.updateFps()">
+            </div>
+        </div>
+        <div class="inline-row">
+            <button class="hide-on-compact hide-on-ultranarrow" onclick="app.addFrame()" title="コマ追加"><svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            <button class="hide-on-compact hide-on-ultranarrow" onclick="app.duplicateFrame()" title="複製"><svg class="icon icon-sm" viewBox="0 0 24 24"><rect width="13" height="13" x="9" y="9" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button class="hide-on-compact hide-on-ultranarrow" onclick="app.deleteFrame()" title="削除" style="color:var(--danger);"><svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg></button>
+            <button id="timelineCollapseBtn" onclick="app.toggleTimeline()" title="タイムライン折りたたみ">
+                <svg class="icon icon-sm" id="timelineCollapseIcon" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+        </div>
+    </div>
+    <div class="frames-container" id="frameList"></div>
+</div>
+
+<!-- Resize & 9-Anchor Modal -->
+<div class="modal-backdrop" id="resizeModal">
+    <div class="modal-window">
+        <div class="modal-header">
+            <span class="modal-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                <span>サイズ変更 (方向指定)</span>
+            </span>
+            <button onclick="document.getElementById('resizeModal').style.display='none'">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="inline-row" style="justify-content:space-between;">
+                <label style="font-size:10px;">幅: <input type="number" id="resizeModalW" value="32" style="width:50px;"></label>
+                <label style="font-size:10px;">高: <input type="number" id="resizeModalH" value="32" style="width:50px;"></label>
+            </div>
+            <div style="font-size:10px; font-weight:600; text-align:center; margin-top:4px;">基準点 (Anchor)</div>
+            <div class="anchor-grid">
+                <button type="button" class="anchor-btn" data-anchor="tl" onclick="app.selectAnchor('tl')">↖</button>
+                <button type="button" class="anchor-btn" data-anchor="tc" onclick="app.selectAnchor('tc')">↑</button>
+                <button type="button" class="anchor-btn" data-anchor="tr" onclick="app.selectAnchor('tr')">↗</button>
+                <button type="button" class="anchor-btn" data-anchor="ml" onclick="app.selectAnchor('ml')">←</button>
+                <button type="button" class="anchor-btn selected" data-anchor="mc" onclick="app.selectAnchor('mc')">・</button>
+                <button type="button" class="anchor-btn" data-anchor="mr" onclick="app.selectAnchor('mr')">→</button>
+                <button type="button" class="anchor-btn" data-anchor="bl" onclick="app.selectAnchor('bl')">↙</button>
+                <button type="button" class="anchor-btn" data-anchor="bc" onclick="app.selectAnchor('bc')">↓</button>
+                <button type="button" class="anchor-btn" data-anchor="br" onclick="app.selectAnchor('br')">↘</button>
+            </div>
+            <button class="btn-primary" onclick="app.applyAnchorResize()" style="padding:6px; margin-top:6px; width:100%;">
+                サイズ変更を適用
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Project Gallery Modal -->
+<div class="modal-backdrop" id="galleryModal">
+    <div class="modal-window">
+        <div class="modal-header">
+            <span class="modal-title">
+                <svg class="icon" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+                <span>作品ギャラリー</span>
+            </span>
+            <button onclick="document.getElementById('galleryModal').style.display='none'">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="inline-row" style="justify-content:space-between;">
+                <button onclick="document.getElementById('importSingleInput').click()">JSON読込</button>
+                <input type="file" id="importSingleInput" accept=".json" style="display:none" onchange="app.importSingleProjectFile(this)">
+                <button class="btn-primary" onclick="app.createNewProjectPrompt()">＋ 新規作成</button>
+            </div>
+            <div class="project-grid" id="projectGrid"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal-backdrop" id="exportModal">
+    <div class="modal-window">
+        <div class="modal-header">
+            <span class="modal-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>書き出し</span>
+            </span>
+            <button onclick="document.getElementById('exportModal').style.display='none'">
+                <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <label class="row-group">
+                <span style="font-size:10px; font-weight:600;">フォーマット:</span>
+                <select id="exportFormat" onchange="document.getElementById('sheetOptions').style.display = this.value === 'spritesheet' ? 'flex' : 'none'">
+                    <!-- 復元: 連番画像 (0始まり) -->
+                    <option value="png_single">現在のコマ (PNG)</option>
+                    <option value="zip_seq">連番PNG (ZIP / 0始まり: frame_0.png〜)</option>
+                    <option value="spritesheet">スプライトシート (PNG+XML)</option>
+                    <option value="apng">APNG (アニメPNG)</option>
+                    <option value="gif">GIF アニメーション</option>
+                </select>
+            </label>
+            <div id="sheetOptions" style="display:none; gap:4px;" class="inline-row">
+                <label style="font-size:10px;">列: <input type="number" id="sheetCols" value="4" min="1" style="width:36px;"></label>
+                <label style="font-size:10px;">行: <input type="number" id="sheetRows" value="4" min="1" style="width:36px;"></label>
+            </div>
+            <button class="btn-primary" onclick="app.exportProject()" style="padding:6px; margin-top:4px; width:100%;">
+                ダウンロード
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * PixelArtApp - Restored Shortcuts, 0-indexed ZIP, 256 Palette, Full Filename
+ */
+class PixelApp {
+    constructor() {
+        this.STORAGE_LIST_KEY = 'pixelArt_project_list';
+        this.STORAGE_PREFIX = 'pixelArt_data_';
+        this.OLD_KEY = 'pixelArtPro';
+
+        this.currentProjectId = null;
+        this.currentProjectName = "無題の作品";
+        this.width = 32;
+        this.height = 32;
+        this.frames = [];
+        this.currentFrameIndex = 0;
+        this.currentLayerIndex = 0;
+
+        this.tool = 'pen';
+        this.lastDrawingTool = 'pen';
+        this.color = 'rgba(0, 0, 0, 1)';
+        this.palette = [
+            'rgba(0,0,0,1)', 'rgba(255,255,255,1)', 'rgba(239,68,68,1)', 
+            'rgba(34,197,94,1)', 'rgba(59,130,246,1)', 'rgba(234,179,8,1)'
+        ];
+
+        this.scale = 14.0;
+        this.panX = 0;
+        this.panY = 0;
+
+        this.isDrawing = false;
+        this.isPlaying = false;
+        this.playTimer = null;
+        this.history = [];
+        this.historyIndex = -1;
+        this.lastPos = { x: 0, y: 0 };
+
+        this.strokePoints = [];
+        this.strokeInitialImageData = null;
+
+        this.isSpaceDown = false;
+        this.isMiddlePanning = false;
+        this.activePointers = new Map();
+        this.pinchStartDistance = 0;
+        this.pinchStartMid = { x: 0, y: 0 };
+        this.pinchStartScale = 1;
+        this.pinchStartPan = { x: 0, y: 0 };
+
+        this.touchStartTime = 0;
+        this.maxPointersInSession = 0;
+        this.hasMovedSignificantly = false;
+
+        this.selection = null;
+        this.floatingSelection = null;
+        this.clipboard = null;
+        this.isDraggingSelection = false;
+        this.dragSelectionStart = { x: 0, y: 0 };
+
+        this.pendingImportImg = null;
+        this.currentAnchor = 'mc';
+        this.longPressTimer = null;
+
+        // DOM
+        this.canvas = document.getElementById('drawingCanvas');
+        this.selectionOverlay = document.getElementById('selectionOverlay');
+        this.artboard = document.getElementById('canvasArtboard');
+        this.transformLayer = document.getElementById('canvasTransformLayer');
+        this.viewport = document.getElementById('viewport');
+        this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+        this.selCtx = this.selectionOverlay.getContext('2d');
+
+        this.initStorageAndProjects();
+        this.setupEvents();
+        this.setupAspectObserver();
+    }
+
+    // ==========================================
+    // Project & Storage Architecture
+    // ==========================================
+
+    initStorageAndProjects() {
+        let list = this.getProjectList();
+
+        const oldData = localStorage.getItem(this.OLD_KEY);
+        if (oldData && list.length === 0) {
+            try {
+                const parsed = JSON.parse(oldData);
+                const id = 'proj_' + Date.now();
+                list.push({
+                    id: id,
+                    name: '移行された作品',
+                    width: parsed.width || 32,
+                    height: parsed.height || 32,
+                    updatedAt: Date.now()
+                });
+                this.saveProjectList(list);
+                localStorage.setItem(this.STORAGE_PREFIX + id, oldData);
+            } catch (e) { console.error(e); }
+        }
+
+        if (list.length === 0) {
+            const id = 'proj_' + Date.now();
+            list = [{ id, name: '作品 1', width: 32, height: 32, updatedAt: Date.now() }];
+            this.saveProjectList(list);
+            this.loadProject(id, true);
+        } else {
+            this.loadProject(list[0].id);
+        }
+    }
+
+    getProjectList() {
+        try { return JSON.parse(localStorage.getItem(this.STORAGE_LIST_KEY)) || []; } catch (e) { return []; }
+    }
+
+    saveProjectList(list) {
+        localStorage.setItem(this.STORAGE_LIST_KEY, JSON.stringify(list));
+    }
+
+    loadProject(id, isInitial = false) {
+        this.currentProjectId = id;
+        const list = this.getProjectList();
+        const meta = list.find(p => p.id === id);
+        if (meta) {
+            this.currentProjectName = meta.name;
+            document.getElementById('headerProjectName').innerText = meta.name;
+            this.width = meta.width;
+            this.height = meta.height;
+        }
+
+        const rawData = localStorage.getItem(this.STORAGE_PREFIX + id);
+        if (rawData && !isInitial) {
+            try {
+                const parsed = JSON.parse(rawData);
+                this.loadHistory(parsed, false);
+                this.resetView();
+                return;
+            } catch (e) { console.error(e); }
+        }
+
+        this.frames = [];
+        this.currentFrameIndex = 0;
+        this.currentLayerIndex = 0;
+        this.history = [];
+        this.historyIndex = -1;
+        this.addFrame(true);
+        this.resetView();
+        this.refreshPalette();
+        this.saveHistory();
+    }
+
+    autoSaveCurrentProject() {
+        if (!this.currentProjectId || this.historyIndex < 0) return;
+        const currentData = this.history[this.historyIndex];
+        try {
+            localStorage.setItem(this.STORAGE_PREFIX + this.currentProjectId, JSON.stringify(currentData));
+            const list = this.getProjectList();
+            const idx = list.findIndex(p => p.id === this.currentProjectId);
+            if (idx >= 0) {
+                list[idx].updatedAt = Date.now();
+                list[idx].width = this.width;
+                list[idx].height = this.height;
+                list[idx].thumbnail = this.canvas.toDataURL();
+                this.saveProjectList(list);
+            }
+        } catch (e) { console.warn("Quota exceeded"); }
+    }
+
+    saveToStorage() {
+        this.autoSaveCurrentProject();
+        alert("ブラウザに保存しました");
+    }
+
+    loadFromStorage() {
+        if (this.currentProjectId) {
+            this.loadProject(this.currentProjectId);
+            alert("保存データを再読み込みしました");
+        }
+    }
+
+    newProjectConfirm() {
+        if (confirm("キャンバスを初期化して白紙に戻しますか？")) {
+            this.frames = [];
+            this.currentFrameIndex = 0;
+            this.currentLayerIndex = 0;
+            this.history = [];
+            this.historyIndex = -1;
+            this.addFrame(true);
+            this.resetView();
+            this.saveHistory();
+        }
+    }
+
+    exportCurrentProjectSingle(targetId = null) {
+        const id = targetId || this.currentProjectId;
+        const list = this.getProjectList();
+        const meta = list.find(p => p.id === id);
+        const data = localStorage.getItem(this.STORAGE_PREFIX + id);
+        if (!meta || !data) return;
+
+        const dump = {
+            format: "pixelart_single_project",
+            meta: meta,
+            project: JSON.parse(data)
+        };
+        const blob = new Blob([JSON.stringify(dump)], { type: 'application/json' });
+        saveAs(blob, `${meta.name}.json`);
+    }
+
+    importSingleProjectFile(input) {
+        if (!input.files[0]) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const parsed = JSON.parse(e.target.result);
+                const list = this.getProjectList();
+                const newId = 'proj_' + Date.now();
+
+                let newMeta = {
+                    id: newId,
+                    name: (parsed.meta && parsed.meta.name) ? parsed.meta.name : "インポート作品",
+                    width: (parsed.project ? parsed.project.width : parsed.width) || 32,
+                    height: (parsed.project ? parsed.project.height : parsed.height) || 32,
+                    updatedAt: Date.now()
+                };
+
+                const projData = parsed.project || parsed;
+                list.unshift(newMeta);
+                this.saveProjectList(list);
+                localStorage.setItem(this.STORAGE_PREFIX + newId, JSON.stringify(projData));
+
+                alert("プロジェクトを復元しました");
+                this.loadProject(newId);
+                document.getElementById('galleryModal').style.display = 'none';
+            } catch (err) {
+                alert("読み込みエラー: " + err.message);
+            }
+            input.value = '';
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    createNewProjectPrompt() {
+        const name = prompt("作品名:", "作品 " + (this.getProjectList().length + 1));
+        if (!name) return;
+        const w = parseInt(prompt("幅 (px):", "32")) || 32;
+        const h = parseInt(prompt("高さ (px):", "32")) || 32;
+
+        const id = 'proj_' + Date.now();
+        const list = this.getProjectList();
+        list.unshift({ id, name, width: w, height: h, updatedAt: Date.now() });
+        this.saveProjectList(list);
+
+        document.getElementById('galleryModal').style.display = 'none';
+        this.loadProject(id, true);
+    }
+
+    openGalleryModal() {
+        const list = this.getProjectList();
+        const grid = document.getElementById('projectGrid');
+        grid.innerHTML = '';
+
+        list.forEach(p => {
+            const card = document.createElement('div');
+            card.className = `project-card ${p.id === this.currentProjectId ? 'active' : ''}`;
+            const dateStr = new Date(p.updatedAt).toLocaleDateString();
+            card.innerHTML = `
+                <img class="project-thumb" src="${p.thumbnail || ''}">
+                <div class="project-name">${p.name}</div>
+                <div class="project-meta">${p.width}×${p.height} | ${dateStr}</div>
+                <div style="display:flex; gap:3px; margin-top:3px;" onclick="event.stopPropagation()">
+                    <button style="flex:1; padding:2px; font-size:9px;" onclick="app.exportCurrentProjectSingle('${p.id}')">書出</button>
+                    <button style="padding:2px; font-size:9px; color:var(--danger);" onclick="app.deleteProject('${p.id}')">削除</button>
+                </div>
+            `;
+            card.onclick = () => {
+                this.autoSaveCurrentProject();
+                this.loadProject(p.id);
+                document.getElementById('galleryModal').style.display = 'none';
+            };
+            grid.appendChild(card);
+        });
+
+        document.getElementById('galleryModal').style.display = 'flex';
+    }
+
+    deleteProject(id) {
+        const list = this.getProjectList();
+        if (list.length <= 1) { alert("最後の作品は削除できません"); return; }
+        if (!confirm("この作品を削除しますか？")) return;
+
+        const filtered = list.filter(p => p.id !== id);
+        this.saveProjectList(filtered);
+        localStorage.removeItem(this.STORAGE_PREFIX + id);
+
+        if (this.currentProjectId === id) this.loadProject(filtered[0].id);
+        this.openGalleryModal();
+    }
+
+    // ==========================================
+    // 9-Anchor Canvas Resize
+    // ==========================================
+
+    openResizeModal() {
+        document.getElementById('resizeModalW').value = this.width;
+        document.getElementById('resizeModalH').value = this.height;
+        document.getElementById('resizeModal').style.display = 'flex';
+    }
+
+    selectAnchor(anchorKey) {
+        this.currentAnchor = anchorKey;
+        document.querySelectorAll('.anchor-btn').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.anchor === anchorKey);
+        });
+    }
+
+    applyAnchorResize() {
+        const newW = parseInt(document.getElementById('resizeModalW').value) || 32;
+        const newH = parseInt(document.getElementById('resizeModalH').value) || 32;
+        if (newW <= 0 || newH <= 0) return;
+
+        const diffW = newW - this.width;
+        const diffH = newH - this.height;
+
+        let offX = 0, offY = 0;
+        if (this.currentAnchor.includes('c')) offX = Math.floor(diffW / 2);
+        else if (this.currentAnchor.includes('r')) offX = diffW;
+
+        if (this.currentAnchor.includes('m')) offY = Math.floor(diffH / 2);
+        else if (this.currentAnchor.includes('b')) offY = diffH;
+
+        this.frames.forEach(f => {
+            f.layers.forEach(l => {
+                const newC = document.createElement('canvas');
+                newC.width = newW; newC.height = newH;
+                const nx = newC.getContext('2d');
+                nx.imageSmoothingEnabled = false;
+                nx.drawImage(l.canvas, offX, offY);
+                l.canvas = newC;
+                l.ctx = nx;
+            });
+        });
+
+        this.width = newW;
+        this.height = newH;
+        this.deselect();
+        this.updateCanvasDisplay();
+        this.saveHistory();
+        document.getElementById('resizeModal').style.display = 'none';
+    }
+
+    // ==========================================
+    // Advanced Selection & Clipboard
+    // ==========================================
+
+    deselect() {
+        this.commitFloatingSelection();
+        this.selection = null;
+        this.floatingSelection = null;
+        this.isDraggingSelection = false;
+        document.getElementById('selectionToolbar').style.display = 'none';
+        this.renderSelectionOverlay();
+    }
+
+    selectAll() {
+        this.selection = { x: 0, y: 0, w: this.width, h: this.height };
+        document.getElementById('selectionToolbar').style.display = 'flex';
+        this.renderSelectionOverlay();
+    }
+
+    commitFloatingSelection() {
+        if (!this.floatingSelection) return;
+        const ctx = this.getCurrentCtx();
+        ctx.drawImage(this.floatingSelection.canvas, this.floatingSelection.x, this.floatingSelection.y);
+        this.floatingSelection = null;
+        this.renderCanvas();
+    }
+
+    liftSelectionToFloating() {
+        if (!this.selection || this.floatingSelection) return;
+        const ctx = this.getCurrentCtx();
+        const { x, y, w, h } = this.selection;
+        
+        const floatC = document.createElement('canvas');
+        floatC.width = w; floatC.height = h;
+        const floatCtx = floatC.getContext('2d');
+        floatCtx.imageSmoothingEnabled = false;
+        floatCtx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
+
+        ctx.clearRect(x, y, w, h);
+        this.floatingSelection = { x, y, w, h, canvas: floatC };
+        this.renderCanvas();
+    }
+
+    copySelection() {
+        if (!this.selection) return;
+        const { x, y, w, h } = this.selection;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const tx = c.getContext('2d');
+        tx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
+        this.clipboard = { w, h, canvas: c, x, y };
+
+        const toast = document.getElementById('copyToast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 800);
+    }
+
+    pasteSelection() {
+        if (!this.clipboard) return;
+        const newLayer = this.createLayer('貼付レイヤー');
+        newLayer.ctx.drawImage(this.clipboard.canvas, this.clipboard.x, this.clipboard.y);
+
+        const frame = this.frames[this.currentFrameIndex];
+        frame.layers.splice(this.currentLayerIndex + 1, 0, newLayer);
+        this.currentLayerIndex++;
+        this.setTool('shift');
+        this.deselect();
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    flipSelectionHorizontal() {
+        if (!this.selection) return;
+        this.liftSelectionToFloating();
+        const { w, h, canvas } = this.floatingSelection;
+        const temp = document.createElement('canvas');
+        temp.width = w; temp.height = h;
+        const tx = temp.getContext('2d');
+        tx.translate(w, 0);
+        tx.scale(-1, 1);
+        tx.drawImage(canvas, 0, 0);
+        this.floatingSelection.canvas = temp;
+        this.renderCanvas();
+        this.renderSelectionOverlay();
+        this.saveHistory();
+    }
+
+    flipSelectionVertical() {
+        if (!this.selection) return;
+        this.liftSelectionToFloating();
+        const { w, h, canvas } = this.floatingSelection;
+        const temp = document.createElement('canvas');
+        temp.width = w; temp.height = h;
+        const tx = temp.getContext('2d');
+        tx.translate(0, h);
+        tx.scale(1, -1);
+        tx.drawImage(canvas, 0, 0);
+        this.floatingSelection.canvas = temp;
+        this.renderCanvas();
+        this.renderSelectionOverlay();
+        this.saveHistory();
+    }
+
+    clearSelectionContent() {
+        if (!this.selection) return;
+        const ctx = this.getCurrentCtx();
+        ctx.clearRect(this.selection.x, this.selection.y, this.selection.w, this.selection.h);
+        this.floatingSelection = null;
+        this.deselect();
+        this.renderCanvas();
+        this.saveHistory();
+    }
+
+    renderSelectionOverlay() {
+        this.selCtx.clearRect(0, 0, this.width, this.height);
+        if (!this.selection) return;
+
+        const { x, y, w, h } = this.selection;
+        this.selCtx.fillStyle = 'rgba(37, 99, 235, 0.14)';
+        this.selCtx.fillRect(x, y, w, h);
+
+        this.selCtx.strokeStyle = '#2563EB';
+        this.selCtx.lineWidth = 1;
+        this.selCtx.setLineDash([2, 2]);
+        this.selCtx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    }
+
+    // ==========================================
+    // Unified Multi-touch & PC Mouse/Keyboard Events
+    // ==========================================
+
+    setupEvents() {
+        const vp = this.viewport;
+
+        // 復元: Ctrl+Wheelでズーム / 通常Wheelで上下パン / Shift+Wheelで左右パン
+        vp.addEventListener('wheel', e => {
+            e.preventDefault();
+            if (e.ctrlKey || e.metaKey) {
+                // カーソル位置中心ズーム
+                const factor = e.deltaY < 0 ? 1.15 : 0.85;
+                this.zoomAt(e.clientX, e.clientY, factor);
+            } else if (e.shiftKey) {
+                // 水平パン
+                this.panX -= e.deltaY;
+                this.applyTransform();
+            } else {
+                // 垂直パン (左右スクロール付きマウスホイールにも対応)
+                this.panY -= e.deltaY;
+                if (e.deltaX) this.panX -= e.deltaX;
+                this.applyTransform();
+            }
+        }, { passive: false });
+
+        vp.addEventListener('pointerdown', e => {
+            this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            this.maxPointersInSession = Math.max(this.maxPointersInSession, this.activePointers.size);
+
+            if (this.activePointers.size === 1) {
+                this.touchStartTime = Date.now();
+                this.hasMovedSignificantly = false;
+
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = setTimeout(() => {
+                    if (this.activePointers.size === 1 && !this.hasMovedSignificantly) {
+                        const pos = this.getPixelPos(e.clientX, e.clientY);
+                        if (pos.x >= 0 && pos.x < this.width && pos.y >= 0 && pos.y < this.height) {
+                            if (navigator.vibrate) navigator.vibrate(20);
+                            this.pickColor(pos.x, pos.y);
+                            this.isDrawing = false;
+                        }
+                    }
+                }, 400);
+            }
+
+            if (this.activePointers.size === 2) {
+                clearTimeout(this.longPressTimer);
+                this.isDrawing = false;
+                this.isDraggingSelection = false;
+
+                const pts = Array.from(this.activePointers.values());
+                this.pinchStartDistance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                this.pinchStartMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+                this.pinchStartScale = this.scale;
+                this.pinchStartPan = { x: this.panX, y: this.panY };
+                return;
+            }
+
+            if (this.isSpaceDown || e.button === 1 || this.tool === 'pan') {
+                this.isMiddlePanning = true;
+                this.pinchStartPan = { x: this.panX, y: this.panY };
+                this.pinchStartMid = { x: e.clientX, y: e.clientY };
+                this.viewport.style.cursor = 'grabbing';
+                return;
+            }
+
+            if (this.activePointers.size === 1 && e.button === 0) {
+                const pos = this.getPixelPos(e.clientX, e.clientY);
+
+                if (this.selection && pos.x >= this.selection.x && pos.x < this.selection.x + this.selection.w &&
+                    pos.y >= this.selection.y && pos.y < this.selection.y + this.selection.h) {
+                    this.liftSelectionToFloating();
+                    this.isDraggingSelection = true;
+                    this.dragSelectionStart = { x: pos.x - this.selection.x, y: pos.y - this.selection.y };
+                    return;
+                }
+
+                if (pos.x < 0 || pos.x >= this.width || pos.y < 0 || pos.y >= this.height) {
+                    if (this.selection) this.deselect();
+                    return;
+                }
+
+                this.isDrawing = true;
+                this.lastPos = pos;
+
+                const ctx = this.getCurrentCtx();
+                this.strokeInitialImageData = ctx.getImageData(0, 0, this.width, this.height);
+                this.strokePoints = [];
+
+                if (this.tool === 'picker') {
+                    this.pickColor(pos.x, pos.y);
+                    this.isDrawing = false;
+                } else if (this.tool === 'bucket') {
+                    this.floodFill(pos.x, pos.y);
+                    this.isDrawing = false;
+                    this.saveHistory();
+                } else if (this.tool === 'pen' || this.tool === 'eraser') {
+                    this.appendStrokePixel(ctx, pos.x, pos.y);
+                    this.renderCanvas();
+                }
+            }
+        });
+
+        window.addEventListener('pointermove', e => {
+            if (!this.activePointers.has(e.pointerId)) return;
+            this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+            if (this.activePointers.size === 2) {
+                this.hasMovedSignificantly = true;
+                clearTimeout(this.longPressTimer);
+
+                const pts = Array.from(this.activePointers.values());
+                const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                const currentMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+
+                if (this.pinchStartDistance > 0) {
+                    const factor = currentDist / this.pinchStartDistance;
+                    const newScale = Math.min(Math.max(this.pinchStartScale * factor, 0.5), 100);
+
+                    const localMidX = (this.pinchStartMid.x - this.pinchStartPan.x) / this.pinchStartScale;
+                    const localMidY = (this.pinchStartMid.y - this.pinchStartPan.y) / this.pinchStartScale;
+
+                    this.panX = currentMid.x - localMidX * newScale;
+                    this.panY = currentMid.y - localMidY * newScale;
+                    this.scale = newScale;
+
+                    this.applyTransform();
+                    this.updateZoomLabel();
+                }
+                return;
+            }
+
+            if (this.isMiddlePanning || (this.tool === 'pan' && this.activePointers.size === 1)) {
+                this.panX = this.pinchStartPan.x + (e.clientX - this.pinchStartMid.x);
+                this.panY = this.pinchStartPan.y + (e.clientY - this.pinchStartMid.y);
+                this.applyTransform();
+                return;
+            }
+
+            if (this.isDraggingSelection) {
+                const pos = this.getPixelPos(e.clientX, e.clientY);
+                this.selection.x = pos.x - this.dragSelectionStart.x;
+                this.selection.y = pos.y - this.dragSelectionStart.y;
+                if (this.floatingSelection) {
+                    this.floatingSelection.x = this.selection.x;
+                    this.floatingSelection.y = this.selection.y;
+                }
+                this.renderCanvas();
+                this.renderSelectionOverlay();
+                return;
+            }
+
+            if (!this.isDrawing) return;
+            const pos = this.getPixelPos(e.clientX, e.clientY);
+            if (Math.abs(pos.x - this.lastPos.x) > 0 || Math.abs(pos.y - this.lastPos.y) > 0) {
+                this.hasMovedSignificantly = true;
+                clearTimeout(this.longPressTimer);
+            }
+
+            if (this.tool === 'pen' || this.tool === 'eraser') {
+                const bresenhamPts = this.getBresenhamPoints(this.lastPos.x, this.lastPos.y, pos.x, pos.y);
+                const ctx = this.getCurrentCtx();
+                for (const p of bresenhamPts) {
+                    this.appendStrokePixel(ctx, p.x, p.y);
+                }
+                this.lastPos = pos;
+                this.renderCanvas();
+            } else if (['line', 'rect', 'circle', 'shift', 'select'].includes(this.tool)) {
+                this.renderCanvas();
+                this.drawPreview(this.lastPos, pos);
+            }
+        });
+
+        const endPointer = e => {
+            clearTimeout(this.longPressTimer);
+            const duration = Date.now() - this.touchStartTime;
+
+            if (!this.hasMovedSignificantly && duration < 280) {
+                if (this.maxPointersInSession === 2) {
+                    this.undo();
+                    this.activePointers.clear();
+                    this.maxPointersInSession = 0;
+                    return;
+                } else if (this.maxPointersInSession === 3) {
+                    this.redo();
+                    this.activePointers.clear();
+                    this.maxPointersInSession = 0;
+                    return;
+                }
+            }
+
+            this.activePointers.delete(e.pointerId);
+            if (this.activePointers.size === 0) {
+                this.maxPointersInSession = 0;
+                this.isMiddlePanning = false;
+                this.viewport.style.cursor = this.isSpaceDown ? 'grab' : 'crosshair';
+            }
+
+            if (this.isDraggingSelection) {
+                this.isDraggingSelection = false;
+                this.saveHistory();
+                return;
+            }
+
+            if (!this.isDrawing) return;
+            this.isDrawing = false;
+            const pos = this.getPixelPos(e.clientX, e.clientY);
+            const ctx = this.getCurrentCtx();
+
+            if (this.tool === 'line') this.plotLine(ctx, this.lastPos.x, this.lastPos.y, pos.x, pos.y);
+            else if (this.tool === 'rect') this.plotRect(ctx, this.lastPos.x, this.lastPos.y, pos.x, pos.y);
+            else if (this.tool === 'circle') this.plotCircle(ctx, this.lastPos.x, this.lastPos.y, pos.x, pos.y);
+            else if (this.tool === 'shift') this.shiftLayer(pos.x - this.lastPos.x, pos.y - this.lastPos.y);
+            else if (this.tool === 'select') {
+                const x0 = Math.max(0, Math.min(this.lastPos.x, pos.x));
+                const y0 = Math.max(0, Math.min(this.lastPos.y, pos.y));
+                const x1 = Math.min(this.width, Math.max(this.lastPos.x, pos.x) + 1);
+                const y1 = Math.min(this.height, Math.max(this.lastPos.y, pos.y) + 1);
+
+                if (x1 - x0 > 0 && y1 - y0 > 0) {
+                    this.selection = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+                    document.getElementById('selectionToolbar').style.display = 'flex';
+                    this.renderSelectionOverlay();
+                } else {
+                    this.deselect();
+                }
+            }
+
+            this.strokePoints = [];
+            this.strokeInitialImageData = null;
+
+            if (this.tool !== 'select') this.saveHistory();
+            this.renderCanvas();
+        };
+
+        window.addEventListener('pointerup', endPointer);
+        window.addEventListener('pointercancel', endPointer);
+
+        // 復元: ショートカットキー全対応
+        window.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Spaceキーで画面移動モード
+            if (e.code === 'Space' && !e.repeat) {
+                this.isSpaceDown = true;
+                this.viewport.style.cursor = 'grab';
+            }
+
+            // ツール切り替えショートカット
+            if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+                switch (e.code) {
+                    case 'KeyP': this.setTool('pen'); break;
+                    case 'KeyE': this.setTool('eraser'); break;
+                    case 'KeyF': this.setTool('bucket'); break;
+                    case 'KeyI': this.setTool('picker'); break;
+                    case 'KeyL': this.setTool('line'); break;
+                    case 'KeyR': this.setTool('rect'); break;
+                    case 'KeyC': this.setTool('circle'); break;
+                    case 'KeyS': this.setTool('select'); break;
+                    case 'KeyM': this.setTool('shift'); break;
+                    case 'KeyH': this.setTool('pan'); break;
+                    case 'KeyX': this.togglePenEraser(); break;
+                }
+
+                // 数字キー 1〜9 でブラシ太さ即時変更
+                if (e.key >= '1' && e.key <= '9') {
+                    this.syncToolSize(parseInt(e.key));
+                }
+            }
+
+            // Ctrl/Cmd 系操作
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key.toLowerCase() === 'z') { e.preventDefault(); this.undo(); }
+                if (e.key.toLowerCase() === 'y') { e.preventDefault(); this.redo(); }
+                if (e.key.toLowerCase() === 'c') { e.preventDefault(); this.copySelection(); }
+                if (e.key.toLowerCase() === 'v') { e.preventDefault(); this.pasteSelection(); }
+                if (e.key.toLowerCase() === 'd') { e.preventDefault(); this.deselect(); }
+                if (e.key.toLowerCase() === 'a') { e.preventDefault(); this.selectAll(); }
+            }
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (this.selection) { e.preventDefault(); this.clearSelectionContent(); }
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            if (e.code === 'Space') {
+                this.isSpaceDown = false;
+                this.isMiddlePanning = false;
+                this.viewport.style.cursor = 'crosshair';
+            }
+        });
+    }
+
+    // 復元: ペン太さの完全連動 (1〜50px)
+    syncToolSize(val) {
+        const parsed = Math.max(1, Math.min(50, parseInt(val) || 1));
+        document.getElementById('toolSize').value = parsed;
+        document.getElementById('toolSizeInput').value = parsed;
+        document.getElementById('toolSizeVal').innerText = parsed;
+    }
+
+    // ==========================================
+    // True Pixel-Perfect Drawing Engine
+    // ==========================================
+
+    getPixelPos(clientX, clientY) {
+        const rect = this.artboard.getBoundingClientRect();
+        return {
+            x: Math.floor((clientX - rect.left) / this.scale),
+            y: Math.floor((clientY - rect.top) / this.scale)
+        };
+    }
+
+    getCurrentCtx() {
+        return this.frames[this.currentFrameIndex].layers[this.currentLayerIndex].ctx;
+    }
+
+    drawDot(ctx, x, y) {
+        const s = parseInt(document.getElementById('toolSize').value) || 1;
+        const off = Math.floor(s / 2);
+        if (this.tool === 'eraser') {
+            ctx.clearRect(x - off, y - off, s, s);
+        } else {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(x - off, y - off, s, s);
+        }
+    }
+
+    getBresenhamPoints(x0, y0, x1, y1) {
+        let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+        let sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+        let err = dx - dy;
+        const pts = [];
+
+        while (true) {
+            pts.push({ x: x0, y: y0 });
+            if (x0 === x1 && y0 === y1) break;
+            let e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x0 += sx; }
+            if (e2 < dx) { err += dx; y0 += sy; }
+        }
+        return pts;
+    }
+
+    appendStrokePixel(ctx, x, y) {
+        const size = parseInt(document.getElementById('toolSize').value) || 1;
+        const isPP = document.getElementById('pixelPerfect').checked && this.tool === 'pen' && size === 1;
+
+        const len = this.strokePoints.length;
+        if (len > 0) {
+            const last = this.strokePoints[len - 1];
+            if (last.x === x && last.y === y) return;
+        }
+
+        if (isPP && len >= 2) {
+            const p0 = this.strokePoints[len - 2];
+            const p1 = this.strokePoints[len - 1];
+            const p2 = { x, y };
+
+            const dist02_x = Math.abs(p0.x - p2.x);
+            const dist02_y = Math.abs(p0.y - p2.y);
+            const dist01_m = Math.abs(p0.x - p1.x) + Math.abs(p0.y - p1.y);
+            const dist12_m = Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y);
+
+            if (dist02_x <= 1 && dist02_y <= 1 && dist01_m === 1 && dist12_m === 1) {
+                this.strokePoints.pop();
+
+                if (this.strokeInitialImageData) {
+                    ctx.putImageData(this.strokeInitialImageData, 0, 0);
+                    for (const pt of this.strokePoints) {
+                        this.drawDot(ctx, pt.x, pt.y);
+                    }
+                }
+            }
+        }
+
+        this.drawDot(ctx, x, y);
+        this.strokePoints.push({ x, y });
+    }
+
+    plotLine(ctx, x0, y0, x1, y1) {
+        const pts = this.getBresenhamPoints(x0, y0, x1, y1);
+        for (const p of pts) {
+            this.drawDot(ctx, p.x, p.y);
+        }
+    }
+
+    plotRect(ctx, x0, y0, x1, y1) {
+        const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+        const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+        this.plotLine(ctx, minX, minY, maxX, minY);
+        this.plotLine(ctx, minX, maxY, maxX, maxY);
+        this.plotLine(ctx, minX, minY, minX, maxY);
+        this.plotLine(ctx, maxX, minY, maxX, maxY);
+    }
+
+    plotCircle(ctx, x0, y0, x1, y1) {
+        const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+        const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+        const w = maxX - minX, h = maxY - minY;
+        if (w === 0 || h === 0) return;
+
+        const cx = minX + w / 2, cy = minY + h / 2;
+        const rx = w / 2, ry = h / 2;
+        const s = parseInt(document.getElementById('toolSize').value) || 1;
+        const innerRx = Math.max(0, rx - s);
+        const innerRy = Math.max(0, ry - s);
+
+        for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++) {
+            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x++) {
+                const px = x + 0.5, py = y + 0.5;
+                const distOuter = (Math.pow(px - cx, 2) / Math.pow(rx, 2)) + (Math.pow(py - cy, 2) / Math.pow(ry, 2));
+                const distInner = (innerRx > 0 && innerRy > 0)
+                    ? (Math.pow(px - cx, 2) / Math.pow(innerRx, 2)) + (Math.pow(py - cy, 2) / Math.pow(innerRy, 2))
+                    : 999;
+
+                if (distOuter <= 1.0 && distInner > 1.0) {
+                    if (this.tool === 'eraser') ctx.clearRect(x, y, 1, 1);
+                    else { ctx.fillStyle = this.color; ctx.fillRect(x, y, 1, 1); }
+                }
+            }
+        }
+    }
+
+    drawPreview(p1, p2) {
+        const ctx = this.ctx;
+        ctx.fillStyle = this.color;
+
+        if (this.tool === 'line') this.plotLine(ctx, p1.x, p1.y, p2.x, p2.y);
+        else if (this.tool === 'rect') this.plotRect(ctx, p1.x, p1.y, p2.x, p2.y);
+        else if (this.tool === 'circle') this.plotCircle(ctx, p1.x, p1.y, p2.x, p2.y);
+        else if (this.tool === 'shift') {
+            ctx.save();
+            ctx.strokeStyle = '#2563EB';
+            ctx.strokeRect(p2.x - p1.x + 0.5, p2.y - p1.y + 0.5, this.width - 1, this.height - 1);
+            ctx.restore();
+        } else if (this.tool === 'select') {
+            const x0 = Math.min(p1.x, p2.x);
+            const y0 = Math.min(p1.y, p2.y);
+            const w = Math.abs(p2.x - p1.x) + 1;
+            const h = Math.abs(p2.y - p1.y) + 1;
+
+            this.selCtx.clearRect(0, 0, this.width, this.height);
+            this.selCtx.fillStyle = 'rgba(37, 99, 235, 0.12)';
+            this.selCtx.fillRect(x0, y0, w, h);
+            this.selCtx.strokeStyle = '#2563EB';
+            this.selCtx.lineWidth = 1;
+            this.selCtx.setLineDash([2, 2]);
+            this.selCtx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+        }
+    }
+
+    floodFill(startX, startY) {
+        const ctx = this.getCurrentCtx();
+        const w = this.width, h = this.height;
+        const img = ctx.getImageData(0, 0, w, h);
+        const d = img.data;
+        const tIdx = (startY * w + startX) * 4;
+
+        const tr = d[tIdx], tg = d[tIdx + 1], tb = d[tIdx + 2], ta = d[tIdx + 3];
+        const match = this.color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+        if (!match) return;
+
+        const fr = parseInt(match[1]), fg = parseInt(match[2]), fb = parseInt(match[3]);
+        const fa = Math.round((match[4] !== undefined ? parseFloat(match[4]) : 1) * 255);
+        if (tr === fr && tg === fg && tb === fb && ta === fa) return;
+
+        const stack = [tIdx];
+        const matchColor = i => d[i] === tr && d[i + 1] === tg && d[i + 2] === tb && d[i + 3] === ta;
+
+        while (stack.length) {
+            const i = stack.pop();
+            if (matchColor(i)) {
+                d[i] = fr; d[i + 1] = fg; d[i + 2] = fb; d[i + 3] = fa;
+                const px = (i / 4) % w;
+                if (px > 0) stack.push(i - 4);
+                if (px < w - 1) stack.push(i + 4);
+                if (i >= w * 4) stack.push(i - w * 4);
+                if (i < d.length - w * 4) stack.push(i + w * 4);
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        this.renderCanvas();
+    }
+
+    pickColor(x, y) {
+        const c = document.createElement('canvas');
+        c.width = this.width; c.height = this.height;
+        const tx = c.getContext('2d');
+        this.frames[this.currentFrameIndex].layers.forEach(l => {
+            if (l.visible) tx.drawImage(l.canvas, 0, 0);
+        });
+
+        const d = tx.getImageData(x, y, 1, 1).data;
+        const alpha = parseFloat((d[3] / 255).toFixed(2));
+        this.setColor(`rgba(${d[0]}, ${d[1]}, ${d[2]}, ${alpha})`);
+        this.setTool(this.lastDrawingTool || 'pen');
+    }
+
+    shiftLayer(dx, dy) {
+        const ctx = this.getCurrentCtx();
+        const d = ctx.getImageData(0, 0, this.width, this.height);
+        ctx.clearRect(0, 0, this.width, this.height);
+        ctx.putImageData(d, dx, dy);
+    }
+
+    renderCanvas() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+
+        if (document.getElementById('onionSkin').checked && this.currentFrameIndex > 0) {
+            const prev = this.frames[this.currentFrameIndex - 1];
+            this.ctx.save();
+            this.ctx.globalAlpha = 0.35;
+            prev.layers.forEach(l => { if (l.visible) this.ctx.drawImage(l.canvas, 0, 0); });
+            this.ctx.restore();
+        }
+
+        const frame = this.frames[this.currentFrameIndex];
+        frame.layers.forEach(l => { if (l.visible) this.ctx.drawImage(l.canvas, 0, 0); });
+
+        if (this.floatingSelection) {
+            this.ctx.drawImage(this.floatingSelection.canvas, this.floatingSelection.x, this.floatingSelection.y);
+        }
+
+        this.updateFramePreview(this.currentFrameIndex);
+    }
+
+    // ==========================================
+    // Viewport & Zoom Operations
+    // ==========================================
+
+    setupAspectObserver() {
+        const ro = new ResizeObserver(() => this.keepCanvasInView());
+        ro.observe(this.viewport);
+    }
+
+    keepCanvasInView() {
+        const vw = this.viewport.clientWidth, vh = this.viewport.clientHeight;
+        if (vw <= 0 || vh <= 0) return;
+        const scaledW = this.width * this.scale, scaledH = this.height * this.scale;
+
+        if (this.panX > vw - 10) this.panX = vw - 10;
+        if (this.panX + scaledW < 10) this.panX = 10 - scaledW;
+        if (this.panY > vh - 10) this.panY = vh - 10;
+        if (this.panY + scaledH < 10) this.panY = 10 - scaledH;
+
+        this.applyTransform();
+    }
+
+    resetView() {
+        const vw = this.viewport.clientWidth || 100;
+        const vh = this.viewport.clientHeight || 100;
+        const fitScale = Math.min(
+            Math.floor((vw * 0.82) / this.width),
+            Math.floor((vh * 0.82) / this.height),
+            32
+        );
+        this.scale = Math.max(fitScale, 1.0);
+        this.panX = Math.round((vw - this.width * this.scale) / 2);
+        this.panY = Math.round((vh - this.height * this.scale) / 2);
+        this.updateCanvasDisplay();
+    }
+
+    setZoom(dir) {
+        const factor = dir > 0 ? 1.25 : 0.8;
+        this.zoomAt(this.viewport.clientWidth / 2, this.viewport.clientHeight / 2, factor);
+    }
+
+    zoomAt(clientX, clientY, factor) {
+        const rect = this.viewport.getBoundingClientRect();
+        const mouseX = clientX - rect.left;
+        const mouseY = clientY - rect.top;
+
+        const newScale = Math.min(Math.max(this.scale * factor, 0.5), 100);
+        const scaleChange = newScale / this.scale;
+
+        this.panX = mouseX - (mouseX - this.panX) * scaleChange;
+        this.panY = mouseY - (mouseY - this.panY) * scaleChange;
+        this.scale = newScale;
+
+        this.applyTransform();
+        this.updateZoomLabel();
+    }
+
+    updateCanvasDisplay() {
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        this.selectionOverlay.width = this.width;
+        this.selectionOverlay.height = this.height;
+
+        this.artboard.style.width = this.width + 'px';
+        this.artboard.style.height = this.height + 'px';
+
+        this.applyTransform();
+        this.renderCanvas();
+        this.renderSelectionOverlay();
+        this.updateZoomLabel();
+    }
+
+    applyTransform() {
+        this.transformLayer.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
+    }
+
+    updateZoomLabel() {
+        document.getElementById('zoomLabel').innerText = Math.round(this.scale * 100) + '%';
+    }
+
+    toggleFullscreenMode() {
+        document.body.classList.toggle('mode-fullscreen');
+        setTimeout(() => this.resetView(), 150);
+    }
+
+    togglePenEraser() {
+        if (this.tool === 'eraser') {
+            this.setTool(this.lastDrawingTool || 'pen');
+        } else {
+            this.lastDrawingTool = this.tool;
+            this.setTool('eraser');
+        }
+    }
+
+    // ==========================================
+    // UI, Layers & Timeline Controls
+    // ==========================================
+
+    updateUI() {
+        const lList = document.getElementById('layerList');
+        lList.innerHTML = '';
+        const layers = this.frames[this.currentFrameIndex].layers;
+        for (let i = layers.length - 1; i >= 0; i--) {
+            const l = layers[i];
+            const item = document.createElement('div');
+            item.className = `layer-item ${i === this.currentLayerIndex ? 'active' : ''}`;
+            item.onclick = () => { this.currentLayerIndex = i; this.updateUI(); };
+
+            const eyeSvg = l.visible
+                ? `<svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`
+                : `<svg class="icon icon-sm" viewBox="0 0 24 24" style="opacity:0.35;"><line x1="2" y1="2" x2="22" y2="22"/></svg>`;
+
+            item.innerHTML = `
+                <span style="display:inline-flex; align-items:center; margin-right:3px;" onclick="event.stopPropagation(); app.toggleVis(${i})">${eyeSvg}</span>
+                <span class="name">${l.name}</span>
+                <span style="display:inline-flex; align-items:center; opacity:0.6; padding:2px;" onclick="event.stopPropagation(); app.renameLayer(${i})" title="名前変更">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </span>
+            `;
+            lList.appendChild(item);
+        }
+
+        const fList = document.getElementById('frameList');
+        fList.innerHTML = '';
+        this.frames.forEach((f, idx) => {
+            const div = document.createElement('div');
+            div.className = `frame-preview ${idx === this.currentFrameIndex ? 'active' : ''}`;
+            div.onclick = () => {
+                this.currentFrameIndex = idx;
+                if (this.currentLayerIndex >= this.frames[idx].layers.length) this.currentLayerIndex = 0;
+                this.updateUI();
+            };
+            const cvs = document.createElement('canvas');
+            cvs.width = this.width; cvs.height = this.height;
+            const cx = cvs.getContext('2d');
+            f.layers.forEach(l => { if (l.visible) cx.drawImage(l.canvas, 0, 0); });
+            div.appendChild(cvs);
+            div.innerHTML += `<div class="frame-num">${idx + 1}</div>`;
+            fList.appendChild(div);
+        });
+
+        this.renderCanvas();
+    }
+
+    renameLayer(i) {
+        const layer = this.frames[this.currentFrameIndex].layers[i];
+        const newName = prompt("新しいレイヤー名:", layer.name);
+        if (newName !== null && newName.trim() !== '') {
+            layer.name = newName.trim();
+            this.updateUI();
+            this.saveHistory();
+        }
+    }
+
+    setTool(t) {
+        if (t !== 'eraser' && t !== 'pan' && t !== 'picker') this.lastDrawingTool = t;
+        this.tool = t;
+        document.querySelectorAll('.tool-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.tool === t);
+        });
+        if (t !== 'select') this.deselect();
+    }
+
+    setColorFromUI() {
+        const hex = document.getElementById('colorPicker').value;
+        const alpha = document.getElementById('alphaSlider').value;
+        const r = parseInt(hex.substring(1, 3), 16);
+        const g = parseInt(hex.substring(3, 5), 16);
+        const b = parseInt(hex.substring(5, 7), 16);
+        this.color = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        this.updateColorPreview();
+        this.refreshPalette();
+    }
+
+    setColor(rgbaStr) {
+        this.color = rgbaStr;
+        const match = rgbaStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d\.]+))?\)/);
+        if (match) {
+            const r = parseInt(match[1]), g = parseInt(match[2]), b = parseInt(match[3]);
+            const a = match[4] !== undefined ? parseFloat(match[4]) : 1;
+            const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+            document.getElementById('colorPicker').value = hex;
+            document.getElementById('alphaSlider').value = a;
+            this.updateColorPreview();
+        }
+    }
+
+    updateColorPreview() {
+        document.getElementById('colorPreviewBox').style.backgroundColor = this.color;
+    }
+
+    refreshPalette() {
+        const p = document.getElementById('paletteContainer');
+        p.innerHTML = '';
+        this.palette.forEach(c => {
+            const d = document.createElement('div');
+            d.className = `palette-swatch ${c === this.color ? 'selected' : ''}`;
+            d.style.setProperty('--swatch-color', c);
+            d.onclick = () => { this.setColor(c); this.refreshPalette(); };
+            p.appendChild(d);
+        });
+        this.updateColorPreview();
+    }
+
+    addCurrentColor() {
+        if (!this.palette.includes(this.color)) {
+            this.palette.push(this.color);
+            this.refreshPalette();
+        }
+    }
+
+    // 復元: 画像からパレット抽出 (最大256色)
+    loadPaletteFromImage(input) {
+        if (!input.files[0]) return;
+        const r = new FileReader();
+        r.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const c = document.createElement('canvas');
+                c.width = img.width; c.height = img.height;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const d = ctx.getImageData(0, 0, c.width, c.height).data;
+                const counts = {};
+                for (let i = 0; i < d.length; i += 4) {
+                    if (d[i + 3] === 0) continue;
+                    const a = parseFloat((d[i + 3] / 255).toFixed(2));
+                    const rgba = `rgba(${d[i]},${d[i + 1]},${d[i + 2]},${a})`;
+                    counts[rgba] = (counts[rgba] || 0) + 1;
+                }
+                const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+                if (sorted.length) {
+                    this.palette = sorted.slice(0, 256); // 256色まで保持
+                    this.refreshPalette();
+                }
+            };
+            img.src = e.target.result;
+        };
+        r.readAsDataURL(input.files[0]);
+        input.value = '';
+    }
+
+    toggleSidebar(side) {
+        const left = document.getElementById('sidebarLeft');
+        const right = document.getElementById('sidebarRight');
+        const backdrop = document.getElementById('drawerBackdrop');
+        if (side === 'left') { right.classList.remove('open'); left.classList.toggle('open'); }
+        else { left.classList.remove('open'); right.classList.toggle('open'); }
+        backdrop.classList.toggle('active', left.classList.contains('open') || right.classList.contains('open'));
+    }
+
+    closeDrawers() {
+        document.getElementById('sidebarLeft').classList.remove('open');
+        document.getElementById('sidebarRight').classList.remove('open');
+        document.getElementById('drawerBackdrop').classList.remove('active');
+    }
+
+    toggleTimeline() {
+        const tl = document.getElementById('timelineArea');
+        tl.classList.toggle('collapsed');
+    }
+
+    // ==========================================
+    // History, Frames & Layers
+    // ==========================================
+
+    saveHistory() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.historyIndex + 1);
+        }
+        const state = {
+            width: this.width,
+            height: this.height,
+            currentFrame: this.currentFrameIndex,
+            frames: this.frames.map(f => ({
+                layers: f.layers.map(l => ({ name: l.name, visible: l.visible, data: l.canvas.toDataURL() }))
+            }))
+        };
+        this.history.push(state);
+        if (this.history.length > 25) this.history.shift();
+        this.historyIndex = this.history.length - 1;
+
+        clearTimeout(this.autoSaveTimer);
+        this.autoSaveTimer = setTimeout(() => this.autoSaveCurrentProject(), 800);
+    }
+
+    undo() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.loadHistory(this.history[this.historyIndex]);
+        }
+    }
+
+    redo() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.loadHistory(this.history[this.historyIndex]);
+        }
+    }
+
+    loadHistory(st, shouldSave = true) {
+        this.width = st.width;
+        this.height = st.height;
+        this.currentFrameIndex = Math.min(st.currentFrame || 0, st.frames.length - 1);
+
+        this.frames = st.frames.map(sf => {
+            const layers = sf.layers.map(sl => {
+                const l = this.createLayer(sl.name);
+                l.visible = sl.visible;
+                const img = new Image();
+                img.onload = () => {
+                    l.ctx.clearRect(0, 0, this.width, this.height);
+                    l.ctx.drawImage(img, 0, 0);
+                    this.renderCanvas();
+                };
+                img.src = sl.data;
+                return l;
+            });
+            return { layers };
+        });
+
+        this.updateCanvasDisplay();
+        this.updateUI();
+        if (shouldSave) this.autoSaveCurrentProject();
+    }
+
+    createLayer(name) {
+        const c = document.createElement('canvas');
+        c.width = this.width; c.height = this.height;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.imageSmoothingEnabled = false;
+        return { name, visible: true, canvas: c, ctx };
+    }
+
+    addFrame(isFirst = false) {
+        const layers = [this.createLayer('Layer 1')];
+        this.frames.splice(this.currentFrameIndex + 1, 0, { layers });
+        if (!isFirst) this.currentFrameIndex++;
+        this.currentLayerIndex = 0;
+        this.updateUI();
+        if (!isFirst) this.saveHistory();
+    }
+
+    duplicateFrame() {
+        const src = this.frames[this.currentFrameIndex];
+        const newLayers = src.layers.map(l => {
+            const nl = this.createLayer(l.name);
+            nl.ctx.drawImage(l.canvas, 0, 0);
+            nl.visible = l.visible;
+            return nl;
+        });
+        this.frames.splice(this.currentFrameIndex + 1, 0, { layers: newLayers });
+        this.currentFrameIndex++;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    deleteFrame() {
+        if (this.frames.length <= 1) return;
+        this.frames.splice(this.currentFrameIndex, 1);
+        if (this.currentFrameIndex >= this.frames.length) this.currentFrameIndex = this.frames.length - 1;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    addLayer() {
+        const frame = this.frames[this.currentFrameIndex];
+        frame.layers.splice(this.currentLayerIndex + 1, 0, this.createLayer(`Layer ${frame.layers.length + 1}`));
+        this.currentLayerIndex++;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    deleteLayer() {
+        const frame = this.frames[this.currentFrameIndex];
+        if (frame.layers.length <= 1) return;
+        frame.layers.splice(this.currentLayerIndex, 1);
+        if (this.currentLayerIndex >= frame.layers.length) this.currentLayerIndex = frame.layers.length - 1;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    moveLayerUp() {
+        const layers = this.frames[this.currentFrameIndex].layers;
+        if (this.currentLayerIndex >= layers.length - 1) return;
+        const temp = layers[this.currentLayerIndex];
+        layers[this.currentLayerIndex] = layers[this.currentLayerIndex + 1];
+        layers[this.currentLayerIndex + 1] = temp;
+        this.currentLayerIndex++;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    moveLayerDown() {
+        if (this.currentLayerIndex <= 0) return;
+        const layers = this.frames[this.currentFrameIndex].layers;
+        const temp = layers[this.currentLayerIndex];
+        layers[this.currentLayerIndex] = layers[this.currentLayerIndex - 1];
+        layers[this.currentLayerIndex - 1] = temp;
+        this.currentLayerIndex--;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    mergeDown() {
+        if (this.currentLayerIndex === 0) return;
+        const frame = this.frames[this.currentFrameIndex];
+        const top = frame.layers[this.currentLayerIndex];
+        const bot = frame.layers[this.currentLayerIndex - 1];
+        bot.ctx.drawImage(top.canvas, 0, 0);
+        frame.layers.splice(this.currentLayerIndex, 1);
+        this.currentLayerIndex--;
+        this.updateUI();
+        this.saveHistory();
+    }
+
+    toggleVis(i) {
+        const l = this.frames[this.currentFrameIndex].layers[i];
+        l.visible = !l.visible;
+        this.renderCanvas();
+        this.updateUI();
+    }
+
+    updateFramePreview(idx) {
+        const fList = document.getElementById('frameList');
+        if (!fList || !fList.children[idx]) return;
+        const cvs = fList.children[idx].querySelector('canvas');
+        if (!cvs) return;
+        const cx = cvs.getContext('2d');
+        cx.clearRect(0, 0, this.width, this.height);
+        this.frames[idx].layers.forEach(l => { if (l.visible) cx.drawImage(l.canvas, 0, 0); });
+    }
+
+    togglePlay() {
+        const icon = document.getElementById('playIcon');
+        const lbl = document.getElementById('playLabel');
+        if (this.isPlaying) {
+            clearInterval(this.playTimer);
+            this.isPlaying = false;
+            icon.innerHTML = `<polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/>`;
+            if (lbl) lbl.innerText = "再生";
+        } else {
+            this.isPlaying = true;
+            icon.innerHTML = `<rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/>`;
+            if (lbl) lbl.innerText = "停止";
+            this.updateFps();
+        }
+    }
+
+    updateFps() {
+        if (!this.isPlaying) return;
+        clearInterval(this.playTimer);
+        const fps = Math.max(1, parseInt(document.getElementById('fps').value) || 12);
+        this.playTimer = setInterval(() => {
+            this.currentFrameIndex = (this.currentFrameIndex + 1) % this.frames.length;
+            this.updateUI();
+        }, 1000 / fps);
+    }
+
+    // ==========================================
+    // File Imports & Security-Policy Handlers
+    // ==========================================
+
+    handleFileImport(input) {
+        if (!input.files.length) return;
+
+        for (const f of input.files) {
+            if (f.name.endsWith('.json')) {
+                const r = new FileReader();
+                r.onload = e => this.loadHistory(JSON.parse(e.target.result));
+                r.readAsText(f);
+                input.value = '';
+                return;
+            }
+        }
+
+        let imgFile = null;
+        for (const f of input.files) {
+            if (f.type.startsWith('image/')) { imgFile = f; break; }
+        }
+
+        if (imgFile) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img = new Image();
+                img.onload = () => {
+                    this.pendingImportImg = img;
+                    if (confirm("これはスプライトシート（分割画像）ですか？")) {
+                        if (confirm("XML設定ファイル（TextureAtlas）はありますか？\n[OK] = XMLを選択して自動切り出し\n[キャンセル] = コマ数を手動入力")) {
+                            document.getElementById('overlayBtn').style.display = 'flex';
+                        } else {
+                            const cols = parseInt(prompt("横のコマ数 (Cols):", "4")) || 1;
+                            const rows = parseInt(prompt("縦のコマ数 (Rows):", "1")) || 1;
+                            this.importSpriteSheetGrid(img, cols, rows);
+                        }
+                    } else {
+                        this.importSingleImage(img);
+                    }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(imgFile);
+        }
+        input.value = '';
+    }
+
+    triggerXmlSelect() {
+        document.getElementById('overlayBtn').style.display = 'none';
+        document.getElementById('xmlLoader').click();
+    }
+
+    handleXmlImport(input) {
+        if (!input.files[0] || !this.pendingImportImg) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            this.importSpriteSheetXML(this.pendingImportImg, e.target.result);
+            this.pendingImportImg = null;
+            input.value = '';
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    importSingleImage(img) {
+        this.width = img.width; this.height = img.height;
+        this.frames = []; this.currentFrameIndex = 0;
+        const l = this.createLayer('Imported');
+        l.ctx.drawImage(img, 0, 0);
+        this.frames.push({ layers: [l] });
+        this.updateCanvasDisplay();
+        this.resetView();
+        this.saveHistory();
+    }
+
+    importSpriteSheetGrid(img, cols, rows) {
+        const fw = Math.floor(img.width / cols);
+        const fh = Math.floor(img.height / rows);
+        this.width = fw; this.height = fh;
+        this.frames = [];
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const l = this.createLayer(`F${this.frames.length + 1}`);
+                l.ctx.drawImage(img, x * fw, y * fh, fw, fh, 0, 0, fw, fh);
+                this.frames.push({ layers: [l] });
+            }
+        }
+        this.currentFrameIndex = 0;
+        this.updateCanvasDisplay();
+        this.resetView();
+        this.saveHistory();
+    }
+
+    importSpriteSheetXML(img, xmlStr) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlStr, "text/xml");
+        const sub = xmlDoc.getElementsByTagName("SubTexture");
+        if (sub.length === 0) { alert("有効なXMLデータではありません"); return; }
+
+        const f1 = sub[0];
+        this.width = parseInt(f1.getAttribute("width"));
+        this.height = parseInt(f1.getAttribute("height"));
+        this.frames = [];
+
+        for (let i = 0; i < sub.length; i++) {
+            const st = sub[i];
+            const sx = parseInt(st.getAttribute("x")), sy = parseInt(st.getAttribute("y"));
+            const sw = parseInt(st.getAttribute("width")), sh = parseInt(st.getAttribute("height"));
+            const l = this.createLayer(st.getAttribute("name") || `F${i + 1}`);
+            l.ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+            this.frames.push({ layers: [l] });
+        }
+        this.currentFrameIndex = 0;
+        this.updateCanvasDisplay();
+        this.resetView();
+        this.saveHistory();
+    }
+
+    // 復元: ファイル名をそのままレイヤー名に完全適用
+    handleLayerImport(input) {
+        if (!input.files.length) return;
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const newLayer = this.createLayer(file.name);
+                newLayer.ctx.drawImage(img, 0, 0, this.width, this.height);
+                this.frames[this.currentFrameIndex].layers.splice(this.currentLayerIndex + 1, 0, newLayer);
+                this.currentLayerIndex++;
+                this.updateUI();
+                this.saveHistory();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        input.value = '';
+    }
+
+    async exportProject() {
+        const fmt = document.getElementById('exportFormat').value;
+        const fps = parseInt(document.getElementById('fps').value) || 12;
+
+        const renders = this.frames.map(f => {
+            const c = document.createElement('canvas');
+            c.width = this.width; c.height = this.height;
+            const x = c.getContext('2d');
+            f.layers.forEach(l => { if (l.visible) x.drawImage(l.canvas, 0, 0); });
+            return c;
+        });
+
+        const cnum = 0;
+
+        if (fmt === 'png_single') {
+            const ctx = renders[this.currentFrameIndex].getContext('2d');
+            const buffer = ctx.getImageData(0, 0, this.width, this.height).data.buffer;
+            saveAs(new Blob([UPNG.encode([buffer], this.width, this.height, cnum)], { type: "image/png" }), `${this.currentProjectName}.png`);
+        } 
+        // 復元: 連番画像 0始まり (frame_0.png, frame_1.png)
+        else if (fmt === 'zip_seq') {
+            const z = new JSZip();
+            renders.forEach((c, i) => z.file(`frame_${i}.png`, c.toDataURL().split(',')[1], { base64: true }));
+            z.generateAsync({ type: 'blob' }).then(b => saveAs(b, 'frames.zip'));
+        } else if (fmt === 'spritesheet') {
+            const cols = parseInt(document.getElementById('sheetCols').value) || 1;
+            const rows = parseInt(document.getElementById('sheetRows').value) || 1;
+
+            if (cols * rows < renders.length) {
+                alert(`マスの数が足りません。\n総コマ数: ${renders.length}コマ\n指定マス数: ${cols * rows}マス (${cols}列 × ${rows}行)`);
+                return;
+            }
+
+            const sheet = document.createElement('canvas');
+            sheet.width = cols * this.width; sheet.height = rows * this.height;
+            const sx = sheet.getContext('2d');
+
+            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TextureAtlas imagePath="sheet.png">\n';
+            renders.forEach((c, i) => {
+                const x = (i % cols) * this.width, y = Math.floor(i / cols) * this.height;
+                sx.drawImage(c, x, y);
+                xml += `\t<SubTexture name="frame_${i}" x="${x}" y="${y}" width="${this.width}" height="${this.height}"/>\n`;
+            });
+            xml += '</TextureAtlas>';
+
+            const sheetBuf = sx.getImageData(0, 0, sheet.width, sheet.height).data.buffer;
+            saveAs(new Blob([UPNG.encode([sheetBuf], sheet.width, sheet.height, cnum)], { type: 'image/png' }), 'sheet.png');
+            saveAs(new Blob([xml], { type: 'text/xml' }), 'sheet.xml');
+        } else if (fmt === 'apng') {
+            const buffs = renders.map(c => c.getContext('2d').getImageData(0, 0, this.width, this.height).data.buffer);
+            const delays = new Array(buffs.length).fill(1000 / fps);
+            saveAs(new Blob([UPNG.encode(buffs, this.width, this.height, cnum, delays)], { type: "image/png" }), "anim.png");
+        } else if (fmt === 'gif') {
+            const wBlob = new Blob([`importScripts('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');`], { type: 'text/javascript' });
+            const gif = new GIF({
+                workers: 2,
+                quality: 1,
+                width: this.width,
+                height: this.height,
+                workerScript: URL.createObjectURL(wBlob),
+                transparent: 0x000000
+            });
+            renders.forEach(c => gif.addFrame(c, { delay: 1000 / fps }));
+            gif.on('finished', b => saveAs(b, 'anim.gif'));
+            gif.render();
+        }
+        document.getElementById('exportModal').style.display = 'none';
+    }
+}
+
+// Initialize Application
+const app = new PixelApp();
+</script>
+</body>
+</html>
