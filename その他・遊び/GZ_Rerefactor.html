@@ -1,0 +1,2656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Deflate Multi-Layer Generator</title>
+    <style>
+        :root {
+            --bg-base: #EAF5FF;
+            --glass-bg: rgba(234, 245, 255, 0.45);
+            --glass-border: rgba(100, 116, 139, 0.15);
+            --text-main: #1E293B;
+            --text-sub: #64748B;
+            --primary: #007ACC;
+            --primary-hover: #00AEFF;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-base) 0%, #F1F7FF 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* アプリ全体のウィンドウ化設計 */
+        .app-window {
+            display: flex;
+            flex: 1;
+            height: 100vh;
+            position: relative;
+        }
+
+        @media (max-width: 900px) {
+            .app-window {
+                flex-direction: column;
+                height: auto;
+            }
+        }
+
+        /* サイドバー（コントロールエリア）のドッキング設計 */
+        aside {
+            width: 380px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px) saturate(135%);
+            border-right: 1px solid var(--glass-border);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 900px) {
+            aside {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--glass-border);
+            }
+        }
+
+        main {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            font-size: 0.82rem;
+            color: var(--text-sub);
+            line-height: 1.4;
+        }
+
+        /* コントロール群 */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-sub);
+        }
+
+        /* 柔軟なサイズ入力フィールドのスタイリング（数式入力用） */
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-row input[type="text"] {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid var(--glass-border);
+            border-radius: 4px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            font-family: var(--font-mono);
+            color: var(--text-main);
+            outline: none;
+        }
+
+        .input-row select {
+            width: 110px;
+        }
+
+        .input-help {
+            font-size: 0.7rem;
+            color: var(--text-sub);
+            line-height: 1.3;
+        }
+
+        .slider-sync-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slider-sync-row input[type="range"] {
+            flex: 1;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .slider-sync-row input[type="number"] {
+            width: 70px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid var(--glass-border);
+            border-radius: 4px;
+            padding: 6px;
+            font-size: 0.85rem;
+            font-family: var(--font-mono);
+            outline: none;
+        }
+
+        input[type="text"], select, input[type="number"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid var(--glass-border);
+            border-radius: 4px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus, select:focus, input[type="number"]:focus {
+            border-color: var(--primary-hover);
+        }
+
+        
+        .optimal-badge {
+            font-size: 0.7rem;
+            background: rgba(16, 185, 129, 0.12);
+            color: #10B981;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .optimal-badge:hover {
+            background: rgba(16, 185, 129, 0.25);
+        }
+
+        /* 予測情報バッジ */
+
+        .prediction-badge {
+            background: rgba(0, 122, 204, 0.05);
+            border: 1px dashed var(--glass-border);
+            border-radius: 4px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .prediction-title {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--text-sub);
+        }
+
+        .prediction-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary);
+            font-family: var(--font-mono);
+        }
+
+        /* 進捗プログレスバー */
+        .progress-box {
+            background: rgba(100, 116, 139, 0.06);
+            border: 1px solid var(--glass-border);
+            border-radius: 4px;
+            padding: 14px;
+            display: none; /* デフォルト非表示 */
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fg {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%);
+            transition: width 0.1s ease;
+        }
+
+        .progress-text {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* ボタン */
+        .btn-generate {
+            display: block;
+            width: 100%;
+            background: linear-gradient(135deg, var(--primary) 0%, #005F9E 100%);
+            color: #FFFFFF;
+            border: none;
+            border-radius: 3px;
+            padding: 14px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(0, 122, 204, 0.15);
+            text-align: center;
+            text-decoration: none;
+            margin-top: auto;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 122, 204, 0.25);
+            background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
+        }
+
+        .btn-generate:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 6px rgba(0, 122, 204, 0.1);
+        }
+
+        /* テーブル構造設計：文脈での整列化 */
+        .table-container {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px) saturate(135%);
+            border: 1px solid var(--glass-border);
+            border-radius: 3px;
+            overflow-x: auto; /* ★スマホでの横スクロールを許可 */
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch; /* iOSでの慣性スクロールを有効化 */
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.01);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 14px 18px;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: rgba(100, 116, 139, 0.05);
+            color: var(--text-sub);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        tr {
+            border-bottom: 1px solid rgba(100, 116, 139, 0.08);
+            transition: background-color 0.2s;
+        }
+
+        tr:hover {
+            background-color: rgba(100, 116, 139, 0.02);
+        }
+
+        tr:last-child {
+            border-bottom: none;
+        }
+
+        .mono {
+            font-family: var(--font-mono);
+            letter-spacing: -0.02em;
+        }
+
+        .ratio-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: rgba(0, 122, 204, 0.1);
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        /* ロギングコンソール */
+        .console-container {
+            background: rgba(30, 41, 59, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 3px;
+            padding: 16px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            height: 150px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .console-line {
+            display: flex;
+            gap: 8px;
+        }
+
+        .console-tag {
+            color: var(--primary);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Web Worker 専用のバックグラウンド計算スクリプト（DOM操作を完全に排除した純粋計算部） -->
+    <script type="text/plain" id="predictionWorkerCode">
+        const assert = (condition, msg = "Assertion failed") => {
+            if (!condition) throw new Error(msg);
+        };
+        class PriorityQueue {
+            constructor() {
+                this.heap = [];
+                this.seq = 0;
+            }
+            push(key, priority) {
+                this.heap.push({ key, priority, seq: this.seq++ });
+                this._up(this.heap.length - 1);
+            }
+            length() { return this.heap.length; }
+            delete_min() {
+                const min = this.heap[0];
+                const end = this.heap.pop();
+                if (this.heap.length > 0) {
+                    this.heap[0] = end;
+                    this._down(0);
+                }
+                return [min.key, min.priority];
+            }
+            min_key() { return this.heap[0].key; }
+            _less(a, b) {
+                if (a.priority !== b.priority) return a.priority < b.priority;
+                return a.seq < b.seq;
+            }
+            _up(i) {
+                const node = this.heap[i];
+                while (i > 0) {
+                    const p = (i - 1) >> 1;
+                    if (!this._less(node, this.heap[p])) break;
+                    this.heap[i] = this.heap[p];
+                    i = p;
+                }
+                this.heap[i] = node;
+            }
+            _down(i) {
+                const len = this.heap.length;
+                const node = this.heap[i];
+                while ((i << 1) + 1 < len) {
+                    let l = (i << 1) + 1, r = l + 1, c = l;
+                    if (r < len && this._less(this.heap[r], this.heap[l])) c = r;
+                    if (!this._less(this.heap[c], node)) break;
+                    this.heap[i] = this.heap[c];
+                    i = c;
+                }
+                this.heap[i] = node;
+            }
+        }
+
+        function b_str(n, size) { return n.toString(2).padStart(size, '0'); }
+
+        function pack_b(bit_string) {
+            const len = bit_string.length;
+            const byte_list = new Uint8Array(Math.ceil(len / 8));
+            let byte_idx = 0;
+            for (let i = 0; i < len; i += 8) {
+                let val = 0;
+                const limit = Math.min(i + 8, len);
+                for (let j = i; j < limit; j++) {
+                    if (bit_string.charCodeAt(j) === 49) {
+                        val |= (1 << (j - i));
+                    }
+                } 
+                byte_list[byte_idx++] = val;
+            }
+            return byte_list;
+        }
+
+        const WORKER_UNPACK_TABLE = Array.from({length: 256}, (_, b) => {
+            let s = '';
+            for (let j = 0; j < 8; j++) s += ((b >> j) & 1) ? '1' : '0';
+            return s;
+        });
+        function unpack_b(data_bytes) {
+            const len = data_bytes.length;
+            const parts = new Array(len);
+            for (let i = 0; i < len; i++) {
+                parts[i] = WORKER_UNPACK_TABLE[data_bytes[i]];
+            }
+            return parts.join('');
+        }
+
+        function pack32LE(n) {
+            const buf = new ArrayBuffer(4);
+            const view = new DataView(buf);
+            view.setUint32(0, Number(n), true);
+            return new Uint8Array(buf);
+        }
+
+        function pack16LE(n) {
+            const buf = new ArrayBuffer(2);
+            const view = new DataView(buf);
+            view.setUint16(0, Number(n), true);
+            return new Uint8Array(buf);
+        }
+
+        class CRC32 {
+            constructor() { this.crc = 0; this.size = 0n; }
+            normalize(data) {
+                let ret = 0;
+                const binaryStr = data.toString(2);
+                for (let i = 0; i < binaryStr.length; i++) {
+                    const bit = binaryStr[i] === '1' ? 1 : 0;
+                    ret = (((ret << 1) ^ (0x04C11DB7 * ((ret >>> 31) & 1))) ^ bit) >>> 0;
+                } 
+                return ret;
+            }
+            normalize_bits(bits) {
+                let ret = 0;
+                for (let i = 0; i < bits.length; i++) {
+                    const bit = bits.charCodeAt(i) === 49 ? 1 : 0;
+                    ret = (((ret << 1) ^ (0x04C11DB7 * ((ret >>> 31) & 1))) ^ bit) >>> 0;
+                } 
+                return ret;
+            }
+            mul(a, b) {
+                let res = 0;
+                a = a >>> 0; b = b >>> 0;
+                for (let i = 0; i < 32; i++) {
+                    if ((b >>> i) & 1) res = (res ^ a) >>> 0;
+                    if (a & 0x80000000) {
+                        a = ((a << 1) ^ 0x04C11DB7) >>> 0;
+                    } else {
+                        a = (a << 1) >>> 0;
+                    }
+                } 
+                return res;
+            }
+            add(a, b) { return (a ^ b) >>> 0; }
+            pow(a, b) {
+                let ret = 1; a = a >>> 0; b = BigInt(b);
+                while (b > 0n) {
+                    if (b & 1n) ret = this.mul(ret, a);
+                    a = this.mul(a, a);
+                    b >>= 1n;
+                }
+                return ret;
+            }
+            concat(a, b, b_size) { return this.add(this.mul(a, this.pow(2, b_size)), b); }
+            concat_fast(a, b, exp_b_size) { return this.add(this.mul(a, exp_b_size), b); }
+            repeat(a, size, times) {
+                let ret = 0;
+                let exp_size = this.pow(2, BigInt(size));
+                let exp_ret_size = 1;
+                a = a >>> 0; times = BigInt(times);
+                while (times > 0n) {
+                    if (times & 1n) {
+                        ret = this.concat_fast(a, ret, exp_ret_size);
+                        exp_ret_size = this.mul(exp_ret_size, exp_size);
+                    }
+                    a = this.concat_fast(a, a, exp_size);
+                    exp_size = this.mul(exp_size, exp_size);
+                    times >>= 1n;
+                }
+                return ret;
+            }
+            to_crc32() {                const remainder = (-this.size) % 8n;
+                const positive_remainder = remainder < 0n ? remainder + 8n : remainder;
+                const size = positive_remainder === 0n ? this.size : (this.size / 8n * 8n + 8n);
+                const zero_bits = '0'.repeat(Number(positive_remainder));
+                const zero_norm = this.normalize_bits(zero_bits);
+                const concatted = this.concat(this.crc, zero_norm, positive_remainder);
+                const ret = this.add(this.mul(concatted, this.pow(2, 32n)), this.mul(0xFFFFFFFF, this.pow(2, size)));
+                const val = this.normalize(ret) ^ 0xFFFFFFFF;
+                const binary_str = (val >>> 0).toString(2).padStart(32, '0');
+                const reversed_binary_str = binary_str.split('').reverse().join('');
+                return parseInt(reversed_binary_str, 2);
+            }
+            push(bits) {
+                this.crc = this.concat(this.crc, this.normalize_bits(bits), bits.length);
+                this.size += BigInt(bits.length);
+            }
+            push_repeat(bits, times) {
+                this.crc = this.concat(this.crc, this.repeat(this.normalize_bits(bits), bits.length, times), BigInt(bits.length) * BigInt(times));
+                this.size += BigInt(bits.length) * BigInt(times);
+            }
+        }
+
+        function gcd(a, b) {
+            a = BigInt(a); b = BigInt(b);
+            while (b !== 0n) { let temp = b; b = a % b; a = temp; }
+            return a;
+        }
+
+        class BitStream {
+            constructor(header_bytes = new Uint8Array()) { 
+                this.tokens = []; this.crc = new CRC32(); this.register = '';
+                if (header_bytes.length > 0) this.push(unpack_b(header_bytes));
+            }
+            push(bits) { this.crc.push(bits); this.push_once(bits); }
+            push_once(bits) {
+                this.register += bits;
+                if (this.register.length >= 8) {
+                    const bytes_count = Math.floor(this.register.length / 8);
+                    const data = pack_b(this.register.slice(0, 8 * bytes_count));
+                    if (this.tokens.length > 0 && this.tokens[this.tokens.length - 1].times === 1n) {
+                        const prev_data = this.tokens[this.tokens.length - 1].data;
+                        const new_data = new Uint8Array(prev_data.length + data.length);
+                        new_data.set(prev_data); new_data.set(data, prev_data.length);
+                        this.tokens[this.tokens.length - 1].data = new_data;
+                    } else {
+                        this.tokens.push({ data: data, times: 1n });
+                    }
+                    this.register = this.register.slice(8 * bytes_count);
+                }
+            }
+            push_repeat(bits, times) {
+                times = BigInt(times); if (times === 0n) return;
+                this.crc.push_repeat(bits, times);
+                let lead = '';
+                while (this.register.length !== 0) {
+                    const push_bits_len = Math.min(8 - this.register.length, bits.length);
+                    this.push_once(bits.slice(0, push_bits_len));
+                    lead = bits.slice(push_bits_len); times--;
+                    if (times === 0n) { this.push_once(lead); return; }
+                }
+                const bit_len = BigInt(bits.length);
+                const lcm_val = (bit_len * 8n) / gcd(bit_len, 8n); 
+                const cycle_size = lcm_val / bit_len;
+                const cycle_times = times / cycle_size;
+                const cycle_remainder = times % cycle_size;
+                if (cycle_times > 0n) {
+                    const cycle_data_bits = (lead + bits.repeat(Number(cycle_size))).slice(0, Number(bit_len * cycle_size));
+                    this.tokens.push({ data: pack_b(cycle_data_bits), times: cycle_times });
+                }
+                this.push_once(lead + bits.repeat(Number(cycle_remainder)));
+            }
+            align() { if (this.register.length % 8 !== 0) this.push('0'.repeat(8 - (this.register.length % 8))); }
+            to_bytes() {
+                const parts = [];
+                for (const token of this.tokens) {
+                    const t = Number(token.times); const single = token.data;
+                    const combined = new Uint8Array(single.length * t);
+                    for (let i = 0; i < t; i++) combined.set(single, i * single.length); 
+                    parts.push(combined);
+                }
+                if (this.register.length > 0) parts.push(pack_b(this.register.padEnd(8, '0')));
+                let total_len = parts.reduce((sum, p) => sum + p.length, 0); 
+                const res = new Uint8Array(total_len);
+                let offset = 0;
+                for (const p of parts) { res.set(p, offset); offset += p.length; }
+                return res;
+            }
+            get_crc() { return this.crc.to_crc32(); }
+        }
+
+        function lzss_compress(data_bytes) {
+            const h = {}; const compressed = []; let compressed_size = 0;
+            for (let i = 0; i < data_bytes.length - 2; i++) {
+                const con = (data_bytes[i] << 16) | (data_bytes[i+1] << 8) | data_bytes[i+2];
+                if (i < compressed_size) { h[con] = i; continue; }
+                if (con in h && (i - h[con]) <= 32768 && h[con] < i - 3) {
+                    const copy_from = h[con]; let length = 3;
+                    while (copy_from + length < data_bytes.length && i + length < data_bytes.length &&
+                           data_bytes[copy_from + length] === data_bytes[i + length] && length + 1 <= 258) length++;
+                    compressed.push({type: "copy", len: length, dist: i - copy_from});
+                    compressed_size += length;
+                } else {
+                    compressed.push({type: "value", value: data_bytes[i]});
+                    compressed_size++;
+                }
+                h[con] = i;
+            }
+            while (compressed_size < data_bytes.length) {
+                compressed.push({type: "value", value: data_bytes[compressed_size]});
+                compressed_size++;
+            }
+            return compressed;
+        }
+
+        function copy_dict(obj) {
+            const res = {};
+            for (const k in obj) res[Number(k)] = obj[k];
+            return res;
+        }
+
+        function do_huffman_encoding(char_count) {
+            char_count = copy_dict(char_count); let padding_index = 0;
+            while (Object.keys(char_count).length < 2) {
+                if (!(padding_index in char_count)) char_count[padding_index] = 0;
+                padding_index++;
+            }
+            const pq = new PriorityQueue();
+            for (const char in char_count) pq.push(Number(char), char_count[char]);
+            while (pq.length() > 1) {
+                const [key1, prio1] = pq.delete_min();
+                const [key2, prio2] = pq.delete_min();
+                pq.push([key1, key2], prio1 + prio2);
+            }
+            const min_key = pq.min_key(); const table_list = generate_table(min_key);
+            const h = {};
+            for (let i = 0; i < table_list.length; i += 2) h[table_list[i]] = table_list[i+1];
+            return h;
+        }
+
+        function huffman_encoding(char_count, max_size) { 
+            char_count = copy_dict(char_count);
+            let encoding_huffman = do_huffman_encoding(char_count);
+            let threshold = 2;
+            while (!Object.values(encoding_huffman).every(v => v <= max_size)) {
+                for (const k in char_count) char_count[k] = Math.max(char_count[k], threshold);
+                encoding_huffman = do_huffman_encoding(char_count); 
+                threshold++;
+            }
+            return encoding_huffman;
+        }
+
+        function generate_table(ary, depth = 0) {
+            if (Array.isArray(ary)) return generate_table(ary[0], depth + 1).concat(generate_table(ary[1], depth + 1));
+            else return [ary, depth];
+        }
+
+        function generate_encoding(table) {
+            const sorted_items = Object.entries(table).map(([k, v]) => [Number(k), v]).sort((a, b) => {
+                if (a[1] !== b[1]) return a[1] - b[1];
+                return a[0] - b[0];
+            });
+            let prev_value = 0; let prev_width = 0; const res = {};
+            for (let i = 0; i < sorted_items.length; i++) {
+                const [k, v] = sorted_items[i];
+                if (i !== 0) { prev_value += 1; prev_value <<= (v - prev_width); }
+                prev_width = v; res[k] = b_str(prev_value, v); 
+            }
+            return res;
+        }
+
+        function encode_len_table(lst) {
+            const encoded = []; const grouped = [];
+            if (lst.length > 0) {
+                let val = lst[0]; let count = 1;
+                for (let i = 1; i < lst.length; i++) {
+                    if (lst[i] === val) count++;
+                    else { grouped.push({value: val, count: count}); val = lst[i]; count = 1; }
+                }
+                grouped.push({value: val, count: count});
+            }
+            for (const {value, count} of grouped) {
+                assert(value <= 15); let c = count;
+                if (value === 0) {
+                    if (c <= 2) encoded.push(...Array(c).fill(0));
+                    else if (c <= 10) encoded.push(17, b_str(c - 3, 3).split('').reverse().join(''));
+                    else if (c <= 138) encoded.push(18, b_str(c - 11, 7).split('').reverse().join(''));
+                    else if (c <= 140) {
+                        encoded.push(18, b_str(138 - 11, 7).split('').reverse().join(''));
+                        encoded.push(...Array(c - 138).fill(0));
+                    } else if (c <= 148) {
+                        encoded.push(18, b_str(138 - 11, 7).split('').reverse().join(''), 17, b_str(c - 138 - 3, 3).split('').reverse().join(''));
+                    } else if (c <= 276) {
+                        encoded.push(18, b_str(138 - 11, 7).split('').reverse().join(''), 18, b_str(c - 138 - 11, 7).split('').reverse().join(''));
+                    } else assert(false, "Too many zeros");
+                } else {
+                    if (c <= 3) encoded.push(...Array(c).fill(value));
+                    else {
+                        encoded.push(value); encoded.push(...Array((c - 1) % 6).fill(value));
+                        const copies = Math.floor((c - 1) / 6);
+                        for (let j = 0; j < copies; j++) encoded.push(16, b_str(3, 2).split('').reverse().join(''));
+                    }
+                }
+            }
+            return encoded;
+        }
+
+        function get_huffman_block(lit_table, dist_table) {
+            const lit_size = Math.max(...Object.keys(lit_table).map(Number).concat([256])) + 1;
+            const dist_size = Math.max(...Object.keys(dist_table).map(Number).concat([0])) + 1;
+            const lit_list = Array.from({length: lit_size}, (_, i) => lit_table[i] || 0);
+            const dist_list = Array.from({length: dist_size}, (_, i) => dist_table[i] || 0);
+            const lit_encoded = encode_len_table(lit_list);
+            const dist_encoded = encode_len_table(dist_list);
+            const all_encoded = lit_encoded.concat(dist_encoded);
+            const tally = {};
+            for (const val of all_encoded) { if (typeof val === 'number') tally[val] = (tally[val] || 0) + 1; }
+            const encoding_huffman = huffman_encoding(tally, 7);
+            assert(Object.values(encoding_huffman).every(v => v <= 7));
+            const encoding_table = generate_encoding(encoding_huffman);
+            const lit_data = lit_encoded.map(val => typeof val === 'number' ? encoding_table[val] : val).join('');
+            const dist_data = dist_encoded.map(val => typeof val === 'number' ? encoding_table[val] : val).join('');
+            const order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+            const encoding_list = order.map(val => encoding_huffman[val] || 0);
+            let r_idx = -1;
+            for (let idx = encoding_list.length - 1; idx >= 0; idx--) { if (encoding_list[idx] !== 0) { r_idx = idx; break; } }
+            const end_idx = Math.max(r_idx, 3);
+            const final_encoding_list = encoding_list.slice(0, end_idx + 1);
+            return [ 
+                b_str(lit_size - 257, 5).split('').reverse().join(''),
+                b_str(dist_size - 1, 5).split('').reverse().join(''),
+                b_str(final_encoding_list.length - 4, 4).split('').reverse().join(''),
+                final_encoding_list.map(v => b_str(v, 3).split('').reverse().join('')).join(''),
+                lit_data, dist_data
+            ].join('');
+        }
+
+        function get_len_literal(n) {
+            assert(3 <= n && n <= 258, "Invalid length: " + n);
+            if (n === 258) return [285, ''];
+            else if (n < 11) return [257 + n - 3, ''];
+            else if (n < 19) return [265 + Math.floor((n - 11) / 2), b_str((n - 11) % 2, 1).split('').reverse().join('')];
+            else if (n < 35) return [269 + Math.floor((n - 19) / 4), b_str((n - 19) % 4, 2).split('').reverse().join('')];
+            else if (n < 67) return [273 + Math.floor((n - 35) / 8), b_str((n - 35) % 8, 3).split('').reverse().join('')];
+            else if (n < 131) return [277 + Math.floor((n - 67) / 16), b_str((n - 67) % 16, 4).split('').reverse().join('')];
+            else return [281 + Math.floor((n - 131) / 32), b_str((n - 131) % 32, 5).split('').reverse().join('')];
+        }
+
+        function get_dist_literal(n) {
+            assert(1 <= n && n <= 32768, "Invalid distance: " + n);
+            if (n < 5) return [n - 1, ''];
+            else if (n < 9) return [Math.floor((n - 5) / 2) + 4, b_str((n - 5) % 2, 1).split('').reverse().join('')];
+            else if (n < 17) return [Math.floor((n - 9) / 4) + 6, b_str((n - 9) % 4, 2).split('').reverse().join('')];
+            else if (n < 33) return [Math.floor((n - 17) / 8) + 8, b_str((n - 17) % 8, 3).split('').reverse().join('')];
+            else if (n < 65) return [Math.floor((n - 33) / 16) + 10, b_str((n - 33) % 16, 4).split('').reverse().join('')];
+            else if (n < 129) return [Math.floor((n - 65) / 32) + 12, b_str((n - 65) % 32, 5).split('').reverse().join('')];
+            else if (n < 257) return [Math.floor((n - 129) / 64) + 14, b_str((n - 129) % 64, 6).split('').reverse().join('')];
+            else if (n < 513) return [Math.floor((n - 257) / 128) + 16, b_str((n - 257) % 128, 7).split('').reverse().join('')];
+            else if (n < 1025) return [Math.floor((n - 513) / 256) + 18, b_str((n - 513) % 256, 8).split('').reverse().join('')];
+            else if (n < 2049) return [Math.floor((n - 1025) / 512) + 20, b_str((n - 1025) % 512, 9).split('').reverse().join('')];
+            else if (n < 4097) return [Math.floor((n - 2049) / 1024) + 22, b_str((n - 2049) % 1024, 10).split('').reverse().join('')];
+            else if (n < 8193) return [Math.floor((n - 4097) / 2048) + 24, b_str((n - 4097) % 2048, 11).split('').reverse().join('')];
+            else if (n < 16385) return [Math.floor((n - 8193) / 4096) + 26, b_str((n - 8193) % 4096, 12).split('').reverse().join('')];
+            else return [Math.floor((n - 16385) / 8192) + 28, b_str((n - 16385) % 8192, 13).split('').reverse().join('')];
+        }
+
+        function get_len_bits(n) { 
+            assert(n <= 0xFFFF);
+            return unpack_b(pack16LE(n)) + unpack_b(pack16LE(~n & 0xFFFF));
+        }
+
+        function computeLayerFilename(base, count, mode) {
+            if (count === 0) return base.replace(/~l/g, '0');
+            if (base.includes('~l')) return base.replace(/~l/g, count);
+            if (mode === 'uniform') return base.endsWith('.gz') ? base : `${base}.gz`;
+            if (mode === 'layer_num') return `${base}~l.gz`.replace(/~l/g, count);
+            return base + ".gz".repeat(count);
+        }
+
+        // Workerのメイン受信ハンドラ
+        self.onmessage = function(e) {
+            const { target_size_setting_str, count_layers, filename, naming_mode } = e.data;
+            
+            let seeded_rand = 42;
+            function getSeededRand(max) {
+                seeded_rand = (seeded_rand * 1664525 + 1013904223) % 4294967296;
+                return BigInt(seeded_rand) % (max + 1n);
+            }
+
+            const target_size_setting = BigInt(target_size_setting_str);
+            const layers = Number(count_layers);
+
+            let tokens = [{
+                data: new Uint8Array([65]), // 'A'
+                times: target_size_setting
+            }];
+
+            const initial_crc = new CRC32();
+            for (const token of tokens) {
+                initial_crc.push_repeat(unpack_b(token.data), token.times);
+            }
+            let data_crc = initial_crc.to_crc32();
+            let stream = null;
+            let current_uncompressed = target_size_setting;
+
+            for (let count = 0; count < layers; count++) {
+                const data_size = tokens.reduce((sum, d) => sum + BigInt(d.data.length) * d.times, 0n);
+                const chunks = data_size < 25000n ? 1 : 10;
+
+                const chunk_separators = [];
+                const max_val = data_size - BigInt(chunks) * 16n;
+                for (let j = 0; j < chunks - 1; j++) {
+                    chunk_separators.push(max_val > 0n ? getSeededRand(max_val) : 0n);
+                }
+                chunk_separators.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+                
+                const arr = [0n, ...chunk_separators, max_val];
+                const chunk_sizes = [];
+                for (let j = 0; j < arr.length - 1; j++) {
+                    chunk_sizes.push(arr[j+1] - arr[j] + 16n);
+                }
+
+                const header = new Uint8Array(10);
+                header[0] = 31;
+                header[1] = 139;
+                header[2] = 8;
+                header[3] = 0x08;
+                header[8] = 0;
+                header[9] = 3;
+
+                const filenameStr = computeLayerFilename(filename, count, naming_mode) + "\0";
+                const filenameBytes = new TextEncoder().encode(filenameStr);
+                const fullHeader = new Uint8Array(header.length + filenameBytes.length);
+                fullHeader.set(header);
+                fullHeader.set(filenameBytes, header.length);
+
+                stream = new BitStream(fullHeader);
+
+                for (let i = 0; i < chunk_sizes.length; i++) {
+                    const size_chunk = chunk_sizes[i];
+                    let current_size = 0n;
+                    const chunk_tokens = [];
+
+                    while (current_size < size_chunk) {
+                        const token = tokens.shift();
+                        const token_total = BigInt(token.data.length) * token.times;
+                        if (token_total <= size_chunk - current_size) {
+                            chunk_tokens.push(token);
+                            current_size += token_total;
+                        } else {
+                            const space = size_chunk - current_size;
+                            const times = space / BigInt(token.data.length);
+                            if (times !== 0n) {
+                                chunk_tokens.push({
+                                    data: token.data,
+                                    times: times
+                                });
+                            }
+                            const remainder = Number(space % BigInt(token.data.length));
+                            if (remainder === 0) {
+                                tokens.unshift({ data: token.data, times: token.times - times });
+                            } else {
+                                chunk_tokens.push({
+                                    data: token.data.slice(0, remainder),
+                                    times: 1n
+                                });
+                                if (token.times - times - 1n > 0n) {
+                                    tokens.unshift({
+                                        data: token.data,
+                                        times: token.times - times - 1n
+                                    });
+                                } 
+                                tokens.unshift({
+                                    data: token.data.slice(remainder),
+                                    times: 1n
+                                });
+                            }
+                            current_size = size_chunk;
+                        }
+                    }
+
+                    const is_final = (i === chunk_sizes.length - 1);
+                    const lit_count = {};
+                    const dist_count = {};
+
+                    for (const token of chunk_tokens) {
+                        const lzss_res = lzss_compress(token.data);
+                        const data_lit_count = {};
+                        const data_dist_count = {};
+                        for (const datum of lzss_res) {
+                            if (datum.type === "value") {
+                                data_lit_count[datum.value] = (data_lit_count[datum.value] || 0) + 1;
+                            } else if (datum.type === "copy") {
+                                const [len_literal, _] = get_len_literal(datum.len);
+                                const [dist_literal, __] = get_dist_literal(datum.dist);
+                                data_lit_count[len_literal] = (data_lit_count[len_literal] || 0) + 1;
+                                data_dist_count[dist_literal] = (data_dist_count[dist_literal] || 0) + 1;
+                            }
+                        }
+
+                        if (258 % token.data.length === 0 && token.times - 1n > 0n) { 
+                            const per_chunk = BigInt(258 / token.data.length);
+                            const remaining_tokens = (token.times - 1n) % per_chunk;
+                            for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k];
+                            for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k];
+                            const [len_literal, _] = get_len_literal(258);
+                            const [dist_literal, __] = get_dist_literal(token.data.length);
+                            lit_count[len_literal] = (lit_count[len_literal] || 0) + Number((token.times - 1n) / per_chunk);
+                            dist_count[dist_literal] = (dist_count[dist_literal] || 0) + Number((token.times - 1n) / per_chunk);
+                            if (remaining_tokens < 3n) {
+                                for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k] * Number(remaining_tokens);
+                                for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k] * Number(remaining_tokens);
+                            } else {
+                                const [rem_len, ___] = get_len_literal(token.data.length * Number(remaining_tokens));
+                                const [rem_dist, ____] = get_dist_literal(token.data.length);
+                                lit_count[rem_len] = (lit_count[rem_len] || 0) + 1;
+                                dist_count[rem_dist] = (dist_count[rem_dist] || 0) + 1;
+                            }
+                        } else {
+                            for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k];
+                            for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k];
+                            if (token.times > 1n) {
+                                const slice_size = 258;
+                                for (let slice_start = 0; slice_start < token.data.length; slice_start += slice_size) {
+                                    const slice_chunk = token.data.slice(slice_start, slice_start + slice_size);
+                                    if (slice_chunk.length < 3) {
+                                        for (const byte of slice_chunk) lit_count[byte] = (lit_count[byte] || 0) + Number(token.times - 1n);
+                                    } else {
+                                        const [sl_len, ___] = get_len_literal(slice_chunk.length);
+                                        const [sl_dist, ____] = get_dist_literal(token.data.length);
+                                        lit_count[sl_len] = (lit_count[sl_len] || 0) + Number(token.times - 1n);
+                                        dist_count[sl_dist] = (dist_count[sl_dist] || 0) + Number(token.times - 1n);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    lit_count[0x100] = (lit_count[0x100] || 0) + 1;
+
+                    const lit_huffman = huffman_encoding(lit_count, 15);
+                    const dist_huffman = huffman_encoding(dist_count, 15);
+                    const lit_table = generate_encoding(lit_huffman);
+                    const dist_table = generate_encoding(dist_huffman);
+
+                    stream.push(is_final ? '1' : '0'); stream.push('01');
+                    stream.push(get_huffman_block(lit_huffman, dist_huffman));
+
+                    for (const token of chunk_tokens) {
+                        const lzss_res = lzss_compress(token.data);
+                        const data_huffman_list = [];
+                        for (const datum of lzss_res) {
+                            if (datum.type === "value") data_huffman_list.push(lit_table[datum.value]);
+                            else if (datum.type === "copy") {
+                                const [len_literal, len_bits] = get_len_literal(datum.len);
+                                const [dist_literal, dist_bits] = get_dist_literal(datum.dist);
+                                data_huffman_list.push(lit_table[len_literal] + len_bits + dist_table[dist_literal] + dist_bits);
+                            }
+                        }
+                        const data_huffman = data_huffman_list.join('');
+
+                        if (258 % token.data.length === 0 && token.times - 1n > 0n) { 
+                            const per_chunk = BigInt(258 / token.data.length);
+                            const remaining_tokens = (token.times - 1n) % per_chunk;
+                            stream.push(data_huffman);
+                            const [len_literal, len_bits] = get_len_literal(258);
+                            const [dist_literal, dist_bits] = get_dist_literal(token.data.length);
+                            const repetition_data = lit_table[len_literal] + len_bits + dist_table[dist_literal] + dist_bits;
+                            stream.push_repeat(repetition_data, (token.times - 1n) / per_chunk);
+                            if (remaining_tokens < 3n) {
+                                stream.push_repeat(data_huffman, remaining_tokens);
+                            } else {
+                                const [rem_len, rem_len_b] = get_len_literal(token.data.length * Number(remaining_tokens));
+                                const [rem_dist, rem_dist_b] = get_dist_literal(token.data.length);
+                                stream.push(lit_table[rem_len] + rem_len_b + dist_table[rem_dist] + rem_dist_b);
+                            }
+                        } else {
+                            stream.push(data_huffman);
+                            if (token.times > 1n) {
+                                const slice_size = 258;
+                                const repetition_data_list = [];
+                                for (let slice_start = 0; slice_start < token.data.length; slice_start += slice_size) {
+                                    const slice_chunk = token.data.slice(slice_start, slice_start + slice_size);
+                                    if (slice_chunk.length < 3) {
+                                        repetition_data_list.push(Array.from(slice_chunk).map(b => lit_table[b]).join(''));
+                                    } else {
+                                        const [sl_len, sl_len_b] = get_len_literal(slice_chunk.length);
+                                        const [sl_dist, sl_dist_b] = get_dist_literal(token.data.length);
+                                        repetition_data_list.push(lit_table[sl_len] + sl_len_b + dist_table[sl_dist] + sl_dist_b);
+                                    }
+                                }
+                                const repetition_data = repetition_data_list.join('');
+                                stream.push_repeat(repetition_data, token.times - 1n);
+                            }
+                        }
+                    }
+                    stream.push(lit_table[0x100]);
+                }
+                stream.align();
+                stream.push(unpack_b(pack32LE(data_crc)));
+                stream.push(unpack_b(pack32LE(data_size & 0xFFFFFFFFn)));
+
+                const compressed_size = stream.tokens.reduce((sum, d) => sum + BigInt(d.data.length) * d.times, 0n);
+
+                self.postMessage({
+                    type: 'layer_progress',
+                    data: {
+                        layer: count + 1,
+                        uncompressed: current_uncompressed.toString(),
+                        compressed: compressed_size.toString(),
+                        crc: "0x" + data_crc.toString(16).toUpperCase().padStart(8, '0')
+                    }
+                });
+
+                current_uncompressed = compressed_size;
+                tokens = stream.tokens;
+                data_crc = stream.get_crc();
+            }
+            self.postMessage({
+                type: 'prediction_complete',
+                finalSize: current_uncompressed.toString()
+            });
+        };
+    </script>
+
+    <div class="app-window">
+        <!-- コントロールサイドバー -->
+        <aside>
+            <div>
+                <h1>Symbolic Deflate</h1>
+                <div class="subtitle">メモリ効率特化型、超巨大多重圧縮ジェネレーター</div>
+            </div>
+
+            <!-- サイズ入力 (柔軟なテキスト入力 + ドロップダウン) -->
+            <div class="control-group">
+                <label>目標展開サイズ (TARGET_SIZE)</label>
+                <div class="input-row">
+                    <!-- 数式を入れられるようにテキスト入力化 -->
+                    <input type="text" id="sizeInput" value="1.0">
+                    <select id="unitSelect">
+                        <option value="MiB">MiB</option>
+                        <option value="GiB">GiB</option>
+                        <option value="TiB" selected>TiB</option>
+                        <option value="PiB">PiB</option>
+                        <option value="EiB">EiB</option>
+                        <option value="ZiB">ZiB</option>
+                        <option value="YiB">YiB</option>
+                        <option value="RiB">RiB</option>
+                        <option value="QiB">QiB</option>
+                    </select>
+                </div>
+                <div class="input-help">
+                    ※「2^120」「1&lt;&lt;100」「0x1p100」「1329227995784915872903807060280344576」などの数式・16進数表記を入力可能。
+                </div>
+            </div>
+
+            <!-- 圧縮回数入力 -->
+            <div class="control-group">
+                <label>
+                    <span>圧縮レイヤー数 (Nesting Layers)</span>
+                    <span class="optimal-badge" id="optimalBadge" style="display:none;" title="1/1032理論限界から算出した最適解">推奨: --層 (適用)</span>
+                </label>
+                <div class="slider-sync-row">
+                    <input type="range" id="layerRange" min="1" max="50" value="15">
+                    <input type="number" id="layerInput" min="1" max="1000" value="15">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>仮想展開ファイル名</label>
+                <input type="text" id="filenameInput" value="bomb.txt">
+            </div>
+
+            <div class="control-group">
+                <label>各層のファイル名命名規則</label>
+                <select id="namingModeSelect">
+                    <option value="layer_num" selected>レイヤー番号付与 (~l.gz)</option>
+                    <option value="uniform">全層同一 (ファイル名統一)</option>
+                    <option value="cumulative">累積拡張子 (.gz 連続)</option>
+                </select>
+                <div class="input-help">※「~l」は現在の階層番号に自動置換されます。</div>
+            </div>
+
+            <!-- ダウンロード前サイズ予測バッジ -->
+            <div class="prediction-badge">
+                <div class="prediction-title">予測される圧縮後サイズ</div>
+                <div class="prediction-value" id="predictValue">-- B</div>
+                <button type="button" id="predictBtn" style="margin-top: 8px; width: 100%; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 3px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary)'">予測を計算</button>
+            </div>
+
+            <!-- 進行プロセスの監視機能 -->
+            <div class="progress-box" id="progressBox">
+                <div class="progress-text">
+                    <span id="progressState">Initializing...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fg" id="progressBar"></div>
+                </div>
+            </div>
+
+            <button class="btn-generate" id="generateBtn">生成 & ダウンロード</button>
+        </aside>
+
+        <!-- メイン表示テーブル -->
+        <main>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>階層</th>
+                            <th>入力サイズ（仮想）</th>
+                            <th>出力サイズ</th>
+                            <th>削減率</th>
+                            <th>CRC32（前層チェック）</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody">
+                        <!-- 動的レンダリング -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="console-container" id="consoleLogs">
+                <div class="console-line"><span class="console-tag">[System]</span> パラメータを検知。事前サイズ予測が即座に同期されます。</div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // アサーションヘルパー
+        function assert(condition, msg = "Assertion failed") {
+            if (!condition) throw new Error(msg);
+        }
+
+        // 1. 優先度付きキュー（Priority Queue）
+        class PriorityQueue {
+            constructor() {
+                this.heap = [];
+                this.seq = 0;
+            }
+            push(key, priority) {
+                this.heap.push({ key, priority, seq: this.seq++ });
+                this._up(this.heap.length - 1);
+            }
+            length() { return this.heap.length; }
+            delete_min() {
+                const min = this.heap[0];
+                const end = this.heap.pop();
+                if (this.heap.length > 0) {
+                    this.heap[0] = end;
+                    this._down(0);
+                }
+                return [min.key, min.priority];
+            }
+            min_key() { return this.heap[0].key; }
+            _less(a, b) {
+                if (a.priority !== b.priority) return a.priority < b.priority;
+                return a.seq < b.seq;
+            }
+            _up(i) {
+                const node = this.heap[i];
+                while (i > 0) {
+                    const p = (i - 1) >> 1;
+                    if (!this._less(node, this.heap[p])) break;
+                    this.heap[i] = this.heap[p];
+                    i = p;
+                }
+                this.heap[i] = node;
+            }
+            _down(i) {
+                const len = this.heap.length;
+                const node = this.heap[i];
+                while ((i << 1) + 1 < len) {
+                    let l = (i << 1) + 1, r = l + 1, c = l;
+                    if (r < len && this._less(this.heap[r], this.heap[l])) c = r;
+                    if (!this._less(this.heap[c], node)) break;
+                    this.heap[i] = this.heap[c];
+                    i = c;
+                }
+                this.heap[i] = node;
+            }
+        }
+
+        // バイナリ変換とパッキング
+        function b_str(n, size) {
+            return n.toString(2).padStart(size, '0');
+        }
+
+        function pack_b(bit_string) {
+            const len = bit_string.length;
+            const byte_list = new Uint8Array(Math.ceil(len / 8));
+            let byte_idx = 0;
+            for (let i = 0; i < len; i += 8) {
+                let val = 0;
+                const limit = Math.min(i + 8, len);
+                for (let j = i; j < limit; j++) {
+                    if (bit_string.charCodeAt(j) === 49) {
+                        val |= (1 << (j - i));
+                    }
+                } 
+                byte_list[byte_idx++] = val;
+            }
+            return byte_list;
+        }
+
+        const MAIN_UNPACK_TABLE = Array.from({length: 256}, (_, b) => {
+            let s = '';
+            for (let j = 0; j < 8; j++) s += ((b >> j) & 1) ? '1' : '0';
+            return s;
+        });
+        function unpack_b(data_bytes) {
+            const len = data_bytes.length;
+            const parts = new Array(len);
+            for (let i = 0; i < len; i++) {
+                parts[i] = MAIN_UNPACK_TABLE[data_bytes[i]];
+            }
+            return parts.join('');
+        }
+
+        function pack32LE(n) {
+            const buf = new ArrayBuffer(4);
+            const view = new DataView(buf);
+            view.setUint32(0, Number(n), true);
+            return new Uint8Array(buf);
+        }
+
+        function pack16LE(n) {
+            const buf = new ArrayBuffer(2);
+            const view = new DataView(buf);
+            view.setUint16(0, Number(n), true);
+            return new Uint8Array(buf);
+        }
+
+        // 高速多重多項式乗算 CRC32 アルゴリズム
+        class CRC32 {
+            constructor() {
+                this.crc = 0;
+                this.size = 0n;
+            }
+            normalize(data) {
+                let ret = 0;
+                const binaryStr = data.toString(2);
+                for (let i = 0; i < binaryStr.length; i++) {
+                    const bit = binaryStr[i] === '1' ? 1 : 0;
+                    ret = (((ret << 1) ^ (0x04C11DB7 * ((ret >>> 31) & 1))) ^ bit) >>> 0;
+                }
+                return ret;
+            }
+            normalize_bits(bits) {
+                let ret = 0;
+                for (let i = 0; i < bits.length; i++) {
+                    const bit = bits.charCodeAt(i) === 49 ? 1 : 0;
+                    ret = (((ret << 1) ^ (0x04C11DB7 * ((ret >>> 31) & 1))) ^ bit) >>> 0;
+                }
+                return ret;
+            }
+            mul(a, b) {
+                let res = 0;
+                a = a >>> 0;
+                b = b >>> 0;
+                for (let i = 0; i < 32; i++) {
+                    if ((b >>> i) & 1) {
+                        res = (res ^ a) >>> 0;
+                    }
+                    if (a & 0x80000000) {
+                        a = ((a << 1) ^ 0x04C11DB7) >>> 0;
+                    } else {
+                        a = (a << 1) >>> 0;
+                    }
+                }
+                return res;
+            }
+            add(a, b) {
+                return (a ^ b) >>> 0;
+            }
+            pow(a, b) {
+                let ret = 1;
+                a = a >>> 0;
+                b = BigInt(b);
+                while (b > 0n) {
+                    if (b & 1n) {
+                        ret = this.mul(ret, a);
+                    }
+                    a = this.mul(a, a);
+                    b >>= 1n;
+                }
+                return ret;
+            }
+            concat(a, b, b_size) {
+                return this.add(this.mul(a, this.pow(2, b_size)), b);
+            }
+            concat_fast(a, b, exp_b_size) { 
+                return this.add(this.mul(a, exp_b_size), b);
+            }
+            repeat(a, size, times) {
+                let ret = 0;
+                let exp_size = this.pow(2, BigInt(size));
+                let exp_ret_size = 1;
+                a = a >>> 0;
+                times = BigInt(times);
+                while (times > 0n) {
+                    if (times & 1n) {
+                        ret = this.concat_fast(a, ret, exp_ret_size);
+                        exp_ret_size = this.mul(exp_ret_size, exp_size);
+                    }
+                    a = this.concat_fast(a, a, exp_size);
+                    exp_size = this.mul(exp_size, exp_size);
+                    times >>= 1n;
+                }
+                return ret;
+            }
+            to_crc32() {
+                const remainder = (-this.size) % 8n;
+                const positive_remainder = remainder < 0n ? remainder + 8n : remainder;
+                const size = positive_remainder === 0n ? this.size : (this.size / 8n * 8n + 8n);
+                
+                const zero_bits = '0'.repeat(Number(positive_remainder));
+                const zero_norm = this.normalize_bits(zero_bits);
+                const concatted = this.concat(this.crc, zero_norm, positive_remainder);
+                
+                const ret = this.add(
+                    this.mul(concatted, this.pow(2, 32n)),
+                    this.mul(0xFFFFFFFF, this.pow(2, size))
+                );
+                const val = this.normalize(ret) ^ 0xFFFFFFFF;
+                const binary_str = (val >>> 0).toString(2).padStart(32, '0');
+                const reversed_binary_str = binary_str.split('').reverse().join('');
+                return parseInt(reversed_binary_str, 2);
+            }
+            push(bits) {
+                this.crc = this.concat(this.crc, this.normalize_bits(bits), bits.length);
+                this.size += BigInt(bits.length);
+            }
+            push_repeat(bits, times) {
+                this.crc = this.concat(this.crc, this.repeat(this.normalize_bits(bits), bits.length, times), BigInt(bits.length) * BigInt(times));
+                this.size += BigInt(bits.length) * BigInt(times);
+            }
+        }
+
+        // GCD アルゴリズム
+        function gcd(a, b) {
+            a = BigInt(a);
+            b = BigInt(b);
+            while (b !== 0n) {
+                let temp = b;
+                b = a % b;
+                a = temp;
+            }
+            return a;
+        }
+
+        // ビットストリーム処理
+        class BitStream {
+            constructor(header_bytes = new Uint8Array()) {
+                this.tokens = [];
+                this.crc = new CRC32();
+                this.register = '';
+                if (header_bytes.length > 0) {
+                    this.push(unpack_b(header_bytes));
+                }
+            }
+            push(bits) {
+                this.crc.push(bits);
+                this.push_once(bits);
+            }
+            push_once(bits) {
+                this.register += bits;
+                if (this.register.length >= 8) {
+                    const bytes_count = Math.floor(this.register.length / 8);
+                    const data = pack_b(this.register.slice(0, 8 * bytes_count));
+                    
+                    if (this.tokens.length > 0 && this.tokens[this.tokens.length - 1].times === 1n) {
+                        const prev_data = this.tokens[this.tokens.length - 1].data;
+                        const new_data = new Uint8Array(prev_data.length + data.length);
+                        new_data.set(prev_data);
+                        new_data.set(data, prev_data.length);
+                        this.tokens[this.tokens.length - 1].data = new_data;
+                    } else {
+                        this.tokens.push({
+                            data: data,
+                            times: 1n
+                        });
+                    }
+                    this.register = this.register.slice(8 * bytes_count);
+                }
+            }
+            push_repeat(bits, times) {
+                times = BigInt(times);
+                if (times === 0n) return;
+                this.crc.push_repeat(bits, times);
+                
+                let lead = '';
+                while (this.register.length !== 0) {
+                    const push_bits_len = Math.min(8 - this.register.length, bits.length);
+                    this.push_once(bits.slice(0, push_bits_len));
+                    lead = bits.slice(push_bits_len);
+                    times--;
+                    if (times === 0n) {
+                        this.push_once(lead);
+                        return;
+                    }
+                }
+                assert(this.register.length === 0);
+                
+                const bit_len = BigInt(bits.length);
+                const lcm_val = (bit_len * 8n) / gcd(bit_len, 8n);
+                const cycle_size = lcm_val / bit_len;
+                
+                const cycle_times = times / cycle_size;
+                const cycle_remainder = times % cycle_size;
+                
+                if (cycle_times > 0n) {
+                    const cycle_data_bits = (lead + bits.repeat(Number(cycle_size))).slice(0, Number(bit_len * cycle_size));
+                    this.tokens.push({
+                        data: pack_b(cycle_data_bits),
+                        times: cycle_times
+                    });
+                }
+                this.push_once(lead + bits.repeat(Number(cycle_remainder)));
+            }
+            align() {
+                if (this.register.length % 8 !== 0) {
+                    this.push('0'.repeat(8 - (this.register.length % 8)));
+                }
+            }
+            to_bytes() {
+                const parts = [];
+                for (const token of this.tokens) {
+                    const t = Number(token.times);
+                    const single = token.data;
+                    const combined = new Uint8Array(single.length * t);
+                    for (let i = 0; i < t; i++) {
+                        combined.set(single, i * single.length);
+                    }
+                    parts.push(combined);
+                }
+                if (this.register.length > 0) {
+                    const padded = this.register.padEnd(8, '0');
+                    parts.push(pack_b(padded));
+                }
+                let total_len = parts.reduce((sum, p) => sum + p.length, 0);
+                const res = new Uint8Array(total_len);
+                let offset = 0;
+                for (const p of parts) {
+                    res.set(p, offset);
+                    offset += p.length;
+                }
+                return res;
+            }
+            get_crc() {
+                return this.crc.to_crc32();
+            }
+        }
+
+        // DEFLATE 関連テーブル処理
+        function lzss_compress(data_bytes) {
+            const h = {};
+            const compressed = [];
+            let compressed_size = 0;
+            for (let i = 0; i < data_bytes.length - 2; i++) {
+                const con = (data_bytes[i] << 16) | (data_bytes[i+1] << 8) | data_bytes[i+2];
+                if (i < compressed_size) {
+                    h[con] = i;
+                    continue;
+                }
+                if (con in h && (i - h[con]) <= 32768 && h[con] < i - 3) {
+                    const copy_from = h[con];
+                    let length = 3;
+                    while (copy_from + length < data_bytes.length &&
+                           i + length < data_bytes.length &&
+                           data_bytes[copy_from + length] === data_bytes[i + length] &&
+                           length + 1 <= 258) {
+                        length++;
+                    }
+                    compressed.push({type: "copy", len: length, dist: i - copy_from});
+                    compressed_size += length;
+                } else {
+                    compressed.push({type: "value", value: data_bytes[i]});
+                    compressed_size++;
+                }
+                h[con] = i;
+            }
+            while (compressed_size < data_bytes.length) {
+                compressed.push({type: "value", value: data_bytes[compressed_size]});
+                compressed_size++;
+            }
+            return compressed;
+        }
+
+        function copy_dict(obj) {
+            const res = {};
+            for (const k in obj) {
+                res[Number(k)] = obj[k];
+            }
+            return res;
+        }
+
+        function do_huffman_encoding(char_count) {
+            char_count = copy_dict(char_count);
+            let padding_index = 0;
+            while (Object.keys(char_count).length < 2) {
+                if (!(padding_index in char_count)) {
+                    char_count[padding_index] = 0;
+                }
+                padding_index++;
+            }
+            const pq = new PriorityQueue();
+            for (const char in char_count) {
+                pq.push(Number(char), char_count[char]);
+            }
+            while (pq.length() > 1) {
+                const [key1, prio1] = pq.delete_min();
+                const [key2, prio2] = pq.delete_min();
+                pq.push([key1, key2], prio1 + prio2);
+            }
+            const min_key = pq.min_key();
+            const table_list = generate_table(min_key);
+            const h = {};
+            for (let i = 0; i < table_list.length; i += 2) {
+                h[table_list[i]] = table_list[i+1];
+            }
+            return h;
+        }
+
+        function huffman_encoding(char_count, max_size) {
+            char_count = copy_dict(char_count);
+            let encoding_huffman = do_huffman_encoding(char_count);
+            let threshold = 2;
+            while (!Object.values(encoding_huffman).every(v => v <= max_size)) {
+                for (const k in char_count) {
+                    char_count[k] = Math.max(char_count[k], threshold);
+                }
+                encoding_huffman = do_huffman_encoding(char_count);
+                threshold++;
+            }
+            return encoding_huffman;
+        }
+
+        function generate_table(ary, depth = 0) {
+            if (Array.isArray(ary)) {
+                return generate_table(ary[0], depth + 1).concat(generate_table(ary[1], depth + 1));
+            } else {
+                return [ary, depth];
+            }
+        }
+
+        function generate_encoding(table) {
+            const sorted_items = Object.entries(table).map(([k, v]) => [Number(k), v]).sort((a, b) => {
+                if (a[1] !== b[1]) return a[1] - b[1];
+                return a[0] - b[0];
+            });
+            let prev_value = 0;
+            let prev_width = 0;
+            const res = {};
+            for (let i = 0; i < sorted_items.length; i++) {
+                const [k, v] = sorted_items[i];
+                if (i !== 0) {
+                    prev_value += 1;
+                    prev_value <<= (v - prev_width);
+                }
+                prev_width = v;
+                res[k] = b_str(prev_value, v);
+            }
+            return res;
+        }
+
+        function encode_len_table(lst) {
+            const encoded = [];
+            const grouped = [];
+            if (lst.length > 0) {
+                let val = lst[0];
+                let count = 1;
+                for (let i = 1; i < lst.length; i++) {
+                    if (lst[i] === val) {
+                        count++;
+                    } else {
+                        grouped.push({value: val, count: count});
+                        val = lst[i];
+                        count = 1;
+                    }
+                }
+                grouped.push({value: val, count: count});
+            }
+
+            for (const {value, count} of grouped) {
+                assert(value <= 15);
+                let c = count;
+                if (value === 0) {
+                    if (c <= 2) {
+                        encoded.push(...Array(c).fill(0));
+                    } else if (c <= 10) {
+                        encoded.push(17, b_str(c - 3, 3).split('').reverse().join(''));
+                    } else if (c <= 138) {
+                        encoded.push(18, b_str(c - 11, 7).split('').reverse().join(''));
+                    } else if (c <= 140) {
+                        encoded.push(18, b_str(138 - 11, 7).split('').reverse().join(''));
+                        encoded.push(...Array(c - 138).fill(0));
+                    } else if (c <= 148) {
+                        encoded.push(18, b_str(138 - 11, 7).split('').reverse().join(''), 17, b_str(c - 138 - 3, 3).split('').reverse().join(''));
+                    } else if (c <= 276) {
+                        encoded.push(18, b_str(138 - 11, 7).split('').reverse().join(''), 18, b_str(c - 138 - 11, 7).split('').reverse().join(''));
+                    } else {
+                        assert(false, "Too many zeros");
+                    }
+                } else {
+                    if (c <= 3) {
+                        encoded.push(...Array(c).fill(value));
+                    } else {
+                        encoded.push(value);
+                        encoded.push(...Array((c - 1) % 6).fill(value));
+                        const copies = Math.floor((c - 1) / 6);
+                        for (let j = 0; j < copies; j++) {
+                            encoded.push(16, b_str(3, 2).split('').reverse().join(''));
+                        }
+                    }
+                }
+            }
+            return encoded;
+        }
+
+        function get_huffman_block(lit_table, dist_table) {
+            const lit_size = Math.max(...Object.keys(lit_table).map(Number).concat([256])) + 1;
+            const dist_size = Math.max(...Object.keys(dist_table).map(Number).concat([0])) + 1;
+            const lit_list = Array.from({length: lit_size}, (_, i) => lit_table[i] || 0);
+            const dist_list = Array.from({length: dist_size}, (_, i) => dist_table[i] || 0);
+
+            const lit_encoded = encode_len_table(lit_list);
+            const dist_encoded = encode_len_table(dist_list);
+
+            const all_encoded = lit_encoded.concat(dist_encoded);
+            const tally = {};
+            for (const val of all_encoded) {
+                if (typeof val === 'number') {
+                    tally[val] = (tally[val] || 0) + 1;
+                }
+            }
+
+            const encoding_huffman = huffman_encoding(tally, 7);
+            assert(Object.values(encoding_huffman).every(v => v <= 7));
+            const encoding_table = generate_encoding(encoding_huffman);
+
+            const lit_data = lit_encoded.map(val => typeof val === 'number' ? encoding_table[val] : val).join('');
+            const dist_data = dist_encoded.map(val => typeof val === 'number' ? encoding_table[val] : val).join('');
+
+            const order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+            const encoding_list = order.map(val => encoding_huffman[val] || 0);
+
+            let r_idx = -1;
+            for (let idx = encoding_list.length - 1; idx >= 0; idx--) {
+                if (encoding_list[idx] !== 0) {
+                    r_idx = idx;
+                    break;
+                }
+            }
+            const end_idx = Math.max(r_idx, 3);
+            const final_encoding_list = encoding_list.slice(0, end_idx + 1);
+
+            return [
+                b_str(lit_size - 257, 5).split('').reverse().join(''),
+                b_str(dist_size - 1, 5).split('').reverse().join(''),
+                b_str(final_encoding_list.length - 4, 4).split('').reverse().join(''),
+                final_encoding_list.map(v => b_str(v, 3).split('').reverse().join('')).join(''),
+                lit_data,
+                dist_data
+            ].join('');
+        }
+
+        function get_len_literal(n) {
+            assert(3 <= n && n <= 258, "Invalid length: " + n);
+            if (n === 258) {
+                return [285, ''];
+            } else if (n < 11) {
+                return [257 + n - 3, ''];
+            } else if (n < 19) {
+                return [265 + Math.floor((n - 11) / 2), b_str((n - 11) % 2, 1).split('').reverse().join('')];
+            } else if (n < 35) {
+                return [269 + Math.floor((n - 19) / 4), b_str((n - 19) % 4, 2).split('').reverse().join('')];
+            } else if (n < 67) {
+                return [273 + Math.floor((n - 35) / 8), b_str((n - 35) % 8, 3).split('').reverse().join('')];
+            } else if (n < 131) {
+                return [277 + Math.floor((n - 67) / 16), b_str((n - 67) % 16, 4).split('').reverse().join('')];
+            } else {
+                return [281 + Math.floor((n - 131) / 32), b_str((n - 131) % 32, 5).split('').reverse().join('')];
+            }
+        }
+
+        function get_dist_literal(n) {
+            assert(1 <= n && n <= 32768, "Invalid distance: " + n);
+            if (n < 5) {
+                return [n - 1, ''];
+            } else if (n < 9) {
+                return [Math.floor((n - 5) / 2) + 4, b_str((n - 5) % 2, 1).split('').reverse().join('')];
+            } else if (n < 17) {
+                return [Math.floor((n - 9) / 4) + 6, b_str((n - 9) % 4, 2).split('').reverse().join('')];
+            } else if (n < 33) {
+                return [Math.floor((n - 17) / 8) + 8, b_str((n - 17) % 8, 3).split('').reverse().join('')];
+            } else if (n < 65) {
+                return [Math.floor((n - 33) / 16) + 10, b_str((n - 33) % 16, 4).split('').reverse().join('')];
+            } else if (n < 129) {
+                return [Math.floor((n - 65) / 32) + 12, b_str((n - 65) % 32, 5).split('').reverse().join('')];
+            } else if (n < 257) {
+                return [Math.floor((n - 129) / 64) + 14, b_str((n - 129) % 64, 6).split('').reverse().join('')];
+            } else if (n < 513) {
+                return [Math.floor((n - 257) / 128) + 16, b_str((n - 257) % 128, 7).split('').reverse().join('')];
+            } else if (n < 1025) {
+                return [Math.floor((n - 513) / 256) + 18, b_str((n - 513) % 256, 8).split('').reverse().join('')];
+            } else if (n < 2049) {
+                return [Math.floor((n - 1025) / 512) + 20, b_str((n - 1025) % 512, 9).split('').reverse().join('')];
+            } else if (n < 4097) {
+                return [Math.floor((n - 2049) / 1024) + 22, b_str((n - 2049) % 1024, 10).split('').reverse().join('')];
+            } else if (n < 8193) {
+                return [Math.floor((n - 4097) / 2048) + 24, b_str((n - 4097) % 2048, 11).split('').reverse().join('')];
+            } else if (n < 16385) {
+                return [Math.floor((n - 8193) / 4096) + 26, b_str((n - 8193) % 4096, 12).split('').reverse().join('')];
+            } else {
+                return [Math.floor((n - 16385) / 8192) + 28, b_str((n - 16385) % 8192, 13).split('').reverse().join('')];
+            }
+        }
+
+        function get_len_bits(n) {
+            assert(n <= 0xFFFF);
+            return unpack_b(pack16LE(n)) + unpack_b(pack16LE(~n & 0xFFFF));
+        }
+
+        // 数値解析用パーサー
+        function parseBigSize(valStr) {
+            valStr = valStr.trim();
+            if (!valStr) return 0n;
+
+            const powRegex = /^(2|10)\s*(\^|\*\*)\s*(\d+)$/;
+            const powMatch = valStr.match(powRegex);
+            if (powMatch) {
+                const base = BigInt(powMatch[1]);
+                const exp = BigInt(powMatch[3]);
+                return base ** exp;
+            }
+
+            const shiftRegex = /^1\s*<<\s*(\d+)$/;
+            const shiftMatch = valStr.match(shiftRegex);
+            if (shiftMatch) {
+                const exp = BigInt(shiftMatch[1]);
+                return 1n << exp;
+            }
+
+            const hexFloatRegex = /^0x([0-9a-fA-F]+)?(?:\.([0-9a-fA-F]+))?[pP]([+-]?\d+)$/;
+            const hexFloatMatch = valStr.match(hexFloatRegex);
+            if (hexFloatMatch) {
+                const intPartStr = hexFloatMatch[1] || "0";
+                const fracPartStr = hexFloatMatch[2] || "";
+                const expVal = BigInt(hexFloatMatch[3]);
+
+                const intPart = BigInt("0x" + intPartStr);
+                const fracPart = fracPartStr ? BigInt("0x" + fracPartStr) : 0n;
+                const fracLen = BigInt(fracPartStr.length);
+
+                const scaledBase = (intPart << (4n * fracLen)) + fracPart;
+                const netExp = expVal - 4n * fracLen;
+
+                if (netExp >= 0n) {
+                    return scaledBase << netExp;
+                } else {
+                    return scaledBase >> (-netExp);
+                }
+            }
+
+            if (valStr.startsWith("0x") || valStr.startsWith("0X")) {
+                try {
+                    return BigInt(valStr);
+                } catch(e) {
+                    return null;
+                }
+            }
+
+            if (valStr.includes('.')) {
+                const parts = valStr.split('.');
+                const integerPart = BigInt(parts[0] || "0");
+                const decimalStr = parts[1].slice(0, 18);
+                const decimalLen = BigInt(decimalStr.length);
+                const decimalPart = BigInt(decimalStr || "0");
+                return {
+                    isFraction: true,
+                    integer: integerPart,
+                    fraction: decimalPart,
+                    fractionLen: decimalLen
+                };
+            } else {
+                try {
+                    return BigInt(valStr);
+                } catch(e) {
+                    return null;
+                }
+            }
+        }
+
+        const UNIT_MULTIPLIERS = {
+            "Bytes": 1n,
+            "KiB": 1024n,
+            "MiB": 1024n * 1024n,
+            "GiB": 1024n * 1024n * 1024n,
+            "TiB": 1024n * 1024n * 1024n * 1024n,
+            "PiB": 1024n * 1024n * 1024n * 1024n * 1024n,
+            "EiB": 1024n * 1024n * 1024n * 1024n * 1024n * 1024n,
+            "ZiB": 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n,
+            "YiB": 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n,
+            "RiB": 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n,
+            "QiB": 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n * 1024n
+        };
+
+        const layerRange = document.getElementById('layerRange');
+        const layerInput = document.getElementById('layerInput');
+        const sizeInput = document.getElementById('sizeInput');
+        const unitSelect = document.getElementById('unitSelect');
+
+        layerRange.addEventListener('input', () => {
+            layerInput.value = layerRange.value;
+            triggerFastUpdate();
+        });
+        layerInput.addEventListener('input', () => {
+            let val = parseInt(layerInput.value);
+            if (isNaN(val) || val < 1) val = 1;
+            if (val > 1000) val = 1000;
+            layerRange.value = Math.min(val, 50);
+            triggerFastUpdate();
+        });
+
+        sizeInput.addEventListener('input', () => {
+            updateOptimalDisplay();
+            triggerFastUpdate();
+        });
+        unitSelect.addEventListener('change', () => {
+            updateOptimalDisplay();
+            triggerFastUpdate();
+        });
+
+        document.getElementById('optimalBadge').addEventListener('click', () => {
+            const bytes = getTargetSizeBytes();
+            if (bytes > 0n) {
+                const opt = calculateOptimalLayers(bytes);
+                layerInput.value = opt;
+                layerRange.value = Math.min(opt, 50);
+                addLog("Opt", `最適レイヤー数 ${opt} 層を適用しました (1/1032 理論限界・1MiB境界基準)`);
+            }
+        });
+        function computeLayerFilename(base, count, mode) {
+            if (count === 0) return base.replace(/~l/g, '0');
+            if (base.includes('~l')) return base.replace(/~l/g, count);
+            if (mode === 'uniform') return base.endsWith('.gz') ? base : `${base}.gz`;
+            if (mode === 'layer_num') return `${base}~l.gz`.replace(/~l/g, count);
+            return base + ".gz".repeat(count);
+        }
+
+        document.getElementById('filenameInput').addEventListener('input', triggerFastUpdate);
+        document.getElementById('namingModeSelect').addEventListener('change', triggerFastUpdate);
+
+        
+        // 1/1032 理論限界 ＆ 1MiB境界 に基づく真の最適レイヤー数計算
+        function calculateOptimalLayers(targetSizeBytes) {
+            const ONE_MIB = 1048576n; // 2^20
+            if (targetSizeBytes <= ONE_MIB) {
+                return targetSizeBytes <= 1024n ? 1 : 2;
+            }
+            const B = targetSizeBytes.toString(2).length - 1;
+            const cruiseLayers = (B - 20) / 10.0112; // 1層あたり 10.0112 bit 減少
+            return Math.ceil(cruiseLayers) + 2;
+        }
+
+        function updateOptimalDisplay() {
+            const bytes = getTargetSizeBytes();
+            const badge = document.getElementById('optimalBadge');
+            if (!badge) return;
+            if (bytes <= 0n) {
+                badge.innerText = "推奨: --層";
+                badge.style.display = "none";
+                return;
+            }
+            const opt = calculateOptimalLayers(bytes);
+            badge.innerText = `推奨: ${opt}層 (適用)`;
+            badge.style.display = "inline-block";
+        }
+
+        function getTargetSizeBytes() {
+            const valStr = sizeInput.value.trim();
+            const parsed = parseBigSize(valStr);
+            if (parsed === null) {
+                sizeInput.style.borderColor = "#EF4444"; // 視覚的なエラー通知（赤枠）
+                return -1n; // エラー用シグナルを返却
+            }
+            sizeInput.style.borderColor = ""; // 正常時は枠線をリセット
+            const unit = unitSelect.value;
+            const mult = UNIT_MULTIPLIERS[unit];
+            if (!mult) return 0n;
+            
+            if (parsed && parsed.isFraction) {
+                const intVal = parsed.integer * mult;
+                const decVal = (parsed.fraction * mult) / (10n ** parsed.fractionLen);
+                return intVal + decVal;
+            } else {
+                return BigInt(parsed) * mult;
+            }
+        }
+
+        function formatBytes(bytes) {
+            const bi = BigInt(bytes);
+            if (bi < 1024n) return bi + " B";
+            const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"];
+            let idx = -1;
+            let temp = bi;
+            while (temp >= 1024n && idx < units.length - 1) {
+                temp /= 1024n;
+                idx++;
+            }
+            const divider = 1024n ** BigInt(idx + 1);
+            const integerPart = bi / divider;
+            const remainder = bi % divider;
+            const fractionalPart = (remainder * 100n) / divider;
+            const displayVal = integerPart.toString() + "." + fractionalPart.toString().padStart(2, '0');
+            return displayVal + " " + units[idx];
+        }
+
+        function addLog(tag, message) {
+            const consoleBox = document.getElementById('consoleLogs');
+            const line = document.createElement('div');
+            line.className = 'console-line';
+            line.innerHTML = `<span class="console-tag">[${tag}]</span> <span>${message}</span>`;
+            consoleBox.appendChild(line);
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
+
+        function triggerFastUpdate() {
+            // 自動予測はフリーズ防止のため無効化
+            document.getElementById('predictValue').innerText = "-- B";
+        }
+
+        function runPrediction() {
+            return; // 古いDOM操作版runPredictionは無効化（Workerに処理を移譲したため）
+            const target_size_setting = getTargetSizeBytes();
+            const count_layers = parseInt(layerInput.value);
+            const filename = document.getElementById('filenameInput').value;
+
+            if (target_size_setting <= 0n || isNaN(count_layers) || count_layers < 1) {
+                document.getElementById('predictValue').innerText = "-- B";
+                return;
+            }
+
+            let seeded_rand = 42;
+            function getSeededRand(max) {
+                seeded_rand = (seeded_rand * 1664525 + 1013904223) % 4294967296;
+                return BigInt(seeded_rand) % (max + 1n);
+            }
+
+            let tokens = [{
+                data: new Uint8Array([65]), // 'A'
+                times: target_size_setting
+            }];
+
+            const initial_crc = new CRC32();
+            for (const token of tokens) {
+                initial_crc.push_repeat(unpack_b(token.data), token.times);
+            }
+            let data_crc = initial_crc.to_crc32();
+
+            const tableBody = document.getElementById('statsTableBody');
+            tableBody.innerHTML = '';
+
+            let stream = null;
+            let current_uncompressed = target_size_setting;
+
+            for (let count = 0; count < count_layers; count++) {
+                const data_size = tokens.reduce((sum, d) => sum + BigInt(d.data.length) * d.times, 0n);
+                const chunks = data_size < 25000n ? 1 : 10;
+
+                const chunk_separators = [];
+                const max_val = data_size - BigInt(chunks) * 16n;
+                for (let j = 0; j < chunks - 1; j++) {
+                    chunk_separators.push(max_val > 0n ? getSeededRand(max_val) : 0n);
+                }
+                chunk_separators.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+                
+                const arr = [0n, ...chunk_separators, max_val];
+                const chunk_sizes = [];
+                for (let j = 0; j < arr.length - 1; j++) {
+                    chunk_sizes.push(arr[j+1] - arr[j] + 16n);
+                }
+
+                const header = new Uint8Array(10);
+                header[0] = 31;
+                header[1] = 139;
+                header[2] = 8;
+                header[3] = 0x08;
+                header[8] = 0;
+                header[9] = 3;
+
+                const filenameStr = filename + ".gz".repeat(count) + "\0";
+                const filenameBytes = new TextEncoder().encode(filenameStr);
+                const fullHeader = new Uint8Array(header.length + filenameBytes.length);
+                fullHeader.set(header);
+                fullHeader.set(filenameBytes, header.length);
+
+                stream = new BitStream(fullHeader);
+
+                for (let i = 0; i < chunk_sizes.length; i++) {
+                    const size = chunk_sizes[i];
+                    let current_size = 0n;
+                    const chunk_tokens = [];
+
+                    while (current_size < size) {
+                        const token = tokens.shift();
+                        const token_total = BigInt(token.data.length) * token.times;
+                        if (token_total <= size - current_size) {
+                            chunk_tokens.push(token);
+                            current_size += token_total;
+                        } else {
+                            const space = size - current_size;
+                            const times = space / BigInt(token.data.length);
+                            if (times !== 0n) {
+                                chunk_tokens.push({
+                                    data: token.data,
+                                    times: times
+                                });
+                            }
+                            const remainder = Number(space % BigInt(token.data.length));
+                            if (remainder === 0) {
+                                tokens.unshift({
+                                    data: token.data,
+                                    times: token.times - times
+                                });
+                            } else {
+                                chunk_tokens.push({
+                                    data: token.data.slice(0, remainder),
+                                    times: 1n
+                                });
+                                if (token.times - times - 1n > 0n) {
+                                    tokens.unshift({
+                                        data: token.data,
+                                        times: token.times - times - 1n
+                                    });
+                                }
+                                tokens.unshift({
+                                    data: token.data.slice(remainder),
+                                    times: 1n
+                                });
+                            }
+                            current_size = size;
+                        }
+                    }
+
+                    const is_final = (i === chunk_sizes.length - 1);
+                    const lit_count = {};
+                    const dist_count = {};
+
+                    for (const token of chunk_tokens) {
+                        const lzss_res = lzss_compress(token.data);
+                        const data_lit_count = {};
+                        const data_dist_count = {};
+                        for (const datum of lzss_res) {
+                            if (datum.type === "value") {
+                                data_lit_count[datum.value] = (data_lit_count[datum.value] || 0) + 1;
+                            } else if (datum.type === "copy") {
+                                const [len_literal, _] = get_len_literal(datum.len);
+                                const [dist_literal, __] = get_dist_literal(datum.dist);
+                                data_lit_count[len_literal] = (data_lit_count[len_literal] || 0) + 1;
+                                data_dist_count[dist_literal] = (data_dist_count[dist_literal] || 0) + 1;
+                            }
+                        }
+
+                        if (258 % token.data.length === 0 && token.times - 1n > 0n) {
+                            const per_chunk = BigInt(258 / token.data.length);
+                            const remaining_tokens = (token.times - 1n) % per_chunk;
+
+                            for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k];
+                            for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k];
+
+                            const [len_literal, _] = get_len_literal(258);
+                            const [dist_literal, __] = get_dist_literal(token.data.length);
+                            lit_count[len_literal] = (lit_count[len_literal] || 0) + Number((token.times - 1n) / per_chunk);
+                            dist_count[dist_literal] = (dist_count[dist_literal] || 0) + Number((token.times - 1n) / per_chunk);
+
+                            if (remaining_tokens < 3n) {
+                                for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k] * Number(remaining_tokens);
+                                for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k] * Number(remaining_tokens);
+                            } else {
+                                const [rem_len, ___] = get_len_literal(token.data.length * Number(remaining_tokens));
+                                const [rem_dist, ____] = get_dist_literal(token.data.length);
+                                lit_count[rem_len] = (lit_count[rem_len] || 0) + 1;
+                                dist_count[rem_dist] = (dist_count[rem_dist] || 0) + 1;
+                            }
+                        } else {
+                            for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k];
+                            for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k];
+
+                            if (token.times > 1n) {
+                                const slice_size = 258;
+                                for (let slice_start = 0; slice_start < token.data.length; slice_start += slice_size) {
+                                    const slice_chunk = token.data.slice(slice_start, slice_start + slice_size);
+                                    if (slice_chunk.length < 3) {
+                                        for (const byte of slice_chunk) {
+                                            lit_count[byte] = (lit_count[byte] || 0) + Number(token.times - 1n);
+                                        }
+                                    } else {
+                                        const [sl_len, ___] = get_len_literal(slice_chunk.length);
+                                        const [sl_dist, ____] = get_dist_literal(token.data.length);
+                                        lit_count[sl_len] = (lit_count[sl_len] || 0) + Number(token.times - 1n);
+                                        dist_count[sl_dist] = (dist_count[sl_dist] || 0) + Number(token.times - 1n);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    lit_count[0x100] = (lit_count[0x100] || 0) + 1;
+
+                    const lit_huffman = huffman_encoding(lit_count, 15);
+                    const dist_huffman = huffman_encoding(dist_count, 15);
+                    const lit_table = generate_encoding(lit_huffman);
+                    const dist_table = generate_encoding(dist_huffman);
+
+                    stream.push(is_final ? '1' : '0');
+                    stream.push('01');
+                    stream.push(get_huffman_block(lit_huffman, dist_huffman));
+
+                    for (const token of chunk_tokens) {
+                        const lzss_res = lzss_compress(token.data);
+                        const data_huffman_list = [];
+                        for (const datum of lzss_res) {
+                            if (datum.type === "value") {
+                                data_huffman_list.push(lit_table[datum.value]);
+                            } else if (datum.type === "copy") {
+                                const [len_literal, len_bits] = get_len_literal(datum.len);
+                                const [dist_literal, dist_bits] = get_dist_literal(datum.dist);
+                                data_huffman_list.push(lit_table[len_literal] + len_bits + dist_table[dist_literal] + dist_bits);
+                            }
+                        }
+                        const data_huffman = data_huffman_list.join('');
+
+                        if (258 % token.data.length === 0 && token.times - 1n > 0n) {
+                            const per_chunk = BigInt(258 / token.data.length);
+                            const remaining_tokens = (token.times - 1n) % per_chunk;
+
+                            stream.push(data_huffman);
+
+                            const [len_literal, len_bits] = get_len_literal(258);
+                            const [dist_literal, dist_bits] = get_dist_literal(token.data.length);
+                            const repetition_data = lit_table[len_literal] + len_bits + dist_table[dist_literal] + dist_bits;
+
+                            stream.push_repeat(repetition_data, (token.times - 1n) / per_chunk);
+
+                            if (remaining_tokens < 3n) {
+                                stream.push_repeat(data_huffman, remaining_tokens);
+                            } else {
+                                const [rem_len, rem_len_b] = get_len_literal(token.data.length * Number(remaining_tokens));
+                                const [rem_dist, rem_dist_b] = get_dist_literal(token.data.length);
+                                stream.push(lit_table[rem_len] + rem_len_b + dist_table[rem_dist] + rem_dist_b);
+                            }
+                        } else {
+                            stream.push(data_huffman);
+                            if (token.times > 1n) {
+                                const slice_size = 258; // ★ 追加箇所（不具合1の修正）
+                                const repetition_data_list = [];
+                                for (let slice_start = 0; slice_start < token.data.length; slice_start += slice_size) {
+                                    const slice_chunk = token.data.slice(slice_start, slice_start + slice_size);
+                                    if (slice_chunk.length < 3) {
+                                        repetition_data_list.push(Array.from(slice_chunk).map(b => lit_table[b]).join(''));
+                                    } else {
+                                        const [sl_len, sl_len_b] = get_len_literal(slice_chunk.length);
+                                        const [sl_dist, sl_dist_b] = get_dist_literal(token.data.length);
+                                        repetition_data_list.push(lit_table[sl_len] + sl_len_b + dist_table[sl_dist] + sl_dist_b);
+                                    }
+                                }
+                                const repetition_data = repetition_data_list.join('');
+                                stream.push_repeat(repetition_data, token.times - 1n);
+                            }
+                        }
+                    }
+                    stream.push(lit_table[0x100]);
+                }
+
+                stream.align();
+                stream.push(unpack_b(pack32LE(data_crc)));
+                stream.push(unpack_b(pack32LE(data_size & 0xFFFFFFFFn)));
+
+                const compressed_size = stream.tokens.reduce((sum, d) => sum + BigInt(d.data.length) * d.times, 0n);
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="mono" style="font-weight: 600;">L${count + 1}</td>
+                    <td class="mono">${formatBytes(current_uncompressed)}</td>
+                    <td class="mono">${formatBytes(compressed_size)}</td>
+                    <td><span class="ratio-badge">${((Number(compressed_size) / Number(current_uncompressed)) * 100).toFixed(6)}%</span></td>
+                    <td class="mono" style="color: var(--text-sub); font-size: 0.8rem;">0x${data_crc.toString(16).toUpperCase().padStart(8, '0')}</td>
+                `;
+                tableBody.appendChild(tr);
+
+                current_uncompressed = compressed_size;
+                tokens = stream.tokens;
+                data_crc = stream.get_crc();
+            }
+
+            document.getElementById('predictValue').innerText = formatBytes(current_uncompressed);
+        }
+
+        // 非同期（描画をブロックしない）圧縮処理
+        function runAsyncCompression(onComplete) {
+            const target_size_setting = getTargetSizeBytes();
+            const count_layers = parseInt(layerInput.value);
+            const filename = document.getElementById('filenameInput').value;
+            const naming_mode = document.getElementById('namingModeSelect').value;
+
+            const progressBox = document.getElementById('progressBox');
+            const progressState = document.getElementById('progressState');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressBar = document.getElementById('progressBar');
+
+            progressBox.style.display = "flex";
+            progressState.innerText = "Initializing CRC...";
+            progressPercent.innerText = "0%";
+            progressBar.style.width = "0%";
+
+            let seeded_rand = 42;
+            function getSeededRand(max) {
+                seeded_rand = (seeded_rand * 1664525 + 1013904223) % 4294967296;
+                return BigInt(seeded_rand) % (max + 1n);
+            }
+
+            let tokens = [{
+                data: new Uint8Array([65]),
+                times: target_size_setting
+            }];
+
+            let stream = null;
+
+            setTimeout(() => {
+                const initial_crc = new CRC32();
+                for (const token of tokens) {
+                    initial_crc.push_repeat(unpack_b(token.data), token.times);
+                }
+                let data_crc = initial_crc.to_crc32();
+                
+                let layer_index = 0;
+                addLog("Gen", "構造計算スレッドを非同期で開始しました。");
+
+                function compressLayerStep() {
+                    if (layer_index >= count_layers) {
+                        progressState.innerText = "Packing stream...";
+                        progressPercent.innerText = "99%";
+                        progressBar.style.width = "99%";
+                        
+                        setTimeout(() => {
+                            progressBox.style.display = "none";
+                            onComplete(stream);
+                        }, 50);
+                        return;
+                    }
+
+                    const pct = Math.floor((layer_index / count_layers) * 100);
+                    progressState.innerText = `Compressing Layer ${layer_index + 1}...`;
+                    progressPercent.innerText = `${pct}%`;
+                    progressBar.style.width = `${pct}%`;
+
+                    const data_size = tokens.reduce((sum, d) => sum + BigInt(d.data.length) * d.times, 0n);
+                    const chunks = data_size < 25000n ? 1 : 10;
+
+                    const chunk_separators = [];
+                    const max_val = data_size - BigInt(chunks) * 16n;
+                    for (let j = 0; j < chunks - 1; j++) {
+                        chunk_separators.push(max_val > 0n ? getSeededRand(max_val) : 0n);
+                    }
+                    chunk_separators.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+                    
+                    const arr = [0n, ...chunk_separators, max_val];
+                    const chunk_sizes = [];
+                    for (let j = 0; j < arr.length - 1; j++) {
+                        chunk_sizes.push(arr[j+1] - arr[j] + 16n);
+                    }
+
+                    const header = new Uint8Array(10);
+                    header[0] = 31;
+                    header[1] = 139;
+                    header[2] = 8;
+                    header[3] = 0x08;
+                    const mtimeBytes = pack32LE(Math.floor(Date.now() / 1000));
+                    header.set(mtimeBytes, 4);
+                    header[8] = 0;
+                    header[9] = 3;
+
+                    const filenameStr = computeLayerFilename(filename, layer_index, naming_mode) + "\0";
+                    const filenameBytes = new TextEncoder().encode(filenameStr);
+                    const fullHeader = new Uint8Array(header.length + filenameBytes.length);
+                    fullHeader.set(header);
+                    fullHeader.set(filenameBytes, header.length);
+
+                    stream = new BitStream(fullHeader);
+
+                    for (let i = 0; i < chunk_sizes.length; i++) {
+                        const size = chunk_sizes[i];
+                        let current_size = 0n;
+                        const chunk_tokens = [];
+
+                        while (current_size < size) {
+                            const token = tokens.shift();
+                            const token_total = BigInt(token.data.length) * token.times;
+                            if (token_total <= size - current_size) {
+                                chunk_tokens.push(token);
+                                current_size += token_total;
+                            } else {
+                                const space = size - current_size;
+                                const times = space / BigInt(token.data.length);
+                                if (times !== 0n) {
+                                    chunk_tokens.push({
+                                        data: token.data,
+                                        times: times
+                                    });
+                                }
+                                const remainder = Number(space % BigInt(token.data.length));
+                                if (remainder === 0) {
+                                    tokens.unshift({
+                                        data: token.data,
+                                        times: token.times - times
+                                    });
+                                } else {
+                                    chunk_tokens.push({
+                                        data: token.data.slice(0, remainder),
+                                        times: 1n
+                                    });
+                                    if (token.times - times - 1n > 0n) {
+                                        tokens.unshift({
+                                            data: token.data,
+                                            times: token.times - times - 1n
+                                        });
+                                    }
+                                    tokens.unshift({
+                                        data: token.data.slice(remainder),
+                                        times: 1n
+                                    });
+                                }
+                                current_size = size;
+                            }
+                        }
+
+                        const is_final = (i === chunk_sizes.length - 1);
+                        const lit_count = {};
+                        const dist_count = {};
+
+                        for (const token of chunk_tokens) {
+                            const lzss_res = lzss_compress(token.data);
+                            const data_lit_count = {};
+                            const data_dist_count = {};
+                            for (const datum of lzss_res) {
+                                if (datum.type === "value") {
+                                    data_lit_count[datum.value] = (data_lit_count[datum.value] || 0) + 1;
+                                } else if (datum.type === "copy") {
+                                    const [len_literal, _] = get_len_literal(datum.len);
+                                    const [dist_literal, __] = get_dist_literal(datum.dist);
+                                    data_lit_count[len_literal] = (data_lit_count[len_literal] || 0) + 1;
+                                    data_dist_count[dist_literal] = (data_dist_count[dist_literal] || 0) + 1;
+                                }
+                            }
+
+                            if (258 % token.data.length === 0 && token.times - 1n > 0n) {
+                                const per_chunk = BigInt(258 / token.data.length);
+                                const remaining_tokens = (token.times - 1n) % per_chunk;
+
+                                for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k];
+                                for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k];
+
+                                const [len_literal, _] = get_len_literal(258);
+                                const [dist_literal, __] = get_dist_literal(token.data.length);
+                                lit_count[len_literal] = (lit_count[len_literal] || 0) + Number((token.times - 1n) / per_chunk);
+                                dist_count[dist_literal] = (dist_count[dist_literal] || 0) + Number((token.times - 1n) / per_chunk);
+
+                                if (remaining_tokens < 3n) {
+                                    for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k] * Number(remaining_tokens);
+                                    for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k] * Number(remaining_tokens);
+                                } else {
+                                    const [rem_len, rem_len_b] = get_len_literal(token.data.length * Number(remaining_tokens));
+                                    const [rem_dist, rem_dist_b] = get_dist_literal(token.data.length);
+                                    lit_count[rem_len] = (lit_count[rem_len] || 0) + 1;
+                                    dist_count[rem_dist] = (dist_count[rem_dist] || 0) + 1;
+                                }
+                            } else {
+                                for (const k in data_lit_count) lit_count[k] = (lit_count[k] || 0) + data_lit_count[k];
+                                for (const k in data_dist_count) dist_count[k] = (dist_count[k] || 0) + data_dist_count[k];
+
+                                if (token.times > 1n) {
+                                    const slice_size = 258;
+                                    // ★ 修正箇所（不具合2のコピペミス修正：出現頻度のカウントのみに修正）
+                                    for (let slice_start = 0; slice_start < token.data.length; slice_start += slice_size) {
+                                        const slice_chunk = token.data.slice(slice_start, slice_start + slice_size);
+                                        if (slice_chunk.length < 3) {
+                                            for (const byte of slice_chunk) {
+                                                lit_count[byte] = (lit_count[byte] || 0) + Number(token.times - 1n);
+                                            }
+                                        } else {
+                                            const [sl_len, ___] = get_len_literal(slice_chunk.length);
+                                            const [sl_dist, ____] = get_dist_literal(token.data.length);
+                                            lit_count[sl_len] = (lit_count[sl_len] || 0) + Number(token.times - 1n);
+                                            dist_count[sl_dist] = (dist_count[sl_dist] || 0) + Number(token.times - 1n);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        lit_count[0x100] = (lit_count[0x100] || 0) + 1;
+
+                        const lit_huffman = huffman_encoding(lit_count, 15);
+                        const dist_huffman = huffman_encoding(dist_count, 15);
+                        const lit_table = generate_encoding(lit_huffman);
+                        const dist_table = generate_encoding(dist_huffman);
+
+                        stream.push(is_final ? '1' : '0');
+                        stream.push('01');
+                        stream.push(get_huffman_block(lit_huffman, dist_huffman));
+
+                        for (const token of chunk_tokens) {
+                            const lzss_res = lzss_compress(token.data);
+                            const data_huffman_list = [];
+                            for (const datum of lzss_res) {
+                                if (datum.type === "value") {
+                                    data_huffman_list.push(lit_table[datum.value]);
+                                } else if (datum.type === "copy") {
+                                    const [len_literal, len_bits] = get_len_literal(datum.len);
+                                    const [dist_literal, dist_bits] = get_dist_literal(datum.dist);
+                                    data_huffman_list.push(lit_table[len_literal] + len_bits + dist_table[dist_literal] + dist_bits);
+                                }
+                            }
+                            const data_huffman = data_huffman_list.join('');
+
+                            if (258 % token.data.length === 0 && token.times - 1n > 0n) {
+                                const per_chunk = BigInt(258 / token.data.length);
+                                const remaining_tokens = (token.times - 1n) % per_chunk;
+
+                                stream.push(data_huffman);
+
+                                const [len_literal, len_bits] = get_len_literal(258);
+                                const [dist_literal, dist_bits] = get_dist_literal(token.data.length);
+                                const repetition_data = lit_table[len_literal] + len_bits + dist_table[dist_literal] + dist_bits;
+
+                                stream.push_repeat(repetition_data, (token.times - 1n) / per_chunk);
+
+                                if (remaining_tokens < 3n) {
+                                    stream.push_repeat(data_huffman, remaining_tokens);
+                                } else {
+                                    const [rem_len, rem_len_b] = get_len_literal(token.data.length * Number(remaining_tokens));
+                                    const [rem_dist, rem_dist_b] = get_dist_literal(token.data.length);
+                                    stream.push(lit_table[rem_len] + rem_len_b + dist_table[rem_dist] + rem_dist_b);
+                                }
+                            } else {
+                                stream.push(data_huffman);
+                                if (token.times > 1n) {
+                                    const slice_size = 258; // ★ 追加箇所（不具合1の修正）
+                                    const repetition_data_list = [];
+                                    for (let slice_start = 0; slice_start < token.data.length; slice_start += slice_size) {
+                                        const slice_chunk = token.data.slice(slice_start, slice_start + slice_size);
+                                        if (slice_chunk.length < 3) {
+                                            repetition_data_list.push(Array.from(slice_chunk).map(b => lit_table[b]).join(''));
+                                        } else {
+                                            const [sl_len, sl_len_b] = get_len_literal(slice_chunk.length);
+                                            const [sl_dist, sl_dist_b] = get_dist_literal(token.data.length);
+                                            repetition_data_list.push(lit_table[sl_len] + sl_len_b + dist_table[sl_dist] + sl_dist_b);
+                                        }
+                                    }
+                                    const repetition_data = repetition_data_list.join('');
+                                    stream.push_repeat(repetition_data, token.times - 1n);
+                                }
+                            }
+                        }
+                        stream.push(lit_table[0x100]);
+                    }
+
+                    stream.align();
+                    stream.push(unpack_b(pack32LE(data_crc)));
+                    stream.push(unpack_b(pack32LE(data_size & 0xFFFFFFFFn)));
+
+                    const compressed_size = stream.tokens.reduce((sum, d) => sum + BigInt(d.data.length) * d.times, 0n);
+                    
+                    addLog("Gen", `L${layer_index+1} 圧縮処理完了: ${formatBytes(data_size)} -> ${formatBytes(compressed_size)}`);
+
+                    tokens = stream.tokens;
+                    data_crc = stream.get_crc();
+
+                    layer_index++;
+                    requestAnimationFrame(compressLayerStep);
+                }
+
+                compressLayerStep();
+            }, 50);
+        }
+
+        // 生成とダウンロードの実行
+        document.getElementById('generateBtn').addEventListener('click', () => {
+            const target_size_setting = getTargetSizeBytes();
+            const count_layers = parseInt(layerInput.value);
+            if (target_size_setting <= 0n || isNaN(count_layers) || count_layers < 1) {
+                addLog("Error", "パラメータが正しくありません。数式入力やレイヤー数を確認してください。", "err");
+                return;
+            }
+
+            const generateBtn = document.getElementById('generateBtn');
+            generateBtn.disabled = true;
+            generateBtn.style.opacity = 0.5;
+
+            runAsyncCompression((stream) => {
+                const finalBytes = stream.to_bytes();
+                const baseFilename = document.getElementById('filenameInput').value;
+                const namingMode = document.getElementById('namingModeSelect').value;
+                let downloadFilename = computeLayerFilename(baseFilename, count_layers, namingMode);
+                if (namingMode === 'uniform' && !downloadFilename.endsWith('.gz')) {
+                    downloadFilename += '.gz';
+                }
+                
+                const blob = new Blob([finalBytes], {type: "application/gzip"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = downloadFilename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                generateBtn.disabled = false;
+                generateBtn.style.opacity = 1;
+                addLog("Success", `ファイル「${downloadFilename}」の書き出し完了。自動DLが開始されました。`);
+            });
+        });
+
+        // -----------------------------------------------------------------
+        // Web Worker（別スレッド）管理部＆メインUIハンドラ
+        // -----------------------------------------------------------------
+        let predictionWorker = null;
+
+        function initWorker() {
+            if (predictionWorker) return;
+            const codeElement = document.getElementById('predictionWorkerCode');
+            const blob = new Blob([codeElement.textContent], { type: 'application/javascript' });
+            predictionWorker = new Worker(URL.createObjectURL(blob));
+
+            // Worker からメッセージ受信したときのハンドラ（DOM更新はすべてメイン側で担当）
+            predictionWorker.onmessage = function(e) {
+                const { type, data, finalSize } = e.data;
+                
+                if (type === 'layer_progress') {
+                    const tableBody = document.getElementById('statsTableBody');
+                    const tr = document.createElement('tr');
+                    const rawUncompressed = BigInt(data.uncompressed);
+                    const rawCompressed = BigInt(data.compressed);
+                    const pct = ((Number(rawCompressed) / Number(rawUncompressed)) * 100).toFixed(6);
+                    
+                    tr.innerHTML = `
+                        <td class="mono" style="font-weight: 600;">L${data.layer}</td>
+                        <td class="mono">${formatBytes(rawUncompressed)}</td>
+                        <td class="mono">${formatBytes(rawCompressed)}</td>
+                        <td><span class="ratio-badge">${pct}%</span></td>
+                        <td class="mono" style="color: var(--text-sub); font-size: 0.8rem;">${data.crc}</td>
+                    `;
+                    tableBody.appendChild(tr);
+                    
+                    addLog("Progress", `L${data.layer} 処理完了: ${formatBytes(rawUncompressed)} ➔ ${formatBytes(rawCompressed)}`, "sys");
+                } else if (type === 'prediction_complete') {
+                    document.getElementById('predictValue').innerText = formatBytes(BigInt(finalSize));
+                    resetPredictButton();
+                    addLog("Success", `スレッド処理完了。最終サイズ予測: ${formatBytes(BigInt(finalSize))}`, "ok");
+                }
+            };
+
+            predictionWorker.onerror = function(err) {
+                addLog("Error", `Workerスレッドでエラーが発生しました: ${err.message}`, "err");
+                resetPredictButton();
+            };
+        }
+
+        function resetPredictButton() {
+            const predictBtn = document.getElementById('predictBtn');
+            predictBtn.disabled = false;
+            predictBtn.innerText = "予測を計算";
+        }
+
+        // 重複定義されていたため削除
+
+        // 手動予測起動ハンドラ（Worker経由）
+        document.getElementById('predictBtn').addEventListener('click', () => {
+            const target_size_setting = getTargetSizeBytes();
+            const count_layers = parseInt(layerInput.value);
+            const filename = document.getElementById('filenameInput').value;
+
+            if (target_size_setting === -1n) {
+                addLog("Error", "入力サイズが解析不能な形式（数式または数値エラー）です。", "err");
+                return;
+            }
+            if (target_size_setting === 0n || isNaN(count_layers) || count_layers < 1) {
+                addLog("Error", "正しいパラメータが指定されていません。", "err");
+                return;
+            }
+
+            // Workerの初期化
+            initWorker();
+
+            // UIをロード中に変更（メインは一切フリーズしません）
+            const predictBtn = document.getElementById('predictBtn');
+            predictBtn.disabled = true;
+            predictBtn.innerText = "計算中（スレッド分離）...";
+            document.getElementById('predictValue').innerText = "Calculating...";
+            
+            const tableBody = document.getElementById('statsTableBody');
+            tableBody.innerHTML = ''; // テーブルをクリア
+
+            addLog("System", "スレッドを起動し、バックグラウンドでのシミュレーションを開始しました。", "sys");
+
+            const namingMode = document.getElementById('namingModeSelect').value;
+
+            // Workerへ投げる（BigIntはそのまま渡せないので文字列化する）
+            predictionWorker.postMessage({
+                target_size_setting_str: target_size_setting.toString(),
+                count_layers: count_layers,
+                filename: filename,
+                naming_mode: namingMode
+            });
+        });
+
+        // 初回はフリーズ防止のため自動実行しない
+        document.getElementById('predictValue').innerText = "-- B";
+        updateOptimalDisplay();
+    </script>
+</body>
+</html>
