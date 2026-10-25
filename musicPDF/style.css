@@ -1,10 +1,9 @@
 :root {
-  /* サックスホワイト〜アッシュグレー */
   --bg-workspace: #edf4f9;
   --text-main: #1e293b;
   --text-muted: #64748b;
-  --tint-blue: rgba(215, 232, 247, 0.72);
-  --glass-border: rgba(100, 116, 139, 0.18);
+  --tint-blue: rgba(215, 232, 247, 0.78);
+  --glass-border: rgba(100, 116, 139, 0.2);
   --glass-highlight: rgba(255, 255, 255, 0.85);
 
   --accent-blue: #0284c7;
@@ -32,23 +31,29 @@ body {
   min-height: 100vh;
 }
 
-/* 追従ヘッダー (ティントガラス質感) */
+/* 追従ヘッダー (2段構成の一体型ティントガラス) */
 .app-chrome {
   position: sticky;
   top: 0;
   z-index: 50;
+  background: var(--tint-blue);
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  box-shadow: 
+    0 1px 0 var(--glass-highlight) inset,
+    0 4px 18px -2px rgba(15, 23, 42, 0.06);
+  padding: 0.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.chrome-primary-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  padding: 0.65rem 1.25rem;
-  background: var(--tint-blue);
-  backdrop-filter: blur(12px) saturate(135%);
-  -webkit-backdrop-filter: blur(12px) saturate(135%);
-  box-shadow: 
-    0 1px 0 var(--glass-highlight) inset,
-    0 4px 16px -2px rgba(15, 23, 42, 0.05);
+  gap: 0.5rem;
 }
 
 .chrome-brand {
@@ -77,38 +82,6 @@ body {
   font-weight: 600;
 }
 
-.chrome-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.param-group {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.param-unit {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-select {
-  padding: 0.35rem 0.5rem;
-  border-radius: 3px;
-  border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 0.8rem;
-  color: var(--text-main);
-  outline: none;
-  cursor: pointer;
-}
-
 .action-group {
   display: flex;
   align-items: center;
@@ -116,15 +89,15 @@ select {
 }
 
 .action-btn {
-  padding: 0.45rem 0.85rem;
+  padding: 0.42rem 0.85rem;
   border-radius: 3px;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   border: none;
   white-space: nowrap;
-  min-height: 36px;
-  transition: background 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
+  min-height: 34px;
+  transition: background 0.15s ease, transform 0.08s ease;
 }
 
 .action-btn.primary {
@@ -143,7 +116,7 @@ select {
 }
 
 .action-btn.secondary {
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   color: var(--text-main);
   border: 1px solid var(--glass-border);
 }
@@ -158,18 +131,83 @@ select {
   box-shadow: none;
 }
 
+/* 下段コントロールバー */
+.chrome-secondary-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(100, 116, 139, 0.15);
+}
+
+.tool-unit {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+select {
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.78rem;
+  color: var(--text-main);
+  outline: none;
+  cursor: pointer;
+}
+
+/* スライダー */
+.scale-unit {
+  min-width: 170px;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(100, 116, 139, 0.25);
+  border-radius: 2px;
+  outline: none;
+  flex: 1;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  cursor: pointer;
+  border: 1px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.slider-val {
+  min-width: 36px;
+  font-size: 0.75rem;
+  color: var(--text-main);
+  font-weight: 600;
+  text-align: right;
+}
+
 /* メイン作業領域 */
 .workbench {
   flex: 1;
   padding: 1.25rem 1rem;
-  max-width: 1080px;
+  max-width: 1200px;
   margin: 0 auto;
   width: 100%;
 }
 
 /* ドロップゾーン */
 .drop-surface {
-  padding: 1.75rem 1rem;
+  padding: 1.6rem 1rem;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.65);
   border: 1.5px dashed rgba(100, 116, 139, 0.25);
@@ -178,7 +216,7 @@ select {
 }
 
 .drop-surface.dragover {
-  background: rgba(224, 242, 254, 0.7);
+  background: rgba(224, 242, 254, 0.75);
   border-color: var(--accent-blue);
 }
 
@@ -186,7 +224,7 @@ select {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .upload-icon {
@@ -201,28 +239,18 @@ select {
 .drop-instructions .secondary-msg {
   font-size: 0.75rem;
   color: var(--text-muted);
-  margin-top: 0.15rem;
-}
-
-.drop-instructions code {
-  background: rgba(255, 255, 255, 0.85);
-  padding: 0.1rem 0.3rem;
-  border-radius: 2px;
 }
 
 .file-picker-btn {
   margin-top: 0.3rem;
-  padding: 0.45rem 1rem;
+  padding: 0.4rem 0.95rem;
   background: #ffffff;
   color: var(--text-main);
   border: 1px solid var(--glass-border);
   border-radius: 3px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
 }
 
 .file-picker-btn input {
@@ -236,11 +264,11 @@ select {
   padding: 0.55rem 0.85rem;
   border-radius: 3px;
   margin-bottom: 1rem;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   border-left: 3px solid var(--accent-blue);
 }
 
-/* 楽譜描画コンテナ (A4比率を死守するスクロールビュー) */
+/* 楽譜描画コンテナ */
 .score-sheet-wrapper {
   background: #ffffff;
   border-radius: 3px;
@@ -248,46 +276,44 @@ select {
   box-shadow: 
     0 1px 3px rgba(15, 23, 42, 0.05),
     0 8px 20px -4px rgba(15, 23, 42, 0.03);
-  min-height: 450px;
+  min-height: 480px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* モバイル時でもA4組版が1小節単位に潰れないよう最小幅を担保 */
 #osmd-container {
-  min-width: 760px;
   margin: 0 auto;
+  width: max-content;
+  min-width: 600px;
 }
 
 /* モバイル向け最適化 (幅768px以下) */
 @media (max-width: 768px) {
   .app-chrome {
-    padding: 0.6rem 0.85rem;
+    padding: 0.5rem 0.75rem;
   }
-  .chrome-controls {
-    width: 100%;
-    justify-content: space-between;
+  .chrome-secondary-row {
+    gap: 0.5rem;
+  }
+  .tool-unit {
+    font-size: 0.75rem;
+  }
+  .scale-unit {
+    min-width: 100%;
   }
   .action-group {
-    flex-grow: 1;
-    justify-content: flex-end;
+    width: 100%;
   }
   .action-btn {
     flex: 1;
     text-align: center;
-    padding: 0.5rem 0.4rem;
   }
   .workbench {
     padding: 0.75rem 0.5rem;
   }
 }
 
-/* 印刷用 (紙への直接印刷用) */
-@page {
-  size: A4 portrait;
-  margin: 10mm;
-}
-
+/* 印刷用 */
 @media print {
   body, .app-root, .workbench {
     background: #ffffff !important;
@@ -303,6 +329,7 @@ select {
     overflow: visible !important;
   }
   #osmd-container {
+    width: 100% !important;
     min-width: auto !important;
   }
   svg {
