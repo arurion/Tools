@@ -125,6 +125,12 @@ body {
   background: #ffffff;
 }
 
+.action-btn.small {
+  min-height: 30px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+}
+
 .action-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -149,7 +155,7 @@ body {
   font-weight: 500;
 }
 
-select {
+select, input[type="text"], input[type="number"] {
   padding: 0.3rem 0.5rem;
   border-radius: 3px;
   border: 1px solid var(--glass-border);
@@ -157,12 +163,12 @@ select {
   font-size: 0.78rem;
   color: var(--text-main);
   outline: none;
-  cursor: pointer;
 }
 
-.scale-unit {
-  min-width: 170px;
-}
+select { cursor: pointer; }
+select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.scale-unit { min-width: 160px; }
 
 input[type="range"] {
   -webkit-appearance: none;
@@ -203,7 +209,7 @@ input[type="range"]::-webkit-slider-thumb {
 .drop-surface {
   max-width: 1100px;
   margin: 0 auto 1rem auto;
-  padding: 1.6rem 1rem;
+  padding: 1.5rem 1rem;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.65);
   border: 1.5px dashed rgba(100, 116, 139, 0.25);
@@ -222,19 +228,9 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 0.35rem;
 }
 
-.upload-icon {
-  color: var(--text-muted);
-}
-
-.drop-instructions .primary-msg {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.drop-instructions .secondary-msg {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
+.upload-icon { color: var(--text-muted); }
+.drop-instructions .primary-msg { font-size: 0.9rem; font-weight: 600; }
+.drop-instructions .secondary-msg { font-size: 0.75rem; color: var(--text-muted); }
 
 .file-picker-btn {
   margin-top: 0.3rem;
@@ -247,10 +243,7 @@ input[type="range"]::-webkit-slider-thumb {
   font-weight: 600;
   cursor: pointer;
 }
-
-.file-picker-btn input {
-  display: none;
-}
+.file-picker-btn input { display: none; }
 
 .status-panel {
   max-width: 1100px;
@@ -263,8 +256,92 @@ input[type="range"]::-webkit-slider-thumb {
   border-left: 3px solid var(--accent-blue);
 }
 
-/* 楽譜描画ラッパー: 
-   Flexboxによる子要素の強制圧縮（flex-shrink）を完全に防ぐため block + overflow-x: auto を使用 */
+/* スコア＆パート設定パネル */
+.editor-surface {
+  max-width: 1100px;
+  margin: 0 auto 1.25rem auto;
+  padding: 1rem 1.25rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.15);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.editor-title {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.meta-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.input-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.input-unit label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.input-unit input { width: 100%; }
+.flex-1 { flex: 1; }
+.flex-2 { flex: 2; }
+
+/* パートテーブル */
+.part-table-wrapper { overflow-x: auto; }
+
+.part-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.part-table th {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.part-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.08);
+  vertical-align: middle;
+}
+
+.part-table tr:hover { background: rgba(224, 242, 254, 0.4); }
+.part-table input[type="text"] { width: 100%; max-width: 280px; }
+.part-table input[type="number"] { width: 55px; }
+.part-table select { width: 100%; }
+
+/* 楽譜描画ラッパー (縮小を阻止) */
 .score-sheet-wrapper {
   display: block;
   width: 100%;
@@ -273,14 +350,12 @@ input[type="range"]::-webkit-slider-thumb {
   padding-bottom: 2rem;
 }
 
-/* コンテナ: 固定幅を確保し、中央寄せで自立させる */
 #osmd-container {
   display: block;
   margin: 0 auto;
   box-sizing: content-box;
 }
 
-/* 各SVGページ: max-widthで潰さない */
 #osmd-container svg {
   display: block;
   margin: 0 auto 24px auto;
@@ -289,22 +364,12 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 @media (max-width: 768px) {
-  .app-chrome {
-    padding: 0.5rem 0.75rem;
-  }
-  .chrome-secondary-row {
-    gap: 0.5rem;
-  }
-  .scale-unit {
-    min-width: 100%;
-  }
-  .action-group {
-    width: 100%;
-  }
-  .action-btn {
-    flex: 1;
-    text-align: center;
-  }
+  .app-chrome { padding: 0.5rem 0.75rem; }
+  .chrome-secondary-row { gap: 0.5rem; }
+  .scale-unit { min-width: 100%; }
+  .meta-row { flex-direction: column; }
+  .action-group { width: 100%; }
+  .action-btn { flex: 1; text-align: center; }
 }
 
 @media print {
@@ -313,13 +378,8 @@ input[type="range"]::-webkit-slider-thumb {
     padding: 0 !important;
     margin: 0 !important;
   }
-  .no-print {
-    display: none !important;
-  }
-  .score-sheet-wrapper {
-    overflow: visible !important;
-    padding: 0 !important;
-  }
+  .no-print { display: none !important; }
+  .score-sheet-wrapper { overflow: visible !important; padding: 0 !important; }
   #osmd-container svg {
     box-shadow: none !important;
     margin: 0 !important;
@@ -330,4 +390,4 @@ input[type="range"]::-webkit-slider-thumb {
     page-break-after: avoid;
     break-after: avoid;
   }
-}
+  }
