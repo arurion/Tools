@@ -1,6 +1,6 @@
 /**
  * ScoreFlow - Multi-Part MIDI to MusicXML 4.0 Converter
- * Port, Channel, Tie-across-barline support
+ * Port, Channel, Tie-across-barline, and Japanese Encoding Support
  */
 const Midi2Xml = (() => {
   const PITCH_CLASSES = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
@@ -16,28 +16,56 @@ const Midi2Xml = (() => {
     return '32nd';
   }
 
+  // 【文字化け復元】MIDIのトラック名（UTF-8 / Shift-JIS）がLatin-1として誤読された場合に日本語へ復元
+  function decodeMidiText(rawStr) {
+    if (!rawStr) return "";
+    let hasHighByte = false;
+    const bytes = [];
+    for (let i = 0; i < rawStr.length; i++) {
+      const code = rawStr.charCodeAt(i);
+      bytes.push(code & 0xff);
+      if (code >= 0x80) hasHighByte = true;
+    }
+    // 128以上のバイトが含まれていない純粋なASCIIならそのまま返す
+    if (!hasHighByte) return rawStr;
+
+    const uint8 = new Uint8Array(bytes);
+
+    // 1. UTF-8としての復元を試みる
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(uint8);
+    } catch (e1) {
+      // 2. 日本のMIDIファイルに非常に多い Shift-JIS としての復元を試みる
+      try {
+        return new TextDecoder("shift-jis", { fatal: true }).decode(uint8);
+      } catch (e2) {
+        return rawStr;
+      }
+    }
+  }
+
   // MIDIからトラック・チャンネル・ポート構成を柔軟に抽出 (Type 0 / Type 1 両対応)
   function extractPartProfiles(parsedMidi, splitMode = "channel") {
     const profiles = [];
 
-    // 1. 各トラックからノートをチャンネル・ポート情報付きで収集
     const allTrackEvents = [];
     parsedMidi.tracks.forEach((track, tIdx) => {
       if (!track.notes || track.notes.length === 0) return;
 
-      // トラック内ポートの検出 (Meta 0x21 または default 1)
       let port = 1;
       if (track.port !== undefined) {
         port = track.port + 1;
       }
 
+      const decodedTrackName = decodeMidiText(track.name ? track.name.trim() : "");
+      const decodedInstName = decodeMidiText(track.instrument ? track.instrument.name : "");
+
       track.notes.forEach(note => {
-        // note.channel (0-15) または track.channel (0-15)
         const ch = (note.channel !== undefined ? note.channel : (track.channel !== undefined ? track.channel : 0)) + 1;
         allTrackEvents.push({
           trackIndex: tIdx,
-          trackName: track.name ? track.name.trim() : "",
-          instrumentName: track.instrument ? track.instrument.name : "",
+          trackName: decodedTrackName,
+          instrumentName: decodedInstName,
           port: port,
           channel: ch,
           note: note
@@ -47,7 +75,7 @@ const Midi2Xml = (() => {
 
     if (allTrackEvents.length === 0) return profiles;
 
-    // 2. 分割基準に応じたグルーピング
+    // 分割基準に応じたグルーピング
     const groups = new Map();
     allTrackEvents.forEach(item => {
       let key = "";
@@ -60,7 +88,6 @@ const Midi2Xml = (() => {
         key = `T_${item.trackIndex}_C_${item.channel}`;
         groupName = item.trackName ? `${item.trackName} (ch ${item.channel})` : `Track ${item.trackIndex + 1} (ch ${item.channel})`;
       } else {
-        // デフォルト: チャンネル別 (Type 0 MIDIでも確実にパート分離される)
         key = `P_${item.port}_C_${item.channel}`;
         groupName = item.instrumentName || item.trackName || `Channel ${item.channel}`;
       }
@@ -77,7 +104,6 @@ const Midi2Xml = (() => {
       groups.get(key).notes.push(item.note);
     });
 
-    // 3. パートプロファイルを構築
     let pIdx = 1;
     groups.forEach((group) => {
       const avgPitch = group.notes.reduce((sum, n) => sum + n.midi, 0) / group.notes.length;
@@ -104,7 +130,7 @@ const Midi2Xml = (() => {
     const quantizeDivision = parseInt(options.quantize || 16, 10);
     const gridTicks = Math.round((ppq * 4) / quantizeDivision);
 
-    const title = options.title || parsedMidi.header.name || "Converted Score";
+    const title = options.title || decodeMidiText(parsedMidi.header.name) || "Converted Score";
     const composer = options.composer || "";
 
     let beats = 4;
@@ -123,7 +149,6 @@ const Midi2Xml = (() => {
       throw new Error("有効な音符を持つパートが存在しません。");
     }
 
-    // 全体の最大小節数を計算
     let globalMaxTick = 0;
     parts.forEach(part => {
       part.notes.forEach(note => {
@@ -133,7 +158,6 @@ const Midi2Xml = (() => {
     });
     const totalMeasures = Math.max(1, Math.ceil(globalMaxTick / ticksPerMeasure));
 
-    // XMLヘッダー・パートリスト構築 (MusicXML 4.0 port / channel 仕様)
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
 <score-partwise version="4.0">
@@ -159,12 +183,10 @@ const Midi2Xml = (() => {
     });
     xml += `  </part-list>\n`;
 
-    // 各パートの構築
     parts.forEach((part, pIdx) => {
       const partId = `P${pIdx + 1}`;
       xml += `  <part id="${partId}">\n`;
 
-      // 1. クオンタイズ処理
       const quantNotes = [];
       part.notes.forEach(note => {
         const start = Math.round(note.ticks / gridTicks) * gridTicks;
@@ -177,7 +199,7 @@ const Midi2Xml = (() => {
         });
       });
 
-      // 2. 【最重要】小節境界（Barline）をまたぐ音符を分割し、タイ（Tie）を付与
+      // 小節境界をまたぐ音符を分割し、タイを付与
       const barlineSplitNotes = [];
       quantNotes.forEach(note => {
         let curStart = note.startTick;
@@ -193,8 +215,8 @@ const Midi2Xml = (() => {
             startTick: curStart,
             endTick: segEnd,
             durationTicks: segEnd - curStart,
-            tieStart: segEnd < curEnd, // 次小節へタイで接続
-            tieStop: curStart > note.startTick // 前小節からタイで接続
+            tieStart: segEnd < curEnd,
+            tieStop: curStart > note.startTick
           });
 
           curStart = segEnd;
@@ -206,7 +228,6 @@ const Midi2Xml = (() => {
       const clefSign = part.clef === 'F' ? 'F' : 'G';
       const clefLine = clefSign === 'F' ? '4' : '2';
 
-      // 3. 小節単位の出力
       for (let m = 0; m < totalMeasures; m++) {
         const mStart = m * ticksPerMeasure;
         const mEnd = mStart + ticksPerMeasure;
@@ -236,7 +257,6 @@ const Midi2Xml = (() => {
             const curNote = mNotes[i];
             const isChord = i > 0 && curNote.startTick === mNotes[i - 1].startTick;
 
-            // 休符の挿入
             if (!isChord && curNote.startTick > cursor) {
               const restDur = curNote.startTick - cursor;
               xml += `      <note>
@@ -248,7 +268,6 @@ const Midi2Xml = (() => {
               cursor = curNote.startTick;
             }
 
-            // 同一ボイス内の衝突防止クランプ
             let nextNonChordTick = mEnd;
             for (let j = i + 1; j < mNotes.length; j++) {
               if (mNotes[j].startTick > curNote.startTick) {
@@ -264,7 +283,6 @@ const Midi2Xml = (() => {
             const alter = ALTER_MAP[curNote.midi % 12];
             const octave = Math.floor(curNote.midi / 12) - 1;
 
-            // タイタグの組み立て
             let tieXml = "";
             let tiedXml = "";
             if (curNote.tieStop) {
@@ -329,5 +347,5 @@ const Midi2Xml = (() => {
     });
   }
 
-  return { extractPartProfiles, convert };
+  return { extractPartProfiles, convert, decodeMidiText };
 })();
