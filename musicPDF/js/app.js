@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentFileName = "score";
   let isMidiMode = false;
 
+  // 用紙規格設定 (ミリ寸法と十分なレンダリングピクセル幅)
   const PAPER_FORMATS = {
     "A4_P":     { osmdOption: "A4_P",     widthMm: 210,   heightMm: 297,   canvasWidthPx: 1050 },
     "A4_L":     { osmdOption: "A4_L",     widthMm: 297,   heightMm: 210,   canvasWidthPx: 1480 },
@@ -56,7 +57,58 @@ document.addEventListener("DOMContentLoaded", () => {
     statusBar.style.borderLeftColor = isError ? "#ef4444" : "var(--accent-blue)";
   }
 
-  // ファイル読み込み処理
+  // =========================================================================
+  // 日本語TrueTypeフォント（M PLUS 1p）の軽量オンデマンド読み込み & キャッシュ
+  // =========================================================================
+  let cachedJapaneseFontBase64 = null;
+  let fontFetchPromise = null;
+
+  function arrayBufferToBase64(buffer) {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    const chunkSize = 0x8000;
+    for (let i = 0; i < len; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return window.btoa(binary);
+  }
+
+  async function loadJapaneseFont() {
+    if (cachedJapaneseFontBase64) return cachedJapaneseFontBase64;
+    if (fontFetchPromise) return fontFetchPromise;
+
+    fontFetchPromise = (async () => {
+      // Google Fonts公式リポジトリから配布されている軽量な M PLUS 1p (約1.5MB)
+      const fontUrls = [
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/mplus1p/MPLUS1p-Regular.ttf",
+        "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/mplus1p/MPLUS1p-Regular.ttf"
+      ];
+
+      for (const url of fontUrls) {
+        try {
+          const res = await fetch(url);
+          if (res.ok) {
+            const buf = await res.arrayBuffer();
+            cachedJapaneseFontBase64 = arrayBufferToBase64(buf);
+            return cachedJapaneseFontBase64;
+          }
+        } catch (e) {
+          console.warn(`フォント読み込み失敗: ${url}`, e);
+        }
+      }
+      return null;
+    })();
+
+    return fontFetchPromise;
+  }
+
+  // バックグラウンドで事前ロードを開始
+  loadJapaneseFont().catch(() => {});
+
+  // =========================================================================
+  // ファイル読み込み
+  // =========================================================================
   async function handleFile(file) {
     if (!file) return;
     currentFileName = file.name.replace(/\.[^/.]+$/, "");
@@ -78,7 +130,6 @@ document.addEventListener("DOMContentLoaded", () => {
         buildPartTable();
         await rebuildMidiXmlAndRender();
       } else {
-        // MusicXML
         splitModeUnit.style.display = "none";
         parsedMidiData = null;
 
@@ -113,7 +164,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // MIDI用のパート設定テーブル生成
   function buildPartTable() {
     partTableBody.innerHTML = "";
     currentParts.forEach((part, idx) => {
@@ -174,7 +224,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // MusicXMLからメタデータとパート抽出
   function extractMusicXmlData() {
     metaTitle.value = osmd.sheet.TitleString || currentFileName;
     metaComposer.value = osmd.sheet.ComposerString || "";
@@ -266,7 +315,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 表示スコア切り替えプルダウン
   function updateViewModeOptions() {
     viewModeSelect.innerHTML = `<option value="all">Full Score (総譜)</option>`;
     if (isMidiMode) {
@@ -283,7 +331,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // MIDI XML再構築
   async function rebuildMidiXmlAndRender() {
     currentXmlContent = Midi2Xml.convert(parsedMidiData, {
       title: metaTitle.value.trim() || currentFileName,
@@ -300,7 +347,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnExportXml.disabled = false;
   }
 
-  // MusicXML DOM書き換えによる確実な同期
   async function syncMusicXmlAndReload() {
     if (!currentXmlContent) return;
 
@@ -447,45 +493,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // 【最重要】日本語を含むSVGをOSのネイティブフォントで300DPI相当の高精細Canvas化するヘルパー
-  function renderSvgToHighDpiCanvas(svgElement, width, height, scale = 2.5) {
-    return new Promise((resolve, reject) => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(width * scale);
-        canvas.height = Math.round(height * scale);
-        const ctx = canvas.getContext("2d");
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const clonedSvg = svgElement.cloneNode(true);
-        clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-        clonedSvg.setAttribute("width", width);
-        clonedSvg.setAttribute("height", height);
-
-        const svgString = new XMLSerializer().serializeToString(clonedSvg);
-        const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(svgBlob);
-
-        const img = new Image();
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          URL.revokeObjectURL(url);
-          resolve(canvas);
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error("SVGのキャンバス変換に失敗しました"));
-        };
-        img.src = url;
-      } catch (e) {
-        reject(e);
-      }
-    });
-  }
-
-  // 【文字化け完全解決】PDF直接ダウンロード
+  // =========================================================================
+  // 【完全ベクターPDF出力】日本語TTFフォントを埋め込み、音符・記号も全てベクター出力
+  // =========================================================================
   async function downloadPdfDirectly() {
     const backends = osmd.drawer && osmd.drawer.Backends;
     if (!backends || backends.length === 0) {
@@ -495,7 +505,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       btnDownloadPdf.disabled = true;
-      showStatus("PDFファイルを生成中...");
+      showStatus("PDFファイルを生成中 (完全ベクター)...");
 
       const fmtKey = formatSelect.value;
       const formatSpec = PAPER_FORMATS[fmtKey] || PAPER_FORMATS["A4_P"];
@@ -509,23 +519,31 @@ document.addEventListener("DOMContentLoaded", () => {
           (formatSpec.widthMm / 25.4) * 72,
           (formatSpec.heightMm / 25.4) * 72
         ],
-        compress: true
+        compress: true,
+        putOnlyUsedFonts: true // 使用した文字のグリフ情報のみ格納して超軽量化
       });
 
       const pdfPageWidth = pdf.internal.pageSize.getWidth();
       const pdfPageHeight = pdf.internal.pageSize.getHeight();
 
-      // 日本語（非ASCII）文字が含まれているかを検出
-      const scoreText = container.textContent || "";
-      const hasNonAscii = /[^\x00-\x7F]/.test(scoreText);
+      // 日本語TTFフォントの取得と登録
+      const FONT_NAME = "MPlus1p";
+      const fontBase64 = await loadJapaneseFont();
+      if (fontBase64) {
+        pdf.addFileToVFS(`${FONT_NAME}.ttf`, fontBase64);
+        pdf.addFont(`${FONT_NAME}.ttf`, FONT_NAME, "normal");
+      }
 
       for (let idx = 0; idx < backends.length; idx++) {
         if (idx > 0) {
           pdf.addPage([pdfPageWidth, pdfPageHeight], orientation);
         }
-        showStatus(`PDFを生成中... (${idx + 1} / ${backends.length} ページ)`);
+        showStatus(`ベクターPDF出力中... (${idx + 1} / ${backends.length} ページ)`);
 
-        const svgElement = backends[idx].getSvgElement();
+        const originalSvg = backends[idx].getSvgElement();
+        // 画面描画を乱さないようクローンを操作
+        const svgElement = originalSvg.cloneNode(true);
+
         const vb = svgElement.viewBox && svgElement.viewBox.baseVal;
         const svgW = (vb && vb.width > 0) ? vb.width : (parseFloat(svgElement.getAttribute("width")) || formatSpec.canvasWidthPx);
         const svgH = (vb && vb.height > 0) ? vb.height : (parseFloat(svgElement.getAttribute("height")) || (svgW * 1.414));
@@ -539,25 +557,26 @@ document.addEventListener("DOMContentLoaded", () => {
           targetH = pdfPageHeight;
         }
 
-        if (hasNonAscii) {
-          // 日本語を含む場合: ブラウザのネイティブ日本語フォントで高精細キャンバス描画（文字化けが100%消失）
-          const canvas = await renderSvgToHighDpiCanvas(svgElement, svgW, svgH, 2.5);
-          const imgData = canvas.toDataURL("image/jpeg", 0.95);
-          pdf.addImage(imgData, "JPEG", 0, 0, targetW, targetH, undefined, "FAST");
-        } else {
-          // 純粋な英数記号のみ: svg2pdfによるベクター出力
-          await pdf.svg(svgElement, {
-            x: 0,
-            y: 0,
-            width: targetW,
-            height: targetH
+        // svg2pdf.js が日本語テキストを Helvetica ではなく登録した TTF フォントで描画するよう明示指定
+        if (fontBase64) {
+          svgElement.querySelectorAll("text, tspan").forEach(el => {
+            el.setAttribute("font-family", FONT_NAME);
+            el.style.fontFamily = FONT_NAME;
           });
         }
+
+        // 五線・音符・スラー・テキスト全てを 100% 純粋なベクターとして PDF 化
+        await pdf.svg(svgElement, {
+          x: 0,
+          y: 0,
+          width: targetW,
+          height: targetH
+        });
       }
 
       const modeName = viewModeSelect.value === "all" ? "FullScore" : `Part_${parseInt(viewModeSelect.value, 10) + 1}`;
       pdf.save(`${currentFileName}_${modeName}.pdf`);
-      showStatus(`ダウンロード完了: ${currentFileName}_${modeName}.pdf`);
+      showStatus(`ダウンロード完了: ${currentFileName}_${modeName}.pdf (完全ベクター)`);
 
     } catch (err) {
       console.error(err);
@@ -570,10 +589,9 @@ document.addEventListener("DOMContentLoaded", () => {
   btnDownloadPdf.addEventListener("click", downloadPdfDirectly);
   btnPrintSheet.addEventListener("click", () => window.print());
 
-  // 【BOM付きUTF-8】MusicXML保存
+  // BOM付きUTF-8 MusicXML保存
   btnExportXml.addEventListener("click", () => {
     if (!currentXmlContent) return;
-    // 先頭に \uFEFF を付与して他ソフトでの誤認を防止
     const blob = new Blob(["\uFEFF", currentXmlContent], {
       type: "application/vnd.recordare.musicxml+xml;charset=utf-8"
     });
