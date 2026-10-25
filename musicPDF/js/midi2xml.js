@@ -20,7 +20,6 @@ const Midi2Xml = (() => {
     const quantizeDivision = parseInt(options.quantize || 16, 10);
     const gridTicks = Math.round((ppq * 4) / quantizeDivision);
 
-    // 拍子の取得（未指定時は 4/4）
     let beats = 4;
     let beatType = 4;
     if (parsedMidi.header.timeSignatures && parsedMidi.header.timeSignatures.length > 0) {
@@ -29,7 +28,6 @@ const Midi2Xml = (() => {
     }
     const ticksPerMeasure = Math.round(beats * (ppq * 4 / beatType));
 
-    // 全トラックからノートを展開してクオンタイズ
     const allNotes = [];
     parsedMidi.tracks.forEach(track => {
       track.notes.forEach(note => {
@@ -45,12 +43,11 @@ const Midi2Xml = (() => {
     });
 
     if (allNotes.length === 0) {
-      throw new Error("MIDI内に検出可能なノートイベントが存在しません。");
+      throw new Error("MIDI内に音符イベントが存在しません。");
     }
 
     allNotes.sort((a, b) => a.startTick - b.startTick || a.midi - b.midi);
 
-    // 音高の平均値からト音／ヘ音記号を自動選定
     const avgPitch = allNotes.reduce((sum, n) => sum + n.midi, 0) / allNotes.length;
     const isBass = avgPitch < 55;
     const clefSign = isBass ? 'F' : 'G';
@@ -67,13 +64,12 @@ const Midi2Xml = (() => {
   </work>
   <part-list>
     <score-part id="P1">
-      <part-name>Track</part-name>
+      <part-name>Piano</part-name>
     </score-part>
   </part-list>
   <part id="P1">
 `;
 
-    // 小節単位の構造化
     for (let m = 0; m < totalMeasures; m++) {
       const mStart = m * ticksPerMeasure;
       const mEnd = mStart + ticksPerMeasure;
@@ -103,7 +99,6 @@ const Midi2Xml = (() => {
           const curNote = measureNotes[i];
           const isChord = i > 0 && curNote.startTick === measureNotes[i - 1].startTick;
 
-          // 前の音符との空白を休符で埋める
           if (!isChord && curNote.startTick > cursor) {
             const restDur = curNote.startTick - cursor;
             xml += `      <note>
@@ -115,7 +110,15 @@ const Midi2Xml = (() => {
             cursor = curNote.startTick;
           }
 
-          const effEnd = Math.min(mEnd, curNote.endTick);
+          let nextNonChordTick = mEnd;
+          for (let j = i + 1; j < measureNotes.length; j++) {
+            if (measureNotes[j].startTick > curNote.startTick) {
+              nextNonChordTick = measureNotes[j].startTick;
+              break;
+            }
+          }
+
+          const effEnd = Math.min(nextNonChordTick, Math.min(mEnd, curNote.endTick));
           const dur = Math.max(gridTicks, effEnd - curNote.startTick);
 
           const step = PITCH_CLASSES[curNote.midi % 12];
@@ -135,11 +138,10 @@ const Midi2Xml = (() => {
       </note>\n`;
 
           if (!isChord) {
-            cursor = Math.max(cursor, effEnd);
+            cursor = Math.max(cursor, curNote.startTick + dur);
           }
         }
 
-        // 小節末尾の余白を休符で埋める
         if (cursor < mEnd) {
           const restDur = mEnd - cursor;
           xml += `      <note>
