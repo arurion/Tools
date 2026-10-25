@@ -1,13 +1,12 @@
 :root {
-  /* サックスホワイト〜アッシュグレーのライトテーマ */
+  /* サックスホワイト〜アッシュグレー */
   --bg-workspace: #edf4f9;
   --text-main: #1e293b;
   --text-muted: #64748b;
-  --tint-blue: rgba(215, 232, 247, 0.65);
+  --tint-blue: rgba(215, 232, 247, 0.72);
   --glass-border: rgba(100, 116, 139, 0.18);
   --glass-highlight: rgba(255, 255, 255, 0.85);
 
-  /* 操作アクセント */
   --accent-blue: #0284c7;
   --accent-blue-hover: #0369a1;
   --accent-blue-active: #0c4a6e;
@@ -41,89 +40,91 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.65rem 1.75rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.65rem 1.25rem;
   background: var(--tint-blue);
-  backdrop-filter: blur(10px) saturate(135%);
-  -webkit-backdrop-filter: blur(10px) saturate(135%);
+  backdrop-filter: blur(12px) saturate(135%);
+  -webkit-backdrop-filter: blur(12px) saturate(135%);
   box-shadow: 
     0 1px 0 var(--glass-highlight) inset,
-    0 4px 16px -2px rgba(15, 23, 42, 0.06);
+    0 4px 16px -2px rgba(15, 23, 42, 0.05);
 }
 
 .chrome-brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 
 .brand-icon {
   color: var(--accent-blue);
-  stroke-width: 2;
 }
 
 .brand-name {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #0f172a;
 }
 
 .format-badge {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.5rem;
-  background: rgba(255, 255, 255, 0.65);
+  font-size: 0.68rem;
+  padding: 0.15rem 0.45rem;
+  background: rgba(255, 255, 255, 0.7);
   color: var(--text-muted);
   border-radius: 3px;
   font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
 .chrome-controls {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.param-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .param-unit {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.825rem;
+  gap: 0.35rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
-  font-weight: 500;
 }
 
 select {
-  padding: 0.35rem 0.6rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 3px;
   border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.85);
-  font-size: 0.825rem;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.8rem;
   color: var(--text-main);
   outline: none;
   cursor: pointer;
-  transition: border-color 0.15s ease;
 }
 
-select:hover {
-  border-color: rgba(100, 116, 139, 0.4);
-}
-
-.action-divider {
-  width: 1px;
-  height: 18px;
-  background: rgba(100, 116, 139, 0.25);
-  margin: 0 0.2rem;
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .action-btn {
-  padding: 0.42rem 0.95rem;
+  padding: 0.45rem 0.85rem;
   border-radius: 3px;
-  font-size: 0.825rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   border: none;
-  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+  min-height: 36px;
+  transition: background 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
 }
 
 .action-btn.primary {
@@ -134,7 +135,6 @@ select:hover {
 
 .action-btn.primary:hover:not(:disabled) {
   background: var(--accent-blue-hover);
-  box-shadow: 0 4px 10px rgba(2, 132, 199, 0.35);
 }
 
 .action-btn.primary:active:not(:disabled) {
@@ -143,39 +143,38 @@ select:hover {
 }
 
 .action-btn.secondary {
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.8);
   color: var(--text-main);
   border: 1px solid var(--glass-border);
 }
 
 .action-btn.secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
 }
 
 .action-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
   box-shadow: none;
 }
 
-/* メイン領域 */
+/* メイン作業領域 */
 .workbench {
   flex: 1;
-  padding: 1.5rem;
-  max-width: 1100px;
+  padding: 1.25rem 1rem;
+  max-width: 1080px;
   margin: 0 auto;
   width: 100%;
 }
 
 /* ドロップゾーン */
 .drop-surface {
-  padding: 2.2rem 1.5rem;
+  padding: 1.75rem 1rem;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1.5px dashed rgba(100, 116, 139, 0.3);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1.5px dashed rgba(100, 116, 139, 0.25);
   text-align: center;
-  margin-bottom: 1.25rem;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  margin-bottom: 1rem;
 }
 
 .drop-surface.dragover {
@@ -187,36 +186,33 @@ select:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .upload-icon {
   color: var(--text-muted);
-  margin-bottom: 0.25rem;
 }
 
 .drop-instructions .primary-msg {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-main);
 }
 
 .drop-instructions .secondary-msg {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: 0.15rem;
 }
 
 .drop-instructions code {
-  background: rgba(255, 255, 255, 0.8);
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.1rem 0.3rem;
+  border-radius: 2px;
 }
 
 .file-picker-btn {
-  margin-top: 0.4rem;
-  padding: 0.4rem 1rem;
+  margin-top: 0.3rem;
+  padding: 0.45rem 1rem;
   background: #ffffff;
   color: var(--text-main);
   border: 1px solid var(--glass-border);
@@ -224,11 +220,9 @@ select:hover {
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-}
-
-.file-picker-btn:hover {
-  background: #f8fafc;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .file-picker-btn input {
@@ -238,31 +232,57 @@ select:hover {
 /* 状態通知 */
 .status-panel {
   display: none;
-  font-size: 0.825rem;
-  padding: 0.6rem 1rem;
+  font-size: 0.8rem;
+  padding: 0.55rem 0.85rem;
   border-radius: 3px;
-  margin-bottom: 1.25rem;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(6px);
+  margin-bottom: 1rem;
+  background: rgba(255, 255, 255, 0.8);
   border-left: 3px solid var(--accent-blue);
 }
 
-/* 楽譜コンテナ */
+/* 楽譜描画コンテナ (A4比率を死守するスクロールビュー) */
 .score-sheet-wrapper {
   background: #ffffff;
   border-radius: 3px;
-  padding: 2rem 1.5rem;
+  padding: 1.5rem 1rem;
   box-shadow: 
     0 1px 3px rgba(15, 23, 42, 0.05),
-    0 12px 24px -6px rgba(15, 23, 42, 0.04);
-  min-height: 480px;
+    0 8px 20px -4px rgba(15, 23, 42, 0.03);
+  min-height: 450px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
+/* モバイル時でもA4組版が1小節単位に潰れないよう最小幅を担保 */
 #osmd-container {
-  width: 100%;
+  min-width: 760px;
+  margin: 0 auto;
 }
 
-/* 印刷・PDF出力 */
+/* モバイル向け最適化 (幅768px以下) */
+@media (max-width: 768px) {
+  .app-chrome {
+    padding: 0.6rem 0.85rem;
+  }
+  .chrome-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .action-group {
+    flex-grow: 1;
+    justify-content: flex-end;
+  }
+  .action-btn {
+    flex: 1;
+    text-align: center;
+    padding: 0.5rem 0.4rem;
+  }
+  .workbench {
+    padding: 0.75rem 0.5rem;
+  }
+}
+
+/* 印刷用 (紙への直接印刷用) */
 @page {
   size: A4 portrait;
   margin: 10mm;
@@ -273,29 +293,23 @@ select:hover {
     background: #ffffff !important;
     padding: 0 !important;
     margin: 0 !important;
-    max-width: 100% !important;
-    min-height: auto !important;
   }
-
   .no-print {
     display: none !important;
   }
-
   .score-sheet-wrapper {
     box-shadow: none !important;
     padding: 0 !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    width: 100% !important;
+    overflow: visible !important;
   }
-
+  #osmd-container {
+    min-width: auto !important;
+  }
   svg {
     max-width: 100% !important;
-    height: auto !important;
     page-break-after: always;
     break-after: page;
   }
-
   svg:last-child {
     page-break-after: avoid;
     break-after: avoid;
