@@ -4,10 +4,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("file-input");
   const statusBar = document.getElementById("status-bar");
 
-  // コントロール要素
   const formatSelect = document.getElementById("format-select");
   const measuresSelect = document.getElementById("measures-select");
-  const densitySelect = document.getElementById("density-select");
   const scaleSlider = document.getElementById("scale-slider");
   const scaleLabel = document.getElementById("scale-label");
   const quantizeSelect = document.getElementById("quantize-select");
@@ -20,21 +18,20 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentFileName = "score";
   let lastLoadedFile = null;
 
-  // 用紙サイズ定義（OSMDとjsPDFの両方で使用）
+  // 用紙規格設定: VexFlowが必要とする十分な最小キャンバス幅（px）を確保
   const PAPER_FORMATS = {
-    "A4_P": { isStandard: true,  osmdId: "A4_P",     width: 210,   height: 297,   jspdfFormat: "a4",     orientation: "portrait" },
-    "A4_L": { isStandard: true,  osmdId: "A4_L",     width: 297,   height: 210,   jspdfFormat: "a4",     orientation: "landscape" },
-    "B5_P": { isStandard: false, osmdId: "custom",   width: 182,   height: 257,   jspdfFormat: [182, 257], orientation: "portrait" },
-    "B5_L": { isStandard: false, osmdId: "custom",   width: 257,   height: 182,   jspdfFormat: [257, 182], orientation: "landscape" },
-    "Letter_P": { isStandard: true, osmdId: "Letter_P", width: 215.9, height: 279.4, jspdfFormat: "letter", orientation: "portrait" },
-    "Letter_L": { isStandard: true, osmdId: "Letter_L", width: 279.4, height: 215.9, jspdfFormat: "letter", orientation: "landscape" },
-    "A3_P": { isStandard: true,  osmdId: "A3_P",     width: 297,   height: 420,   jspdfFormat: "a3",     orientation: "portrait" },
-    "A3_L": { isStandard: true,  osmdId: "A3_L",     width: 420,   height: 297,   jspdfFormat: "a3",     orientation: "landscape" }
+    "A4_P":     { osmdOption: "A4_P",     widthMm: 210,   heightMm: 297,   canvasWidthPx: 1050 },
+    "A4_L":     { osmdOption: "A4_L",     widthMm: 297,   heightMm: 210,   canvasWidthPx: 1480 },
+    "Letter_P": { osmdOption: "Letter_P", widthMm: 215.9, heightMm: 279.4, canvasWidthPx: 1080 },
+    "Letter_L": { osmdOption: "Letter_L", widthMm: 279.4, heightMm: 215.9, canvasWidthPx: 1400 },
+    "Endless":  { osmdOption: "Endless",  widthMm: 210,   heightMm: 297,   canvasWidthPx: 1050 }
   };
 
-  // OSMDインスタンス初期化
+  // 初期キャンバス幅を1050pxに固定してOSMDを生成
+  container.style.width = "1050px";
+
   const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
-    autoResize: false, // 端末解像度による崩れを防ぎ、設定通りの出力を保証
+    autoResize: false, // 画面サイズによるページ割れ・幅圧縮を防ぐ
     backend: "svg",
     drawingParameters: "default",
     drawTitle: true,
@@ -49,44 +46,32 @@ document.addEventListener("DOMContentLoaded", () => {
     statusBar.style.borderLeftColor = isError ? "#ef4444" : "var(--accent-blue)";
   }
 
-  // レイアウト設定の反映と再描画
+  // レイアウトと再描画
   function applyLayoutAndRender() {
     if (!osmd.sheet) return;
 
-    // 1. 用紙サイズの設定
     const fmtKey = formatSelect.value;
     const formatSpec = PAPER_FORMATS[fmtKey] || PAPER_FORMATS["A4_P"];
-    if (formatSpec.isStandard) {
-      osmd.setPageFormat(formatSpec.osmdId);
-    } else {
-      osmd.setCustomPageFormat(formatSpec.width, formatSpec.height);
-    }
 
-    // 2. 1段あたりの小節数 (0 = 自動)
+    // 1. OSMDが小節幅を計算するための十分なコンテナ幅（px）をセット
+    container.style.width = `${formatSpec.canvasWidthPx}px`;
+
+    // 2. 公式オプションメソッド setOptions を使用して用紙フォーマットを更新
+    osmd.setOptions({
+      pageFormat: formatSpec.osmdOption
+    });
+
+    // 3. 1段の小節数 (0 = 自動組版)
     const measures = parseInt(measuresSelect.value, 10);
     osmd.EngravingRules.RenderXMeasuresPerLineAkaSystem = measures;
 
-    // 3. 段間隔・密度設定
-    const density = densitySelect.value;
-    if (density === "compact") {
-      osmd.EngravingRules.BetweenStaffDistance = 10;
-      osmd.EngravingRules.StaffDistance = 5;
-    } else if (density === "spacious") {
-      osmd.EngravingRules.BetweenStaffDistance = 22;
-      osmd.EngravingRules.StaffDistance = 9;
-    } else {
-      osmd.EngravingRules.BetweenStaffDistance = 15;
-      osmd.EngravingRules.StaffDistance = 7;
-    }
+    // 4. ズーム倍率
+    osmd.zoom = parseFloat(scaleSlider.value);
 
-    // 4. ズーム・スケール
-    const scale = parseFloat(scaleSlider.value);
-    osmd.zoom = scale;
-
+    // 5. 描画
     osmd.render();
   }
 
-  // ファイル解析処理
   async function handleFile(file) {
     if (!file) return;
     lastLoadedFile = file;
@@ -137,49 +122,73 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 指定用紙サイズで直接ベクターPDFを生成・ダウンロード
+  // 【OSMD公式仕様準拠】SVGの比率を完全に維持したベクターPDF出力
   async function downloadPdfDirectly() {
-    const svgs = container.querySelectorAll("svg");
-    if (svgs.length === 0) {
+    const backends = osmd.drawer && osmd.drawer.Backends;
+    if (!backends || backends.length === 0) {
       showStatus("出力対象の楽譜が見つかりません。", true);
       return;
     }
 
     try {
       btnDownloadPdf.disabled = true;
-      showStatus("PDFを生成中...");
+      showStatus("PDFファイルを生成中...");
 
       const fmtKey = formatSelect.value;
       const formatSpec = PAPER_FORMATS[fmtKey] || PAPER_FORMATS["A4_P"];
+      const orientation = formatSpec.heightMm > formatSpec.widthMm ? "portrait" : "landscape";
 
       const { jsPDF } = window.jspdf;
+      // ポイント単位（pt）でPDFドキュメントを初期化
       const pdf = new jsPDF({
-        orientation: formatSpec.orientation,
-        unit: "mm",
-        format: formatSpec.jspdfFormat,
+        orientation: orientation,
+        unit: "pt",
+        format: [
+          (formatSpec.widthMm / 25.4) * 72,
+          (formatSpec.heightMm / 25.4) * 72
+        ],
         compress: true
       });
 
-      const pWidth = pdf.internal.pageSize.getWidth();
-      const pHeight = pdf.internal.pageSize.getHeight();
+      const pdfPageWidth = pdf.internal.pageSize.getWidth();
+      const pdfPageHeight = pdf.internal.pageSize.getHeight();
 
-      for (let i = 0; i < svgs.length; i++) {
-        if (i > 0) {
-          pdf.addPage(formatSpec.jspdfFormat, formatSpec.orientation);
+      for (let idx = 0; idx < backends.length; idx++) {
+        if (idx > 0) {
+          pdf.addPage([pdfPageWidth, pdfPageHeight], orientation);
         }
-        showStatus(`PDFを生成中... (${i + 1} / ${svgs.length} ページ)`);
+        showStatus(`PDFを生成中... (${idx + 1} / ${backends.length} ページ)`);
 
-        const svg = svgs[i];
-        await pdf.svg(svg, {
+        const svgElement = backends[idx].getSvgElement();
+
+        // SVG本来の解像度・アスペクト比を取得
+        const vb = svgElement.viewBox && svgElement.viewBox.baseVal;
+        const svgW = (vb && vb.width > 0) ? vb.width : (parseFloat(svgElement.getAttribute("width")) || formatSpec.canvasWidthPx);
+        const svgH = (vb && vb.height > 0) ? vb.height : (parseFloat(svgElement.getAttribute("height")) || (svgW * 1.414));
+
+        // 用紙横幅いっぱいに収めたときの正確な高さを計算（縦横比率を完全保持）
+        const renderedHeight = pdfPageWidth * (svgH / svgW);
+
+        // 高さがページを超える場合は全体を縮小
+        let targetW = pdfPageWidth;
+        let targetH = renderedHeight;
+        if (renderedHeight > pdfPageHeight) {
+          const ratio = pdfPageHeight / renderedHeight;
+          targetW *= ratio;
+          targetH = pdfPageHeight;
+        }
+
+        // svg2pdf.js v2 の公式仕様に沿って描画
+        await pdf.svg(svgElement, {
           x: 0,
           y: 0,
-          width: pWidth,
-          height: pHeight
+          width: targetW,
+          height: targetH
         });
       }
 
       pdf.save(`${currentFileName}.pdf`);
-      showStatus(`ダウンロード完了: ${currentFileName}.pdf (${fmtKey.replace('_', ' ')})`);
+      showStatus(`ダウンロード完了: ${currentFileName}.pdf`);
 
     } catch (err) {
       console.error(err);
@@ -189,10 +198,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // レイアウト変更イベント（即時再計算）
+  // イベントリスナー
   formatSelect.addEventListener("change", applyLayoutAndRender);
   measuresSelect.addEventListener("change", applyLayoutAndRender);
-  densitySelect.addEventListener("change", applyLayoutAndRender);
 
   scaleSlider.addEventListener("input", (e) => {
     scaleLabel.textContent = `${Math.round(e.target.value * 100)}%`;
@@ -205,7 +213,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ダウンロード・印刷
   btnDownloadPdf.addEventListener("click", downloadPdfDirectly);
   btnPrintSheet.addEventListener("click", () => window.print());
 
@@ -220,7 +227,6 @@ document.addEventListener("DOMContentLoaded", () => {
     URL.revokeObjectURL(link);
   });
 
-  // ドラッグ＆ドロップ & ファイルピッカー
   dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropZone.classList.add("dragover");
@@ -233,6 +239,7 @@ document.addEventListener("DOMContentLoaded", () => {
       handleFile(e.dataTransfer.files[0]);
     }
   });
+
   fileInput.addEventListener("change", (e) => {
     if (e.target.files.length > 0) {
       handleFile(e.target.files[0]);
