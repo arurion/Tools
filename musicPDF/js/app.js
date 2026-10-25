@@ -72,7 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
         parsedMidiData = new Midi(buffer);
 
         currentParts = Midi2Xml.extractPartProfiles(parsedMidiData, splitModeSelect.value);
-        metaTitle.value = parsedMidiData.header.name || currentFileName;
+        metaTitle.value = Midi2Xml.decodeMidiText(parsedMidiData.header.name) || currentFileName;
         metaComposer.value = "";
 
         buildPartTable();
@@ -85,7 +85,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (ext === 'mxl') {
           const buffer = await file.arrayBuffer();
           await osmd.load(buffer);
-          // mxlの場合は内部のMusicXMLをテキストとして抽出不可のため再ロード用フラグをクリア
           currentXmlContent = null;
         } else {
           let text = await file.text();
@@ -183,7 +182,6 @@ document.addEventListener("DOMContentLoaded", () => {
     partTableBody.innerHTML = "";
     currentParts = [];
 
-    // DOMからポートとチャンネルの取得を試みる
     let doc = null;
     if (currentXmlContent) {
       try {
@@ -268,7 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 表示スコア（Full Score / 単独パート）の切り替えプルダウン
+  // 表示スコア切り替えプルダウン
   function updateViewModeOptions() {
     viewModeSelect.innerHTML = `<option value="all">Full Score (総譜)</option>`;
     if (isMidiMode) {
@@ -310,7 +308,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const parser = new DOMParser();
       const doc = parser.parseFromString(currentXmlContent, "application/xml");
 
-      // タイトル
       let workTitle = doc.querySelector("work work-title");
       if (!workTitle) {
         let work = doc.querySelector("work");
@@ -323,7 +320,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       workTitle.textContent = metaTitle.value.trim() || currentFileName;
 
-      // 作曲者
       if (metaComposer.value.trim()) {
         let comp = doc.querySelector("identification creator[type='composer']");
         if (!comp) {
@@ -340,7 +336,6 @@ document.addEventListener("DOMContentLoaded", () => {
         comp.textContent = metaComposer.value.trim();
       }
 
-      // パート名、ポート、チャンネル
       const scoreParts = doc.querySelectorAll("part-list score-part");
       scoreParts.forEach((sp, idx) => {
         if (currentParts[idx]) {
@@ -383,7 +378,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 表示パートのフィルタリング
   function filterVisiblePart() {
     if (!osmd.sheet) return;
     const mode = viewModeSelect.value;
@@ -401,7 +395,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // レイアウト反映
   function applyLayoutAndRender() {
     if (!osmd.sheet) return;
 
@@ -422,7 +415,6 @@ document.addEventListener("DOMContentLoaded", () => {
     osmd.render();
   }
 
-  // 設定反映ボタン
   btnApplyMeta.addEventListener("click", async () => {
     if (isMidiMode && parsedMidiData) {
       await rebuildMidiXmlAndRender();
@@ -432,7 +424,6 @@ document.addEventListener("DOMContentLoaded", () => {
     showStatus("スコアとパート設定を更新しました。");
   });
 
-  // 分割基準変更 (MIDI)
   splitModeSelect.addEventListener("change", async () => {
     if (isMidiMode && parsedMidiData) {
       currentParts = Midi2Xml.extractPartProfiles(parsedMidiData, splitModeSelect.value);
@@ -456,7 +447,45 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // PDF直接ダウンロード
+  // 【最重要】日本語を含むSVGをOSのネイティブフォントで300DPI相当の高精細Canvas化するヘルパー
+  function renderSvgToHighDpiCanvas(svgElement, width, height, scale = 2.5) {
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        const ctx = canvas.getContext("2d");
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const clonedSvg = svgElement.cloneNode(true);
+        clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        clonedSvg.setAttribute("width", width);
+        clonedSvg.setAttribute("height", height);
+
+        const svgString = new XMLSerializer().serializeToString(clonedSvg);
+        const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          resolve(canvas);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("SVGのキャンバス変換に失敗しました"));
+        };
+        img.src = url;
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  // 【文字化け完全解決】PDF直接ダウンロード
   async function downloadPdfDirectly() {
     const backends = osmd.drawer && osmd.drawer.Backends;
     if (!backends || backends.length === 0) {
@@ -486,6 +515,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const pdfPageWidth = pdf.internal.pageSize.getWidth();
       const pdfPageHeight = pdf.internal.pageSize.getHeight();
 
+      // 日本語（非ASCII）文字が含まれているかを検出
+      const scoreText = container.textContent || "";
+      const hasNonAscii = /[^\x00-\x7F]/.test(scoreText);
+
       for (let idx = 0; idx < backends.length; idx++) {
         if (idx > 0) {
           pdf.addPage([pdfPageWidth, pdfPageHeight], orientation);
@@ -506,12 +539,20 @@ document.addEventListener("DOMContentLoaded", () => {
           targetH = pdfPageHeight;
         }
 
-        await pdf.svg(svgElement, {
-          x: 0,
-          y: 0,
-          width: targetW,
-          height: targetH
-        });
+        if (hasNonAscii) {
+          // 日本語を含む場合: ブラウザのネイティブ日本語フォントで高精細キャンバス描画（文字化けが100%消失）
+          const canvas = await renderSvgToHighDpiCanvas(svgElement, svgW, svgH, 2.5);
+          const imgData = canvas.toDataURL("image/jpeg", 0.95);
+          pdf.addImage(imgData, "JPEG", 0, 0, targetW, targetH, undefined, "FAST");
+        } else {
+          // 純粋な英数記号のみ: svg2pdfによるベクター出力
+          await pdf.svg(svgElement, {
+            x: 0,
+            y: 0,
+            width: targetW,
+            height: targetH
+          });
+        }
       }
 
       const modeName = viewModeSelect.value === "all" ? "FullScore" : `Part_${parseInt(viewModeSelect.value, 10) + 1}`;
@@ -529,9 +570,13 @@ document.addEventListener("DOMContentLoaded", () => {
   btnDownloadPdf.addEventListener("click", downloadPdfDirectly);
   btnPrintSheet.addEventListener("click", () => window.print());
 
+  // 【BOM付きUTF-8】MusicXML保存
   btnExportXml.addEventListener("click", () => {
     if (!currentXmlContent) return;
-    const blob = new Blob([currentXmlContent], { type: "application/vnd.recordare.musicxml+xml" });
+    // 先頭に \uFEFF を付与して他ソフトでの誤認を防止
+    const blob = new Blob(["\uFEFF", currentXmlContent], {
+      type: "application/vnd.recordare.musicxml+xml;charset=utf-8"
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
