@@ -6,7 +6,7 @@
   <title>ScoreFlow - Music Score PDF Converter</title>
   <link rel="stylesheet" href="./style.css" />
 
-  <!-- OSMD公式安定版 -->
+  <!-- OSMD公式安定版 (v2.2.1) -->
   <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@2.2.1/build/opensheetmusicdisplay.min.js"></script>
   <!-- @tonejs/midi -->
   <script src="https://unpkg.com/@tonejs/midi"></script>
@@ -16,7 +16,7 @@
 </head>
 <body>
   <div class="app-root">
-    <!-- OS風追従ヘッダー (ティントガラス質感 / 絵文字排除) -->
+    <!-- OS風追従ヘッダー (ティントガラス質感) -->
     <header class="app-chrome no-print">
       <div class="chrome-primary-row">
         <div class="chrome-brand">
@@ -26,7 +26,7 @@
             <circle cx="18" cy="16" r="3"></circle>
           </svg>
           <span class="brand-name">ScoreFlow</span>
-          <span class="format-badge">MusicXML 4.0 & MIDI</span>
+          <span class="format-badge">FullScore / Part Arranger</span>
         </div>
 
         <div class="action-group">
@@ -43,14 +43,23 @@
       </div>
 
       <div class="chrome-secondary-row">
+        <!-- 表示スコア切り替え: Full Score または特定パート -->
+        <div class="tool-unit">
+          <label for="view-mode-select">表示スコア</label>
+          <select id="view-mode-select" disabled>
+            <option value="all">Full Score (総譜)</option>
+          </select>
+        </div>
+
         <div class="tool-unit">
           <label for="format-select">用紙</label>
           <select id="format-select">
             <option value="A4_P" selected>A4 縦</option>
             <option value="A4_L">A4 横</option>
+            <option value="A3_P">A3 縦 (総譜推奨)</option>
+            <option value="A3_L">A3 横 (総譜推奨)</option>
             <option value="Letter_P">Letter 縦</option>
             <option value="Letter_L">Letter 横</option>
-            <option value="Endless">連続 (スクロール)</option>
           </select>
         </div>
 
@@ -61,12 +70,14 @@
             <option value="2">2 小節</option>
             <option value="3">3 小節</option>
             <option value="4">4 小節</option>
+            <option value="5">5 小節</option>
+            <option value="6">6 小節</option>
           </select>
         </div>
 
         <div class="tool-unit scale-unit">
           <label for="scale-slider">サイズ</label>
-          <input type="range" id="scale-slider" min="0.7" max="1.3" step="0.05" value="1.0" />
+          <input type="range" id="scale-slider" min="0.6" max="1.3" step="0.05" value="1.0" />
           <span id="scale-label" class="slider-val">100%</span>
         </div>
 
@@ -83,6 +94,7 @@
     </header>
 
     <main class="workbench">
+      <!-- ドロップゾーン -->
       <section id="drop-zone" class="drop-surface no-print">
         <div class="drop-content">
           <svg class="upload-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -105,7 +117,59 @@
 
       <div id="status-bar" class="status-panel no-print" aria-live="polite"></div>
 
-      <!-- 楽譜表示エリア: Flexboxによる幅収縮を完全に遮断 -->
+      <!-- スコア構成＆パート分割パネル (ファイル読込後に表示) -->
+      <section id="editor-panel" class="editor-surface no-print" style="display: none;">
+        <div class="editor-header">
+          <div class="header-left">
+            <span class="editor-title">スコア基本設定 & パート構成 (ch / ポート)</span>
+          </div>
+          <div class="header-right">
+            <!-- MIDIパート分割基準 -->
+            <div class="tool-unit" id="split-mode-unit" style="display: none;">
+              <label for="split-mode-select">MIDIパート分割基準:</label>
+              <select id="split-mode-select">
+                <option value="channel" selected>MIDIチャンネル単位 (ch 1〜16)</option>
+                <option value="track">トラック単位</option>
+                <option value="track_channel">トラック ＋ チャンネル単位</option>
+              </select>
+            </div>
+            <button id="btn-apply-meta" class="action-btn primary small">変更を楽譜に反映</button>
+          </div>
+        </div>
+
+        <!-- 曲名・作曲者 -->
+        <div class="meta-row">
+          <div class="input-unit flex-2">
+            <label for="meta-title">曲名 (Title)</label>
+            <input type="text" id="meta-title" placeholder="曲名を入力" />
+          </div>
+          <div class="input-unit flex-1">
+            <label for="meta-composer">作曲 / 編曲 (Composer)</label>
+            <input type="text" id="meta-composer" placeholder="作曲者名を入力" />
+          </div>
+        </div>
+
+        <!-- パート一覧テーブル (ポート、チャンネル、楽器名、音部記号) -->
+        <div class="part-table-wrapper">
+          <table class="part-table">
+            <thead>
+              <tr>
+                <th style="width: 44px; text-align: center;">有効</th>
+                <th style="width: 70px;">ポート</th>
+                <th style="width: 70px;">ch</th>
+                <th>楽器名 / パート名 (Part Name)</th>
+                <th style="width: 140px;">音部記号</th>
+                <th style="width: 80px; text-align: right;">音符数</th>
+              </tr>
+            </thead>
+            <tbody id="part-table-body">
+              <!-- JSで動的生成 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 楽譜描画ビューポート -->
       <article id="score-viewport" class="score-sheet-wrapper">
         <div id="osmd-container"></div>
       </article>
