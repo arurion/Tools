@@ -31,7 +31,7 @@ body {
   min-height: 100vh;
 }
 
-/* 追従ヘッダー (2段構成の一体型ティントガラス) */
+/* 追従ヘッダー (ティントガラス質感) */
 .app-chrome {
   position: sticky;
   top: 0;
@@ -131,7 +131,6 @@ body {
   box-shadow: none;
 }
 
-/* 下段コントロールバー */
 .chrome-secondary-row {
   display: flex;
   align-items: center;
@@ -161,7 +160,6 @@ select {
   cursor: pointer;
 }
 
-/* スライダー */
 .scale-unit {
   min-width: 170px;
 }
@@ -196,23 +194,20 @@ input[type="range"]::-webkit-slider-thumb {
   text-align: right;
 }
 
-/* メイン作業領域 */
 .workbench {
   flex: 1;
   padding: 1.25rem 1rem;
-  max-width: 1200px;
-  margin: 0 auto;
   width: 100%;
 }
 
-/* ドロップゾーン */
 .drop-surface {
+  max-width: 1100px;
+  margin: 0 auto 1rem auto;
   padding: 1.6rem 1rem;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.65);
   border: 1.5px dashed rgba(100, 116, 139, 0.25);
   text-align: center;
-  margin-bottom: 1rem;
 }
 
 .drop-surface.dragover {
@@ -257,46 +252,48 @@ input[type="range"]::-webkit-slider-thumb {
   display: none;
 }
 
-/* 状態通知 */
 .status-panel {
+  max-width: 1100px;
+  margin: 0 auto 1rem auto;
   display: none;
   font-size: 0.8rem;
   padding: 0.55rem 0.85rem;
   border-radius: 3px;
-  margin-bottom: 1rem;
   background: rgba(255, 255, 255, 0.85);
   border-left: 3px solid var(--accent-blue);
 }
 
-/* 楽譜描画コンテナ */
+/* 楽譜描画ラッパー: 
+   Flexboxによる子要素の強制圧縮（flex-shrink）を完全に防ぐため block + overflow-x: auto を使用 */
 .score-sheet-wrapper {
-  background: #ffffff;
-  border-radius: 3px;
-  padding: 1.5rem 1rem;
-  box-shadow: 
-    0 1px 3px rgba(15, 23, 42, 0.05),
-    0 8px 20px -4px rgba(15, 23, 42, 0.03);
-  min-height: 480px;
+  display: block;
+  width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  padding-bottom: 2rem;
 }
 
+/* コンテナ: 固定幅を確保し、中央寄せで自立させる */
 #osmd-container {
+  display: block;
   margin: 0 auto;
-  width: max-content;
-  min-width: 600px;
+  box-sizing: content-box;
 }
 
-/* モバイル向け最適化 (幅768px以下) */
+/* 各SVGページ: max-widthで潰さない */
+#osmd-container svg {
+  display: block;
+  margin: 0 auto 24px auto;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+}
+
 @media (max-width: 768px) {
   .app-chrome {
     padding: 0.5rem 0.75rem;
   }
   .chrome-secondary-row {
     gap: 0.5rem;
-  }
-  .tool-unit {
-    font-size: 0.75rem;
   }
   .scale-unit {
     min-width: 100%;
@@ -308,12 +305,8 @@ input[type="range"]::-webkit-slider-thumb {
     flex: 1;
     text-align: center;
   }
-  .workbench {
-    padding: 0.75rem 0.5rem;
-  }
 }
 
-/* 印刷用 */
 @media print {
   body, .app-root, .workbench {
     background: #ffffff !important;
@@ -324,20 +317,16 @@ input[type="range"]::-webkit-slider-thumb {
     display: none !important;
   }
   .score-sheet-wrapper {
-    box-shadow: none !important;
-    padding: 0 !important;
     overflow: visible !important;
+    padding: 0 !important;
   }
-  #osmd-container {
-    width: 100% !important;
-    min-width: auto !important;
-  }
-  svg {
-    max-width: 100% !important;
+  #osmd-container svg {
+    box-shadow: none !important;
+    margin: 0 !important;
     page-break-after: always;
     break-after: page;
   }
-  svg:last-child {
+  #osmd-container svg:last-child {
     page-break-after: avoid;
     break-after: avoid;
   }
