@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多次元色弁別 完全全機能統合解析システム（真・完全確定版）</title>
+<style>
+  :root {
+    --bg: #141414;
+    --card: #1c1c1c;
+    --inner: #161616;
+    --border: #333333;
+    --text: #eeeeee;
+    --text-sub: #aaaaaa;
+    --muted: #666666;
+    --white: #ffffff;
+    --black: #000000;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+
+  .container {
+    background: var(--card);
+    width: 100%;
+    max-width: 980px;
+    border-radius: 12px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  }
+
+  .screen { display: none; flex-direction: column; align-items: center; width: 100%; }
+  .screen.active { display: flex; }
+
+  h1 { font-size: 1.25rem; margin-bottom: 8px; text-align: center; font-weight: 600; }
+  p { color: var(--text-sub); font-size: 0.82rem; line-height: 1.6; margin-bottom: 18px; text-align: center; }
+
+  .btn {
+    background: var(--white);
+    color: var(--black);
+    border: none;
+    padding: 12px 36px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn:hover { opacity: 0.85; }
+
+  /* HUD：完全無彩色 */
+  .hud {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+    color: var(--text-sub);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timer-bar-container {
+    width: 100%;
+    height: 6px;
+    background: var(--inner);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .timer-bar {
+    width: 100%;
+    height: 100%;
+    background: var(--white);
+    transition: width 0.04s linear;
+  }
+
+  /* 盤面 */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: 100%;
+    aspect-ratio: 1/1;
+    max-width: 380px;
+    background: var(--black);
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .tile { border-radius: 4px; cursor: pointer; user-select: none; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+  .tile.wrong { animation: shake 0.25s ease-in-out; outline: 2px solid var(--white); }
+
+  /* 残像リセット用ブランク表示 */
+  .blank-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--inner);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 6px;
+    font-size: 1.4rem;
+    color: var(--muted);
+    user-select: none;
+    z-index: 10;
+  }
+
+  /* レポートUI（完全無彩色・全数値開示） */
+  .report-section {
+    width: 100%;
+    background: var(--inner);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .report-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    color: var(--white);
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 12px;
+    width: 100%;
+  }
+  .stat-card {
+    background: var(--inner);
+    border: 1px solid var(--border);
+    padding: 8px 4px;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.68rem;
+    color: var(--text-sub);
+  }
+  .stat-card .num { font-size: 0.95rem; font-weight: bold; color: var(--white); margin-top: 2px; }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+    text-align: center;
+    margin-top: 4px;
+  }
+  .data-table th, .data-table td {
+    padding: 5px 3px;
+    border: 1px solid var(--border);
+  }
+  .data-table th { background: #222222; color: var(--text-sub); font-weight: 600; }
+  .td-bold { font-weight: bold; color: var(--white); }
+
+  .scroll-box {
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    margin-top: 6px;
+  }
+
+  .diag-text {
+    font-size: 0.82rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .diag-text strong { color: var(--white); text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 1. 開始画面 -->
+  <div id="screen-start" class="screen active">
+    <h1>多次元色弁別 完全全機能統合解析システム</h1>
+    <p>
+      <strong>【これまでの全要望・全機能を1つも漏らさず完全網羅】</strong><br>
+      ① <strong>安心の段階的進行</strong>: 前半54問は大差（中微細差）で快適にスタート！後半54問で極微細限界テストへ。<br>
+      ② <strong>変化ベクトル完全解析</strong>: 色相変化（緑化/赤化等）、明度変化（明化/暗化）、彩度変化（鮮やか化/くすみ化）を独立追跡。<br>
+      ③ <strong>デジタルRGB（ΔR, ΔG, ΔB）＋ CIELAB（ΔL*, Δa*, Δb*）完全併記</strong>。<br>
+      ④ 1秒残像リセット・ブランク ＆ 完全無彩色環境 ＆ 全108問生ログ完全開示。
+    </p>
+    <button class="btn" onclick="startVectorTest()">測定スタート (全108問 / 段階出題)</button>
+  </div>
+
+  <!-- 2. テスト画面 -->
+  <div id="screen-game" class="screen">
+    <div class="hud">
+      <span id="hud-progress">問 1 / 108</span>
+      <span id="hud-tier">Phase: 準備中</span>
+      <span id="hud-timer">5.0s</span>
+    </div>
+    <div class="timer-bar-container">
+      <div id="timer-bar" class="timer-bar"></div>
+    </div>
+    <div id="board" class="board"></div>
+  </div>
+
+  <!-- 3. レポート画面 -->
+  <div id="screen-result" class="screen">
+    <h1>多次元完全数値解析レポート（全機能・全データ完全開示）</h1>
+
+    <!-- 1. 基本統合メトリクス（最弱明度・彩度カードも完全復元） -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div>総合ハイスコア</div>
+        <div id="res-score" class="num">0</div>
+      </div>
+      <div class="stat-card">
+        <div>平均反応時間</div>
+        <div id="res-speed" class="num">0.0s</div>
+      </div>
+      <div class="stat-card">
+        <div>ハイスコア帯正答率</div>
+        <div id="res-high-acc" class="num">0%</div>
+      </div>
+      <div class="stat-card">
+        <div>最弱色相変化</div>
+        <div id="res-weak-vec" class="num">-</div>
+      </div>
+      <div class="stat-card">
+        <div>最弱明度・彩度変化</div>
+        <div id="res-weak-ls" class="num">-</div>
+      </div>
+    </div>
+
+    <!-- 2. 【最重要】明度変化（ΔL*）＆ 彩度変化（ΔC*）別 性能一覧 -->
+    <div class="report-section">
+      <div class="report-title">【1】明度変化（ΔL*：明化/暗化）＆ 彩度変化（ΔC*：鮮やか化/くすみ化）性能一覧</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>変化属性</th>
+            <th>物理変化の向き</th>
+            <th>試行数</th>
+            <th>平均スコア</th>
+            <th>平均反応時間</th>
+            <th>正答率</th>
+            <th>最小識別JND ΔE₀₀</th>
+            <th>ミス回数</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-ls-vector-summary"></tbody>
+      </table>
+    </div>
+
+    <!-- 3. 色相変化ベクトル方向別（8大方位）性能一覧 -->
+    <div class="report-section">
+      <div class="report-title">【2】色相変化ベクトル方向別（ターゲットがどの色相へ変調したか）性能一覧</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>色相変化方向</th>
+            <th>物理変調成分</th>
+            <th>試行数</th>
+            <th>平均スコア</th>
+            <th>平均反応時間</th>
+            <th>正答率</th>
+            <th>最小識別JND ΔE₀₀</th>
+            <th>ミス回数</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-delta-vector-summary"></tbody>
+      </table>
+    </div>
+
+    <!-- 4. 変化ベクトル死角重心の数理診断 -->
+    <div class="report-section">
+      <div class="report-title">【3】変化ベクトル死角重心解析（知覚重心 vs 死角重心）</div>
+      <div id="res-vector-diag" class="diag-text"></div>
+    </div>
+
+    <!-- 5. 色相環 12方位 連続カーネルモーメント積分テーブル -->
+    <div class="report-section">
+      <div class="report-title">【4】色相環 12方位 連続カーネルモーメント積分（30°刻み連続期待値）</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>色相方位</th>
+            <th>基準角</th>
+            <th>有効重み (Σw)</th>
+            <th>モーメント期待スコア</th>
+            <th>重み付き平均反応時間</th>
+            <th>重み付き正答率</th>
+            <th>局所最小JND ΔE₀₀</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-moment-summary"></tbody>
+      </table>
+    </div>
+
+    <!-- 6. ベース色相別（RGBCMY）性能一覧 -->
+    <div class="report-section">
+      <div class="report-title">【5】出題ベース色相別（RGBCMY）性能一覧</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ベース色相</th>
+            <th>平均スコア</th>
+            <th>平均速度</th>
+            <th>総合正答率</th>
+            <th>ハイスコア帯正答率</th>
+            <th>ロースコア帯正答率</th>
+            <th>最小JND ΔE₀₀</th>
+            <th>ミス総数</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-hue-summary"></tbody>
+      </table>
+    </div>
+
+    <!-- 7. 全54条件 同軸ワーストランキング（完全復元） -->
+    <div class="report-section">
+      <div class="report-title">【6】全54条件 同軸ワーストランキング（ワースト1位〜54位 一覧ソート）</div>
+      <div class="scroll-box">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>順位</th>
+              <th>環境条件 (色相・L・S)</th>
+              <th>ペア総合スコア</th>
+              <th>平均反応速度</th>
+              <th>ハイ帯判定 (JND)</th>
+              <th>ロー帯判定 (JND)</th>
+              <th>合計ミス</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-ranked-matrix"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 8. 全54セル完全ペアマトリクス -->
+    <div class="report-section">
+      <div class="report-title">【7】RGBCMY × 輝度(3) × 彩度(3) 全54セル完全ペアマトリクス（ハイ/ロー並列、ΔL・ΔC*値付き）</div>
+      <div class="scroll-box">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>色相</th>
+              <th>輝度 (L)</th>
+              <th>彩度 (S)</th>
+              <th>[ハイ] ΔL, ΔC</th>
+              <th>[ハイ] 達成JND</th>
+              <th>[ハイ] 得点 / 秒</th>
+              <th>[ハイ] 判定</th>
+              <th>[ロー] ΔL, ΔC</th>
+              <th>[ロー] 達成JND</th>
+              <th>[ロー] 得点 / 秒</th>
+              <th>[ロー] 判定</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-54-pair-matrix"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 9. 全108問 完全試行生ログ（RGB変化量 ΔR, ΔG, ΔB も完全復元） -->
+    <div class="report-section">
+      <div class="report-title">【8】全108問 完全試行生ログ（ΔR, ΔG, ΔB ＆ ΔL*, Δa*, Δb* ＆ ΔL*, ΔC* 完全併記）</div>
+      <div class="scroll-box">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>問</th>
+              <th>ベース色</th>
+              <th>L / S</th>
+              <th>難易度</th>
+              <th>変化方向</th>
+              <th>RGB変化 (ΔR, ΔG, ΔB)</th>
+              <th>Lab変化 (ΔL*, Δa*, Δb*)</th>
+              <th>ΔL*, ΔC*</th>
+              <th>理論ΔE₀₀</th>
+              <th>時間</th>
+              <th>ミス</th>
+              <th>結果</th>
+              <th>スコア</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-raw-log"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="btn" style="margin-top: 10px;" onclick="startVectorTest()">もう一度全108問測定する</button>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// CIEDE2000 色差計算エンジン（厳密規格準拠）
+// ================================================================
+function srgbToLinear(c) {
+  c /= 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function rgbToXyz(r, g, b) {
+  const lr = srgbToLinear(r), lg = srgbToLinear(g), lb = srgbToLinear(b);
+  return [
+    lr * 0.4124564 + lg * 0.3575761 + lb * 0.1804375,
+    lr * 0.2126729 + lg * 0.7151522 + lb * 0.0721750,
+    lr * 0.0193339 + lg * 0.1191920 + lb * 0.9503041
+  ];
+}
+function xyzToLab(x, y, z) {
+  const xn = 0.95047, yn = 1.00000, zn = 1.08883;
+  let fx = x / xn, fy = y / yn, fz = z / zn;
+  const eps = 216 / 24389, kap = 24389 / 27;
+  fx = fx > eps ? Math.cbrt(fx) : (kap * fx + 16) / 116;
+  fy = fy > eps ? Math.cbrt(fy) : (kap * fy + 16) / 116;
+  fz = fz > eps ? Math.cbrt(fz) : (kap * fz + 16) / 116;
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function rgbToLab(r, g, b) {
+  const [x, y, z] = rgbToXyz(r, g, b);
+  return xyzToLab(x, y, z);
+}
+function labToXyz(L, a, b) {
+  const fy = (L + 16) / 116;
+  const fx = a / 500 + fy;
+  const fz = fy - b / 200;
+  const eps = 216 / 24389, kap = 24389 / 27;
+  const xr = Math.pow(fx, 3) > eps ? Math.pow(fx, 3) : (116 * fx - 16) / kap;
+  const yr = L > kap * eps ? Math.pow((L + 16) / 116, 3) : L / kap;
+  const zr = Math.pow(fz, 3) > eps ? Math.pow(fz, 3) : (116 * fz - 16) / kap;
+  return [xr * 0.95047, yr * 1.00000, zr * 1.08883];
+}
+function linearToSrgb(c) {
+  c = Math.max(0, Math.min(1, c));
+  return Math.round((c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255);
+}
+function xyzToRgb(x, y, z) {
+  const lr = x *  3.2404542 + y * -1.5371385 + z * -0.4985314;
+  const lg = x * -0.9692660 + y *  1.8760108 + z *  0.0415560;
+  const lb = x *  0.0556434 + y * -0.2040259 + z *  1.0572252;
+  return [linearToSrgb(lr), linearToSrgb(lg), linearToSrgb(lb)];
+}
+function labToRgb(L, a, b) {
+  const [x, y, z] = labToXyz(L, a, b);
+  return xyzToRgb(x, y, z);
+}
+
+function deltaE00(lab1, lab2) {
+  const [L1, a1, b1] = lab1;
+  const [L2, a2, b2] = lab2;
+  const avgL = (L1 + L2) / 2;
+  const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2);
+  const avgC = (C1 + C2) / 2;
+  const G = 0.5 * (1 - Math.sqrt(Math.pow(avgC, 7) / (Math.pow(avgC, 7) + Math.pow(25, 7))));
+  const a1p = (1 + G) * a1, a2p = (1 + G) * a2;
+  const C1p = Math.hypot(a1p, b1), C2p = Math.hypot(a2p, b2);
+  const avgCp = (C1p + C2p) / 2;
+
+  let h1p = Math.atan2(b1, a1p) * (180 / Math.PI);
+  if (h1p < 0) h1p += 360;
+  let h2p = Math.atan2(b2, a2p) * (180 / Math.PI);
+  if (h2p < 0) h2p += 360;
+
+  let deltahp = 0;
+  if (C1p * C2p !== 0) {
+    deltahp = h2p - h1p;
+    if (Math.abs(deltahp) > 180) deltahp += (h2p <= h1p ? 360 : -360);
+  }
+  const deltaHp = 2 * Math.sqrt(C1p * C2p) * Math.sin((deltahp / 2) * (Math.PI / 180));
+
+  let avghp = h1p + h2p;
+  if (C1p * C2p === 0) avghp = h1p + h2p;
+  else if (Math.abs(h1p - h2p) <= 180) avghp = (h1p + h2p) / 2;
+  else avghp = (h1p + h2p < 360) ? (h1p + h2p + 360) / 2 : (h1p + h2p - 360) / 2;
+
+  const deltaLp = L2 - L1, deltaCp = C2p - C1p;
+  const Sl = 1 + (0.015 * Math.pow(avgL - 50, 2)) / Math.sqrt(20 + Math.pow(avgL - 50, 2));
+  const Sc = 1 + 0.045 * avgCp;
+  const T = 1 - 0.17 * Math.cos(((avghp - 30) * Math.PI) / 180)
+            + 0.24 * Math.cos((2 * avghp * Math.PI) / 180)
+            + 0.32 * Math.cos(((3 * avghp + 6) * Math.PI) / 180)
+            - 0.20 * Math.cos(((4 * avghp - 63) * Math.PI) / 180);
+  const Sh = 1 + 0.015 * avgCp * T;
+  const deltaTheta = 30 * Math.exp(-Math.pow((avghp - 275) / 25, 2));
+  const Rc = 2 * Math.sqrt(Math.pow(avgCp, 7) / (Math.pow(avgCp, 7) + Math.pow(25, 7)));
+  const Rt = -Math.sin((2 * deltaTheta * Math.PI) / 180) * Rc;
+
+  return Math.sqrt(
+    Math.pow(deltaLp / Sl, 2) + Math.pow(deltaCp / Sc, 2) + Math.pow(deltaHp / Sh, 2) +
+    Rt * (deltaCp / Sc) * (deltaHp / Sh)
+  );
+}
+
+function hslToRgbHelper(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+function classifyDeltaVector(da, db, dl) {
+  let angle = Math.atan2(db, da) * (180 / Math.PI);
+  if (angle < 0) angle += 360;
+
+  let dirName = '', id = '';
+  if (angle >= 337.5 || angle < 22.5) {
+    id = 'RED_SHIFT'; dirName = '赤化変化 (+Δa*)';
+  } else if (angle >= 22.5 && angle < 67.5) {
+    id = 'ORANGE_SHIFT'; dirName = '橙化変化 (+Δa*, +Δb*)';
+  } else if (angle >= 67.5 && angle < 112.5) {
+    id = 'YELLOW_SHIFT'; dirName = '黄化変化 (+Δb*)';
+  } else if (angle >= 112.5 && angle < 157.5) {
+    id = 'LIME_SHIFT'; dirName = '黄緑化変化 (-Δa*, +Δb*)';
+  } else if (angle >= 157.5 && angle < 202.5) {
+    id = 'GREEN_SHIFT'; dirName = '緑化変化 (-Δa*)';
+  } else if (angle >= 202.5 && angle < 247.5) {
+    id = 'CYAN_SHIFT'; dirName = '青緑/シアン化 (-Δa*, -Δb*)';
+  } else if (angle >= 247.5 && angle < 292.5) {
+    id = 'BLUE_SHIFT'; dirName = '青化変化 (-Δb*)';
+  } else {
+    id = 'MAGENTA_SHIFT'; dirName = '紫化変化 (+Δa*, -Δb*)';
+  }
+
+  const lumDesc = dl >= 0 ? '+ΔL* (明化)' : '-ΔL* (暗化)';
+  return { id, dirName, angle, lumDesc };
+}
+
+// ================================================================
+// 実験パラメータ設計（段階的進行：前半ロー帯54問 → 後半ハイ帯54問）
+// ================================================================
+const HUES = [
+  { id: 'R', name: '赤 (Red)',      angle: 0 },
+  { id: 'Y', name: '黄 (Yellow)',   angle: 60 },
+  { id: 'G', name: '緑 (Green)',    angle: 120 },
+  { id: 'C', name: 'シアン (Cyan)', angle: 180 },
+  { id: 'B', name: '青 (Blue)',     angle: 240 },
+  { id: 'M', name: '紫 (Magenta)',  angle: 300 }
+];
+
+const LIGHTS = [
+  { id: 'LowL',  name: '低輝度 (30%)', l: 30 },
+  { id: 'MidL',  name: '中輝度 (55%)', l: 55 },
+  { id: 'HighL', name: '高輝度 (80%)', l: 80 }
+];
+
+const SATS = [
+  { id: 'LowS',  name: '低彩度 (35%)', s: 35 },
+  { id: 'MidS',  name: '中彩度 (65%)', s: 65 },
+  { id: 'HighS', name: '高彩度 (90%)', s: 90 }
+];
+
+const TIERS = [
+  { id: 'LOW',  name: 'Phase 1: 中微細差 (ウォーミングアップ)', targetDeltaE: 4.80, basePt: 400 },
+  { id: 'HIGH', name: 'Phase 2: 極微細差 (限界測定テスト)',   targetDeltaE: 1.60, basePt: 1500 }
+];
+
+let questions = [];
+let currentIndex = 0;
+let totalScore = 0;
+let results = [];
+let timerId = null;
+let startTime = 0;
+let answered = false;
+let missCount = 0;
+const LIMIT_TIME = 5000;
+const BLANK_TIME = 1000;
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function generateCalibratedTarget(lab0, targetDeltaE, dirAngle, dirL) {
+  let low = 0.1, high = 15.0;
+  let bestRgb = [0, 0, 0];
+  let bestLab = lab0;
+  let bestDE = 0;
+
+  for (let iter = 0; iter < 12; iter++) {
+    const scale = (low + high) / 2;
+    const rad = (dirAngle * Math.PI) / 180;
+    const testL = Math.max(10, Math.min(90, lab0[0] + dirL * scale * 0.45));
+    const testA = lab0[1] + Math.cos(rad) * scale;
+    const testB = lab0[2] + Math.sin(rad) * scale;
+
+    const rgb = labToRgb(testL, testA, testB);
+    const labActual = rgbToLab(...rgb);
+    const de = deltaE00(lab0, labActual);
+
+    bestRgb = rgb;
+    bestLab = labActual;
+    bestDE = de;
+
+    if (de < targetDeltaE) low = scale;
+    else high = scale;
+  }
+
+  return { rgb: bestRgb, lab: bestLab, deltaE: parseFloat(bestDE.toFixed(2)) };
+}
+
+// 段階的出題：前半54問（ロー帯）→ 後半54問（ハイ帯）を厳格に構築
+function build108VectorQuestions() {
+  const lowList = [];
+  const highList = [];
+
+  HUES.forEach(h => {
+    LIGHTS.forEach(l => {
+      SATS.forEach(s => {
+        const jitter = (Math.random() * 10 - 5);
+        const actualHue = (h.angle + jitter + 360) % 360;
+        const rgb0 = hslToRgbHelper(actualHue, s.s, l.l);
+        const lab0 = rgbToLab(...rgb0);
+        const chroma0 = Math.hypot(lab0[1], lab0[2]);
+
+        // 1. ロー帯（中微細差）
+        const dirAngleLow = Math.random() * 360;
+        const dirLLow = (Math.random() > 0.5 ? 1 : -1);
+        const targetLow = generateCalibratedTarget(lab0, TIERS[0].targetDeltaE, dirAngleLow, dirLLow);
+
+        const dlLow = parseFloat((targetLow.lab[0] - lab0[0]).toFixed(2));
+        const daLow = parseFloat((targetLow.lab[1] - lab0[1]).toFixed(2));
+        const dbLow = parseFloat((targetLow.lab[2] - lab0[2]).toFixed(2));
+        const chromaLow = Math.hypot(targetLow.lab[1], targetLow.lab[2]);
+        const dcLow = parseFloat((chromaLow - chroma0).toFixed(2));
+
+        const drLow = targetLow.rgb[0] - rgb0[0];
+        const dgLow = targetLow.rgb[1] - rgb0[1];
+        const db_rgbLow = targetLow.rgb[2] - rgb0[2];
+
+        lowList.push({
+          cellId: `${h.id}_${l.id}_${s.id}`,
+          hue: h, hueAngle: actualHue, light: l, sat: s, tier: TIERS[0],
+          rgb0: rgb0, rgb1: targetLow.rgb, deltaE: targetLow.deltaE,
+          deltaR: drLow, deltaG: dgLow, deltaB_rgb: db_rgbLow,
+          deltaL: dlLow, deltaA: daLow, deltaB: dbLow, deltaC: dcLow,
+          vecInfo: classifyDeltaVector(daLow, dbLow, dlLow)
+        });
+
+        // 2. ハイ帯（極微細差）
+        const dirAngleHigh = Math.random() * 360;
+        const dirLHigh = (Math.random() > 0.5 ? 1 : -1);
+        const targetHigh = generateCalibratedTarget(lab0, TIERS[1].targetDeltaE, dirAngleHigh, dirLHigh);
+
+        const dlHigh = parseFloat((targetHigh.lab[0] - lab0[0]).toFixed(2));
+        const daHigh = parseFloat((targetHigh.lab[1] - lab0[1]).toFixed(2));
+        const dbHigh = parseFloat((targetHigh.lab[2] - lab0[2]).toFixed(2));
+        const chromaHigh = Math.hypot(targetHigh.lab[1], targetHigh.lab[2]);
+        const dcHigh = parseFloat((chromaHigh - chroma0).toFixed(2));
+
+        const drHigh = targetHigh.rgb[0] - rgb0[0];
+        const dgHigh = targetHigh.rgb[1] - rgb0[1];
+        const db_rgbHigh = targetHigh.rgb[2] - rgb0[2];
+
+        highList.push({
+          cellId: `${h.id}_${l.id}_${s.id}`,
+          hue: h, hueAngle: actualHue, light: l, sat: s, tier: TIERS[1],
+          rgb0: rgb0, rgb1: targetHigh.rgb, deltaE: targetHigh.deltaE,
+          deltaR: drHigh, deltaG: dgHigh, deltaB_rgb: db_rgbHigh,
+          deltaL: dlHigh, deltaA: daHigh, deltaB: dbHigh, deltaC: dcHigh,
+          vecInfo: classifyDeltaVector(daHigh, dbHigh, dlHigh)
+        });
+      });
+    });
+  });
+
+  // 前半＝シャッフルしたロー帯54問、後半＝シャッフルしたハイ帯54問
+  questions = [...shuffle(lowList), ...shuffle(highList)];
+}
+
+function startVectorTest() {
+  document.getElementById('screen-start').classList.remove('active');
+  document.getElementById('screen-result').classList.remove('active');
+  document.getElementById('screen-game').classList.add('active');
+
+  build108VectorQuestions();
+  currentIndex = 0;
+  totalScore = 0;
+  results = [];
+  triggerQuestionWithBlank();
+}
+
+function triggerQuestionWithBlank() {
+  if (currentIndex >= questions.length) {
+    finishTest();
+    return;
+  }
+
+  clearInterval(timerId);
+  document.getElementById('timer-bar').style.width = '100%';
+  document.getElementById('hud-timer').textContent = '5.0s';
+  document.getElementById('hud-progress').textContent = `問 ${currentIndex + 1} / ${questions.length}`;
+  document.getElementById('hud-tier').textContent = questions[currentIndex].tier.id === 'LOW' ? 'Phase 1: 中微細差' : 'Phase 2: 極微細差';
+
+  const board = document.getElementById('board');
+  board.innerHTML = '<div class="blank-overlay">+</div>';
+
+  setTimeout(() => {
+    renderTilesAndStartTimer();
+  }, BLANK_TIME);
+}
+
+function renderTilesAndStartTimer() {
+  answered = false;
+  missCount = 0;
+  const q = questions[currentIndex];
+
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const targetIdx = Math.floor(Math.random() * 16);
+
+  for (let i = 0; i < 16; i++) {
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+
+    if (i === targetIdx) {
+      tile.style.backgroundColor = `rgb(${q.rgb1[0]}, ${q.rgb1[1]}, ${q.rgb1[2]})`;
+      tile.onclick = () => onCorrect();
+    } else {
+      tile.style.backgroundColor = `rgb(${q.rgb0[0]}, ${q.rgb0[1]}, ${q.rgb0[2]})`;
+      tile.onclick = (e) => onWrong(e.target);
+    }
+    board.appendChild(tile);
+  }
+
+  startTime = performance.now();
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timerId);
+  const bar = document.getElementById('timer-bar');
+  const timerText = document.getElementById('hud-timer');
+
+  timerId = setInterval(() => {
+    const elapsed = performance.now() - startTime;
+    const remaining = Math.max(0, LIMIT_TIME - elapsed);
+    const ratio = remaining / LIMIT_TIME;
+
+    bar.style.width = (ratio * 100) + '%';
+    timerText.textContent = (remaining / 1000).toFixed(1) + 's';
+
+    if (remaining <= 0) {
+      clearInterval(timerId);
+      onTimeout();
+    }
+  }, 25);
+}
+
+function onWrong(el) {
+  if (answered) return;
+  missCount++;
+  el.classList.remove('wrong');
+  void el.offsetWidth;
+  el.classList.add('wrong');
+}
+
+function onCorrect() {
+  if (answered) return;
+  answered = true;
+  clearInterval(timerId);
+
+  const timeSpent = Math.min(LIMIT_TIME, performance.now() - startTime);
+  const q = questions[currentIndex];
+  const timeBonus = (LIMIT_TIME - timeSpent) / LIMIT_TIME;
+  const missPenalty = Math.max(0.1, 1 - (missCount * 0.25));
+  const score = Math.round(q.tier.basePt * (0.35 + 0.65 * timeBonus) * missPenalty);
+  totalScore += score;
+
+  results.push({ q, isCorrect: true, timeSpent, misses: missCount, score, deltaE: q.deltaE });
+  currentIndex++;
+  triggerQuestionWithBlank();
+}
+
+function onTimeout() {
+  if (answered) return;
+  answered = true;
+  results.push({ q: questions[currentIndex], isCorrect: false, timeSpent: LIMIT_TIME, misses: missCount, score: 0, deltaE: questions[currentIndex].deltaE });
+  currentIndex++;
+  triggerQuestionWithBlank();
+}
+
+// ================================================================
+// レポート出力（全機能・全データ完全開示）
+// ================================================================
+function finishTest() {
+  document.getElementById('screen-game').classList.remove('active');
+  document.getElementById('screen-result').classList.add('active');
+
+  const safeSet = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  safeSet('res-score', totalScore.toLocaleString());
+
+  const avgSpeed = (results.reduce((a, b) => a + b.timeSpent, 0) / results.length / 1000).toFixed(2);
+  safeSet('res-speed', avgSpeed + 's');
+
+  const highList = results.filter(r => r.q.tier.id === 'HIGH');
+  const highAcc = Math.round((highList.filter(r => r.isCorrect).length / highList.length) * 100);
+  safeSet('res-high-acc', highAcc + '%');
+
+  try { renderLSVectorTable(); } catch(e) { console.error(e); }
+  try { renderDeltaVectorTable(); } catch(e) { console.error(e); }
+  try { renderDeltaVectorDiagnosis(); } catch(e) { console.error(e); }
+  try { renderMomentSummaryTable(); } catch(e) { console.error(e); }
+  try { renderHueSummaryTable(); } catch(e) { console.error(e); }
+  try { renderRankedMatrixTable(); } catch(e) { console.error(e); }
+  try { render54PairTable(); } catch(e) { console.error(e); }
+  try { renderRawLogTable(); } catch(e) { console.error(e); }
+}
+
+function renderLSVectorTable() {
+  const tbody = document.getElementById('tbody-ls-vector-summary');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const lsCategories = [
+    { id: 'L_PLUS',  name: '明化変化 (+ΔL*)',  desc: 'ターゲットが明るく変化', filter: r => r.q.deltaL > 0 },
+    { id: 'L_MINUS', name: '暗化変化 (-ΔL*)',  desc: 'ターゲットが暗く変化',   filter: r => r.q.deltaL < 0 },
+    { id: 'C_PLUS',  name: '鮮やか化 (+ΔC*)', desc: 'ターゲットの彩度が増加', filter: r => r.q.deltaC > 0 },
+    { id: 'C_MINUS', name: 'くすみ化 (-ΔC*)', desc: 'ターゲットの彩度が低下', filter: r => r.q.deltaC < 0 }
+  ];
+
+  const catStats = [];
+
+  lsCategories.forEach(cat => {
+    const matched = results.filter(cat.filter);
+    if (matched.length === 0) return;
+
+    const count = matched.length;
+    const avgScore = Math.round(matched.reduce((a, b) => a + b.score, 0) / count);
+    const avgSpeed = (matched.reduce((a, b) => a + b.timeSpent, 0) / count / 1000).toFixed(2);
+    const acc = Math.round((matched.filter(r => r.isCorrect).length / count) * 100);
+    const solvedDEs = matched.filter(r => r.isCorrect).map(r => r.deltaE);
+    const minJND = solvedDEs.length > 0 ? Math.min(...solvedDEs).toFixed(2) : '>5.00';
+    const totalMiss = matched.reduce((a, b) => a + b.misses, 0);
+
+    catStats.push({ ...cat, count, avgScore, avgSpeed, acc, minJND, totalMiss });
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-bold">${cat.name}</td>
+      <td>${cat.desc}</td>
+      <td>${count}問</td>
+      <td class="td-bold">${avgScore} pt</td>
+      <td>${avgSpeed}s</td>
+      <td class="td-bold">${acc}%</td>
+      <td class="td-bold">${minJND}</td>
+      <td>${totalMiss}回</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (catStats.length > 0) {
+    const sorted = [...catStats].sort((a, b) => a.avgScore - b.avgScore);
+    const weakLsEl = document.getElementById('res-weak-ls');
+    if (weakLsEl) weakLsEl.textContent = `${sorted[0].name.split(' ')[0]} (${sorted[0].acc}%)`;
+  }
+}
+
+function renderDeltaVectorTable() {
+  const tbody = document.getElementById('tbody-delta-vector-summary');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const vectorCategories = [
+    { id: 'GREEN_SHIFT',   name: '緑化変化',     desc: '-Δa* (緑方向へズレた)' },
+    { id: 'RED_SHIFT',     name: '赤化変化',     desc: '+Δa* (赤方向へズレた)' },
+    { id: 'YELLOW_SHIFT',  name: '黄化変化',     desc: '+Δb* (黄方向へズレた)' },
+    { id: 'BLUE_SHIFT',    name: '青化変化',     desc: '-Δb* (青方向へズレた)' },
+    { id: 'CYAN_SHIFT',    name: '青緑/シアン化', desc: '-Δa*, -Δb*' },
+    { id: 'LIME_SHIFT',    name: '黄緑化変化',   desc: '-Δa*, +Δb*' },
+    { id: 'ORANGE_SHIFT',  name: '橙化変化',     desc: '+Δa*, +Δb*' },
+    { id: 'MAGENTA_SHIFT', name: '紫化変化',     desc: '+Δa*, -Δb*' }
+  ];
+
+  const catStats = [];
+
+  vectorCategories.forEach(cat => {
+    const matched = results.filter(r => r.q.vecInfo.id === cat.id);
+    if (matched.length === 0) return;
+
+    const count = matched.length;
+    const avgScore = Math.round(matched.reduce((a, b) => a + b.score, 0) / count);
+    const avgSpeed = (matched.reduce((a, b) => a + b.timeSpent, 0) / count / 1000).toFixed(2);
+    const acc = Math.round((matched.filter(r => r.isCorrect).length / count) * 100);
+    const solvedDEs = matched.filter(r => r.isCorrect).map(r => r.deltaE);
+    const minJND = solvedDEs.length > 0 ? Math.min(...solvedDEs).toFixed(2) : '>5.00';
+    const totalMiss = matched.reduce((a, b) => a + b.misses, 0);
+
+    catStats.push({ ...cat, count, avgScore, avgSpeed, acc, minJND, totalMiss });
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-bold">${cat.name}</td>
+      <td>${cat.desc}</td>
+      <td>${count}問</td>
+      <td class="td-bold">${avgScore} pt</td>
+      <td>${avgSpeed}s</td>
+      <td class="td-bold">${acc}%</td>
+      <td class="td-bold">${minJND}</td>
+      <td>${totalMiss}回</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (catStats.length > 0) {
+    const sorted = [...catStats].sort((a, b) => a.avgScore - b.avgScore);
+    const worst = sorted[0];
+    const weakEl = document.getElementById('res-weak-vec');
+    if (weakEl) weakEl.textContent = `${worst.name} (${worst.acc}%)`;
+  }
+}
+
+function renderDeltaVectorDiagnosis() {
+  const box = document.getElementById('res-vector-diag');
+  if (!box) return;
+
+  let peakX = 0, peakY = 0, peakW = 0;
+  let blindX = 0, blindY = 0, blindW = 0;
+
+  results.forEach(r => {
+    const rad = (r.q.vecInfo.angle * Math.PI) / 180;
+    if (r.isCorrect && r.score > 0) {
+      peakX += r.score * Math.cos(rad);
+      peakY += r.score * Math.sin(rad);
+      peakW += r.score;
+    }
+    const penalty = (r.misses * 300) + (r.isCorrect ? 0 : 1500);
+    if (penalty > 0) {
+      blindX += penalty * Math.cos(rad);
+      blindY += penalty * Math.sin(rad);
+      blindW += penalty;
+    }
+  });
+
+  let peakAngle = Math.atan2(peakY, peakX) * (180 / Math.PI);
+  if (peakAngle < 0) peakAngle += 360;
+
+  let blindAngle = Math.atan2(blindY, blindX) * (180 / Math.PI);
+  if (blindAngle < 0) blindAngle += 360;
+
+  box.innerHTML = `
+    ・<strong>最強変化ベクトル方位（最高感度）</strong>: <strong>${Math.round(peakAngle)}° 方向への色変調</strong><br>
+    ・<strong>死角変化ベクトル方位（最大不感帯）</strong>: <strong>${Math.round(blindAngle)}° 方向への色変調</strong><br><br>
+    <em>【総合特性診断】</em><br>
+    上部【1】テーブルで、<strong>明度変化（+ΔL* vs -ΔL*）</strong>および<strong>彩度変化（+ΔC* vs -ΔC*）</strong>の耐性を確認してください。<br>
+    色相方向（【2】テーブル）と合わせることで、あなたが「明るくなる変化に強いのか」「くすむ変化に弱いのか」を含む3次元の知覚境界が完全に数値化されます。
+  `;
+}
+
+function renderMomentSummaryTable() {
+  const tbody = document.getElementById('tbody-moment-summary');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const directions = [
+    { name: '赤 (Red)', deg: 0 },
+    { name: '橙 (Orange)', deg: 30 },
+    { name: '黄 (Yellow)', deg: 60 },
+    { name: '黄緑 (Lime)', deg: 90 },
+    { name: '緑 (Green)', deg: 120 },
+    { name: '青緑 (Mint)', deg: 150 },
+    { name: 'シアン (Cyan)', deg: 180 },
+    { name: '空色 (Sky)', deg: 210 },
+    { name: '青 (Blue)', deg: 240 },
+    { name: '藍 (Violet)', deg: 270 },
+    { name: '紫 (Magenta)', deg: 300 },
+    { name: '紅 (Rose)', deg: 330 }
+  ];
+
+  const sigma = 30;
+
+  directions.forEach(d => {
+    let weightSum = 0, scoreSum = 0, timeSum = 0, correctWeight = 0;
+    let localSolvedDEs = [];
+
+    results.forEach(r => {
+      const baseAng = r.q.hueAngle !== undefined ? r.q.hueAngle : r.q.hue.angle;
+      let dist = Math.abs(d.deg - baseAng) % 360;
+      if (dist > 180) dist = 360 - dist;
+
+      const w = Math.exp(-(dist * dist) / (2 * sigma * sigma));
+      weightSum += w;
+      scoreSum += r.score * w;
+      timeSum += r.timeSpent * w;
+
+      if (r.isCorrect) {
+        correctWeight += w;
+        if (dist <= 25) localSolvedDEs.push(r.deltaE);
+      }
+    });
+
+    const expScore = Math.round(scoreSum / (weightSum || 1));
+    const expTime = (timeSum / (weightSum || 1) / 1000).toFixed(2);
+    const expAcc = Math.round((correctWeight / (weightSum || 1)) * 100);
+    const minJND = localSolvedDEs.length > 0 ? Math.min(...localSolvedDEs).toFixed(2) : '>5.00';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-bold">${d.name}</td>
+      <td>${d.deg}°</td>
+      <td>${weightSum.toFixed(2)}</td>
+      <td class="td-bold">${expScore} pt</td>
+      <td>${expTime}s</td>
+      <td>${expAcc}%</td>
+      <td class="td-bold">${minJND}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderHueSummaryTable() {
+  const tbody = document.getElementById('tbody-hue-summary');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  HUES.forEach(h => {
+    const list = results.filter(r => r.q.hue.id === h.id);
+    const avgScore = Math.round(list.reduce((a, b) => a + b.score, 0) / list.length);
+    const avgSpeed = (list.reduce((a, b) => a + b.timeSpent, 0) / list.length / 1000).toFixed(2);
+    const totalAcc = Math.round((list.filter(r => r.isCorrect).length / list.length) * 100);
+
+    const hList = list.filter(r => r.q.tier.id === 'HIGH');
+    const lList = list.filter(r => r.q.tier.id === 'LOW');
+    const hAcc = Math.round((hList.filter(r => r.isCorrect).length / (hList.length || 1)) * 100);
+    const lAcc = Math.round((lList.filter(r => r.isCorrect).length / (lList.length || 1)) * 100);
+
+    const solvedDEs = list.filter(r => r.isCorrect).map(r => r.deltaE);
+    const minJND = solvedDEs.length > 0 ? Math.min(...solvedDEs).toFixed(2) : '>5.00';
+    const totalMiss = list.reduce((a, b) => a + b.misses, 0);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-bold">${h.name}</td>
+      <td>${avgScore} pt</td>
+      <td>${avgSpeed}s</td>
+      <td>${totalAcc}%</td>
+      <td>${hAcc}%</td>
+      <td>${lAcc}%</td>
+      <td class="td-bold">${minJND}</td>
+      <td>${totalMiss}回</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// 【新設・完全復元】全54条件 同軸ワーストランキング
+function renderRankedMatrixTable() {
+  const tbody = document.getElementById('tbody-ranked-matrix');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const cellStats = [];
+
+  HUES.forEach(h => {
+    LIGHTS.forEach(l => {
+      SATS.forEach(s => {
+        const cellId = `${h.id}_${l.id}_${s.id}`;
+        const highMatch = results.find(r => r.q.cellId === cellId && r.q.tier.id === 'HIGH');
+        const lowMatch = results.find(r => r.q.cellId === cellId && r.q.tier.id === 'LOW');
+
+        const scoreSum = (highMatch ? highMatch.score : 0) + (lowMatch ? lowMatch.score : 0);
+        const timeAvg = (((highMatch ? highMatch.timeSpent : 5000) + (lowMatch ? lowMatch.timeSpent : 5000)) / 2 / 1000).toFixed(2);
+        const totalMiss = (highMatch ? highMatch.misses : 0) + (lowMatch ? lowMatch.misses : 0);
+
+        cellStats.push({
+          label: `${h.name.split(' ')[0]}・${l.name.split(' ')[0]}・${s.name.split(' ')[0]}`,
+          scoreSum, timeAvg, totalMiss,
+          highMatch, lowMatch
+        });
+      });
+    });
+  });
+
+  // ワースト順（スコア昇順）にソート
+  cellStats.sort((a, b) => a.scoreSum - b.scoreSum || b.totalMiss - a.totalMiss);
+
+  cellStats.forEach((c, idx) => {
+    const tr = document.createElement('tr');
+    const hJND = c.highMatch && c.highMatch.isCorrect ? c.highMatch.deltaE : '>5.00';
+    const lJND = c.lowMatch && c.lowMatch.isCorrect ? c.lowMatch.deltaE : '>5.00';
+
+    tr.innerHTML = `
+      <td class="td-bold">#${idx + 1}</td>
+      <td class="td-bold">${c.label}</td>
+      <td>${c.scoreSum} pt</td>
+      <td>${c.timeAvg}s</td>
+      <td>${c.highMatch && c.highMatch.isCorrect ? '○' : '×'} (${hJND})</td>
+      <td>${c.lowMatch && c.lowMatch.isCorrect ? '○' : '×'} (${lJND})</td>
+      <td>${c.totalMiss}回</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function render54PairTable() {
+  const tbody = document.getElementById('tbody-54-pair-matrix');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  HUES.forEach(h => {
+    LIGHTS.forEach(l => {
+      SATS.forEach(s => {
+        const cellId = `${h.id}_${l.id}_${s.id}`;
+        const highMatch = results.find(r => r.q.cellId === cellId && r.q.tier.id === 'HIGH');
+        const lowMatch = results.find(r => r.q.cellId === cellId && r.q.tier.id === 'LOW');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="td-bold">${h.name}</td>
+          <td>${l.name}</td>
+          <td>${s.name}</td>
+          <td>${highMatch ? `ΔL:${highMatch.q.deltaL}, ΔC:${highMatch.q.deltaC}` : '-'}</td>
+          <td class="td-bold">${highMatch ? (highMatch.isCorrect ? highMatch.deltaE : '>5.00') : '-'}</td>
+          <td>${highMatch ? `${highMatch.score}pt / ${(highMatch.timeSpent/1000).toFixed(2)}s` : '-'}</td>
+          <td>${highMatch ? (highMatch.isCorrect ? '○' : '×') : '-'}</td>
+          <td>${lowMatch ? `ΔL:${lowMatch.q.deltaL}, ΔC:${lowMatch.q.deltaC}` : '-'}</td>
+          <td class="td-bold">${lowMatch ? (lowMatch.isCorrect ? lowMatch.deltaE : '>5.00') : '-'}</td>
+          <td>${lowMatch ? `${lowMatch.score}pt / ${(lowMatch.timeSpent/1000).toFixed(2)}s` : '-'}</td>
+          <td>${lowMatch ? (lowMatch.isCorrect ? '○' : '×') : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    });
+  });
+}
+
+function renderRawLogTable() {
+  const tbody = document.getElementById('tbody-raw-log');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  results.forEach((r, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>#${idx + 1}</td>
+      <td class="td-bold">${r.q.hue.name.split(' ')[0]}</td>
+      <td>${r.q.light.name.split(' ')[0]} / ${r.q.sat.name.split(' ')[0]}</td>
+      <td>${r.q.tier.id}</td>
+      <td class="td-bold">${r.q.vecInfo.dirName.split(' ')[0]}</td>
+      <td>(${r.q.deltaR >= 0 ? '+' : ''}${r.q.deltaR}, ${r.q.deltaG >= 0 ? '+' : ''}${r.q.deltaG}, ${r.q.deltaB_rgb >= 0 ? '+' : ''}${r.q.deltaB_rgb})</td>
+      <td>(${r.q.deltaL >= 0 ? '+' : ''}${r.q.deltaL}, ${r.q.deltaA >= 0 ? '+' : ''}${r.q.deltaA}, ${r.q.deltaB >= 0 ? '+' : ''}${r.q.deltaB})</td>
+      <td class="td-bold">ΔL:${r.q.deltaL >= 0 ? '+' : ''}${r.q.deltaL}, ΔC:${r.q.deltaC >= 0 ? '+' : ''}${r.q.deltaC}</td>
+      <td>${r.deltaE}</td>
+      <td>${(r.timeSpent / 1000).toFixed(2)}s</td>
+      <td>${r.misses}</td>
+      <td>${r.isCorrect ? '○' : '×'}</td>
+      <td class="td-bold">${r.score} pt</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+</script>
+
+</body>
+</html>
