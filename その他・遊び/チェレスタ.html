@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>5.5-Octave Authentic Celesta Physical Model (C3 - F8)</title>
+  <style>
+    /* =========================================================================
+       Tinted Glass UI Philosophy: Strict Design Tokens
+       ========================================================================= */
+    :root {
+      /* 色: サックスブルー (HSV 215°, 50%, 100%) と サックスホワイト (HSV 210°, 10%, 100%) */
+      --glass-tint: 136 187 255;          /* #88BBFF サックスブルー */
+      --glass-alpha: 0.38;                /* 枠のガラス */
+      --glass-alpha-active: 0.50;         /* 操作中の枠 */
+      --glass-alpha-inactive: 0.30;       /* 非操作の枠 */
+      
+      --content-tint: 234 245 255;        /* #EAF5FF サックスホワイト */
+      --content-alpha: 0.45;              /* 本体 */
+      
+      /* 文字色: 深いネイビー (コントラスト比4.5:1以上、主要テキストは7:1以上を死守) */
+      --text: #0F172A;                    /* ディープネイビー */
+      --text-muted: #334155;              /* 読みやすい濃いめのスレートネイビー */
+      --text-sub: #475569;
+
+      /* 光と影: 光源は左上に1つ。ギラつかない上端ハイライトと右下への落ち影 */
+      --edge: rgb(100 116 139 / 0.25);    /* スモーキーな淡い縁取り */
+      --highlight: inset 0 1px 0 rgb(255 255 255 / 0.70);
+      --halo: 0 0 8px rgb(255 255 255 / 0.90), 0 1px 2px rgb(255 255 255 / 0.65);
+
+      /* 高さの階層影 */
+      --shadow-1: 2px 4px 10px rgb(15 40 80 / 0.08);
+      --shadow-2: 4px 8px 20px rgb(15 40 80 / 0.10);
+      --shadow-3: 6px 12px 30px rgb(15 40 80 / 0.14);
+
+      --radius: 4px;                      /* 固定px。拡縮しても曲率は変えない */
+      --glass-blur: 4px;                  /* 既定4px */
+      --surface-base: 234 245 255;
+
+      /* 屈折フィルター */
+      --refract-filter: url(#glass-refract);
+
+      /* 霜の微粒子 (不透明度0.05以下) */
+      --frost-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.045'/></svg>");
+
+      /* 反射ハイライト (画面基準の光の層) */
+      --hl-angle: 115deg;
+      --hl-stripes: repeating-linear-gradient(var(--hl-angle),
+        transparent 0px,
+        transparent 90px,
+        rgb(255 255 255 / 0.18) 130px,
+        rgb(255 255 255 / 0.18) 170px,
+        transparent 210px,
+        transparent 320px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at 18% 18%, #FFFFFF 0%, #E8F2FC 45%, #D6E7F8 100%);
+      color: var(--text);
+    }
+
+    /* 画面全体を1枚のOSアプリケーションウィンドウとして設計 */
+    .celesta-app {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100%;
+      width: 100%;
+      position: relative;
+    }
+
+    /* ガラス上の短いキャプション文字だけにグローを敷く */
+    .on-glass-title {
+      text-shadow: var(--halo);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--text);
+    }
+
+    /* =========================================================================
+       左サイドバー: サックスブルー色付きガラス ＆ 完全ドッキング
+       ========================================================================= */
+    .sidebar {
+      grid-row: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px 18px 24px 18px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 100vh;
+      z-index: 30;
+      background-color: rgb(var(--glass-tint) / var(--glass-alpha));
+      background-image: var(--hl-stripes), var(--frost-grain);
+      background-attachment: fixed, scroll;
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+      backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+      border-right: 1px solid var(--edge);
+      box-shadow: var(--highlight), 4px 0 16px rgb(15 40 80 / 0.10); /* 線ではなく垂直の落ち影 */
+      transition: background-color 0.2s ease;
+    }
+
+    .sidebar.is-active {
+      background-color: rgb(var(--glass-tint) / var(--glass-alpha-active));
+    }
+
+    /* 屈折対応 (Blink) */
+    .can-refract .sidebar {
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+      backdrop-filter: var(--refract-filter) blur(var(--glass-blur)) saturate(130%);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 6px;
+    }
+
+    .brand-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 26px;
+      height: 26px;
+      stroke: var(--text);
+      stroke-width: 1.8;
+      fill: none;
+      flex-shrink: 0;
+    }
+
+    .sidebar-close-btn {
+      display: none;
+      min-width: 32px;
+      min-height: 32px;
+      background: rgb(255 255 255 / 0.70);
+      border: 1px solid var(--edge);
+      border-radius: var(--radius);
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--highlight);
+      color: var(--text);
+    }
+
+    .section-title {
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text);
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-shadow: var(--halo);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 文脈でまとめる行 (視認性を死守するサックスホワイトの落ち着いた面) */
+    .param-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: rgb(245 250 255 / 0.85); /* 文字を際立たせる高コントラスト面 */
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.90), 0 1px 4px rgb(15 40 80 / 0.04), 0 0 0 1px var(--edge);
+    }
+
+    .param-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .param-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .param-value {
+      font-weight: 700;
+      color: #1D4ED8;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.84rem;
+    }
+
+    .param-note {
+      font-size: 0.71rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      font-weight: 400;
+    }
+
+    /* スライダー: 手前を塗り分けで明示 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #CBD5E1;
+      outline: none;
+      margin: 4px 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      box-shadow: 0 1px 4px rgb(15 40 80 / 0.30), 0 0 0 1px var(--edge);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    input[type="range"]:active::-webkit-slider-thumb {
+      transform: scale(1.18);
+    }
+
+    /* =========================================================================
+       ヘッダー (色付きガラス枠 ＆ メリハリのあるクリスタルボタン)
+       ========================================================================= */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 18px;
+      z-index: 10;
+      background-color: rgb(var(--glass-tint) / var(--glass-alpha));
+      background-image: var(--hl-stripes);
+      background-attachment: fixed;
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+      backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+      border-bottom: 1px solid var(--edge);
+      box-shadow: var(--highlight), 0 2px 8px rgb(15 40 80 / 0.05);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .octave-navigator-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgb(245 250 255 / 0.85);
+      padding: 3px 6px;
+      border-radius: var(--radius);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.90), 0 0 0 1px var(--edge);
+    }
+
+    .octave-display-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text);
+      min-width: 68px;
+      text-align: center;
+      letter-spacing: 0.02em;
+    }
+
+    /* コントロールボタン: 白無地クリスタル基調でメリハリを確保 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 0 13px;
+      border-radius: var(--radius);
+      border: 1px solid var(--edge);
+      background: rgb(255 255 255 / 0.80);
+      color: var(--text);
+      font-size: 0.80rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--highlight), 0 2px 5px rgb(15 40 80 / 0.06);
+      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+    }
+
+    .btn:hover {
+      background: rgb(255 255 255 / 0.95);
+      box-shadow: var(--highlight), 0 3px 8px rgb(15 40 80 / 0.10);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    /* アクティブ時のみ鮮やかなサックスブルーでパッと応える */
+    .btn.pedal-btn.is-down {
+      background: #3B82F6;
+      color: #FFFFFF;
+      border-color: #2563EB;
+      box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.25);
+    }
+
+    .btn.is-toggle-active {
+      background: #3B82F6;
+      color: #FFFFFF;
+      border-color: #2563EB;
+      box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.25);
+    }
+
+    /* =========================================================================
+       メイン作業領域 (本体: サックスホワイト面)
+       ========================================================================= */
+    .main-stage {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-width: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .acoustic-canvas-wrap {
+      flex: 1;
+      min-height: 130px;
+      position: relative;
+      margin: 12px 18px 6px 18px;
+      border-radius: var(--radius);
+      background: rgb(var(--content-tint) / var(--content-alpha));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+      backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 0 0 1px var(--edge);
+      overflow: hidden;
+    }
+
+    canvas#resonanceCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .canvas-hud {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      display: flex;
+      gap: 16px;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .hud-stat span {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* =========================================================================
+       5.5オクターブ レンジスライダー
+       ========================================================================= */
+    .range-navigator-wrap {
+      padding: 0 18px 6px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .range-meta-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.70rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .range-track-container {
+      position: relative;
+      height: 22px;
+      background: rgb(245 250 255 / 0.85);
+      border-radius: var(--radius);
+      box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.06), 0 0 0 1px var(--edge);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .range-ticks-layer {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      pointer-events: none;
+    }
+
+    .range-tick {
+      flex: 1;
+      border-right: 1px dashed rgb(100 116 139 / 0.30);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: var(--text);
+      font-weight: 700;
+    }
+    .range-tick:last-child {
+      border-right: none;
+    }
+
+    .range-slider-thumb {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      background: rgb(96 165 250 / 0.45);
+      border: 1.5px solid #2563EB;
+      border-radius: 3px;
+      box-shadow: 0 1px 4px rgb(15 40 80 / 0.18);
+      cursor: grab;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s ease;
+    }
+
+    .range-slider-thumb:active {
+      cursor: grabbing;
+      background: rgb(96 165 250 / 0.65);
+    }
+
+    .range-thumb-grip {
+      width: 12px;
+      height: 4px;
+      background: #1D4ED8;
+      border-radius: 2px;
+      opacity: 0.90;
+      pointer-events: none;
+    }
+
+    /* =========================================================================
+       鍵盤コンテナ
+       ========================================================================= */
+    .keyboard-container {
+      position: relative;
+      padding: 2px 18px 18px 18px;
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .keyboard-case {
+      position: relative;
+      height: 184px;
+      background: linear-gradient(180deg, #334155 0%, #1E293B 100%);
+      border-radius: var(--radius);
+      padding: 8px 4px 4px 4px;
+      box-shadow: 0 6px 20px rgb(15 40 80 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.2);
+      display: flex;
+      overflow-x: scroll;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x;
+      scrollbar-width: none;
+    }
+
+    .keyboard-case::-webkit-scrollbar {
+      display: none;
+    }
+
+    .felt-rail {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      right: 5px;
+      height: 4px;
+      background: #881337;
+      border-radius: 2px;
+      box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.4);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .keys-bed {
+      display: flex;
+      position: relative;
+      height: 100%;
+      margin: 0;
+    }
+
+    .key-white {
+      position: relative;
+      width: 42px;
+      height: 100%;
+      background: linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 90%, #CBD5E1 100%);
+      border: 1px solid #94A3B8;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      box-shadow: 0 4px 6px rgb(0 0 0 / 0.15), inset 0 -3px 0 rgb(255 255 255 / 0.8);
+      cursor: pointer;
+      flex-shrink: 0;
+      z-index: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 8px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #334155;
+      transition: background 0.08s ease, transform 0.05s ease;
+    }
+
+    .key-white.is-pressed {
+      background: linear-gradient(180deg, #E2E8F0 0%, #BFDBFE 100%);
+      transform: translateY(3px);
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), inset 0 2px 4px rgb(59 130 246 / 0.3);
+      color: #1E3A8A;
+    }
+
+    .key-black {
+      position: absolute;
+      width: 25px;
+      height: 60%;
+      background: linear-gradient(180deg, #334155 0%, #0F172A 100%);
+      border-radius: 0 0 3px 3px;
+      border: 1px solid #020617;
+      box-shadow: 0 3px 6px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.3);
+      cursor: pointer;
+      z-index: 2;
+      transition: background 0.08s ease, transform 0.05s ease;
+    }
+
+    .key-black.is-pressed {
+      background: linear-gradient(180deg, #1E3A8A 0%, #172554 100%);
+      transform: translateY(2px);
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+    }
+
+    /* モバイル用半透明バックドロップ */
+    .mobile-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgb(15 23 42 / 0.30);
+      -webkit-backdrop-filter: blur(3px);
+      backdrop-filter: blur(3px);
+      z-index: 25;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .mobile-backdrop.is-visible {
+      display: block;
+      opacity: 1;
+    }
+
+    /* =========================================================================
+       レスポンシブ (<= 860px): モバイル設定ドロワー
+       ========================================================================= */
+    @media (max-width: 860px) {
+      .celesta-app {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .sidebar {
+        position: fixed;
+        inset: 0 0 0 auto;
+        width: min(330px, 88vw);
+        background-color: rgb(var(--glass-tint) / 0.55);
+        background-image: var(--hl-stripes), var(--frost-grain);
+        background-attachment: fixed, scroll;
+        -webkit-backdrop-filter: blur(6px) saturate(140%);
+        backdrop-filter: blur(6px) saturate(140%);
+        transform: translateX(100%);
+        transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: -6px 0 28px rgb(15 40 80 / 0.20);
+      }
+
+      .can-refract .sidebar {
+        -webkit-backdrop-filter: blur(6px) saturate(140%);
+        backdrop-filter: var(--refract-filter) blur(6px) saturate(140%);
+      }
+
+      .sidebar.is-open {
+        transform: translateX(0);
+      }
+
+      .sidebar-close-btn {
+        display: inline-flex;
+      }
+
+      .key-white {
+        width: 36px;
+      }
+
+      .key-black {
+        width: 22px;
+      }
+
+      .acoustic-canvas-wrap {
+        margin: 8px 12px 4px 12px;
+      }
+
+      .range-navigator-wrap {
+        padding: 0 12px 4px 12px;
+      }
+
+      .keyboard-container {
+        padding: 2px 12px 14px 12px;
+      }
+    }
+
+    /* =========================================================================
+       SKILL MUST: 厳密な等価不透明色縮退 (color-mix)
+       ========================================================================= */
+    @supports not (backdrop-filter: blur(1px)) {
+      .sidebar, .header-bar, .param-group, .btn {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+      .sidebar {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
+      }
+      .sidebar.is-active {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-active) * 100%), rgb(var(--surface-base))) !important;
+      }
+      .header-bar {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
+      }
+      .acoustic-canvas-wrap {
+        background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base))) !important;
+      }
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+      .sidebar, .header-bar, .param-group, .btn {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+      .sidebar {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
+      }
+      .header-bar {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
+      }
+      .acoustic-canvas-wrap {
+        background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base))) !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 特許由来: 屈折(背後像の変位)用SVGフィルター (Blink基準) -->
+  <svg width="0" height="0" style="position:absolute; pointer-events:none;" aria-hidden="true" focusable="false">
+    <filter id="glass-refract" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feOffset in="SourceGraphic" dx="2" dy="2" result="shifted"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.015 0.02" numOctaves="2" seed="5" result="noise"/>
+      <feDisplacementMap in="shifted" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+
+  <div class="celesta-app">
+
+    <!-- モバイル用半透明バックドロップ -->
+    <div class="mobile-backdrop" id="mobileBackdrop"></div>
+
+    <!-- サイドバー: 高コントラスト＆完全ドッキング -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-section">
+        <div class="brand-title-wrap">
+          <svg class="brand-icon" viewBox="0 0 24 24">
+            <circle cx="12" cy="7" r="4"/>
+            <path d="M12 11v10M7 21h10M4 14h16"/>
+          </svg>
+          <div>
+            <h1 class="on-glass-title" style="font-size: 1.02rem;">Acoustic Celesta</h1>
+            <p style="font-size: 0.68rem; color: var(--text-muted); font-weight: 500;">Schiedmayer 5.5-Oct (C3 - F8) Model</p>
+          </div>
+        </div>
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- 1. マレット剛体力学 (Mallet Mechanics) -->
+      <div>
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8 12 8-8"/></svg>
+          <span>Mallet Dynamics (剛体打撃)</span>
+        </div>
+        <div class="param-group">
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Mallet Mass <i>m</i><sub>h</sub></span>
+              <span class="param-value" id="valMalletMass">3.6 g</span>
+            </div>
+            <input type="range" id="pMalletMass" min="1.5" max="6.0" step="0.1" value="3.6">
+            <div class="param-note">マレット慣性質量。低音ほど重く、高音ほど軽小に遷移</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Hertz Stiffness <i>K</i><sub>H</sub></span>
+              <span class="param-value" id="valHertzK">Medium</span>
+            </div>
+            <input type="range" id="pHertzK" min="2.0" max="15.0" step="0.5" value="8.0">
+            <div class="param-note">フェルト〜芯のヘルツ非線形接触剛性 <i>F</i> = <i>K</i><sub>H</sub> &delta;<sup>1.5</sup></div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Crystal Sparkle (高域接触感)</span>
+              <span class="param-value" id="valSparkle">80%</span>
+            </div>
+            <input type="range" id="pSparkle" min="20" max="100" step="5" value="80">
+            <div class="param-note">高音域（C6〜F8）特有の微小打撃接触インパルスの輝き</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 音板連続体調律 (Steel Bar Acoustics) -->
+      <div>
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 18h16M8 6v12M16 6v12"/></svg>
+          <span>Steel Plate Tuning (音板調律)</span>
+        </div>
+        <div class="param-group">
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Undercut <i>f</i><sub>2</sub>/<i>f</i><sub>1</sub> (中央削り比)</span>
+              <span class="param-value" id="valUndercut">3.00×</span>
+            </div>
+            <input type="range" id="pUndercut" min="2.60" max="3.40" step="0.01" value="3.00">
+            <div class="param-note">音板中央切削による完全12度（オクターブ＋5度）調律比</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Metallic Attack (金属倍音強度)</span>
+              <span class="param-value" id="valMetallic">75%</span>
+            </div>
+            <input type="range" id="pMetallic" min="20" max="100" step="2" value="75">
+            <div class="param-note">打鍵瞬間に立ち上がる第2〜第4モード（鋼板の澄んだ輝き）</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Plate Damper Speed</span>
+              <span class="param-value" id="valDamperSpeed">40 ms</span>
+            </div>
+            <input type="range" id="pDamperSpeed" min="0.02" max="0.10" step="0.005" value="0.04">
+            <div class="param-note">離鍵時にフェルトが音板の金属振動を止める制動速度</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 基音優先の共鳴管残響 (Pipe Cavity Acoustics) -->
+      <div>
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 8h4M10 12h4M10 16h4"/></svg>
+          <span>Pipe Cavity (共鳴管基音残響)</span>
+        </div>
+        <div class="param-group">
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Fundamental Ringing &tau;<sub>f1</sub></span>
+              <span class="param-value" id="valF1Decay">1.50 s</span>
+            </div>
+            <input type="range" id="pF1Decay" min="0.5" max="2.8" step="0.05" value="1.50">
+            <div class="param-note">音板制動後も共鳴管内の空気が自律放射する基音の余韻</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Cavity Resonance <i>Q</i> (選択度)</span>
+              <span class="param-value" id="valResQ">24.0</span>
+            </div>
+            <input type="range" id="pResQ" min="10" max="40" step="1" value="24">
+            <div class="param-note">共鳴管の同調鋭度（高いほど倍音が遮断され基音のみ残存）</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Radiation Ratio (共鳴管比率)</span>
+              <span class="param-value" id="valRadRatio">85%</span>
+            </div>
+            <input type="range" id="pRadRatio" min="50" max="95" step="5" value="85">
+            <div class="param-note">音板直接音に対する木製ヘルムホルツ共鳴箱の音圧放射割合</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 50次 LSP キャビネット全体共鳴胴 (Cabinet System) -->
+      <div>
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          <span>50th-Order LSP Cabinet (共鳴胴)</span>
+        </div>
+        <div class="param-group">
+          <div class="param-row">
+            <div class="param-meta">
+              <span>LSP Cabinet Coupling</span>
+              <span class="param-value" id="valLspCouple">75%</span>
+            </div>
+            <input type="range" id="pLspCouple" min="0" max="100" step="2" value="75">
+            <div class="param-note">チェレスタ木製ケース全体の25組(50次)共振対の結合度</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <span>Cabinet Viscous Loss &gamma;</span>
+              <span class="param-value" id="valViscous">0.993</span>
+            </div>
+            <input type="range" id="pViscous" min="0.980" max="0.998" step="0.001" value="0.993">
+            <div class="param-note">木材内部の音響粘性散逸係数（極の単位円引き込み度）</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- メイン領域 -->
+    <main class="main-stage">
+      
+      <!-- ヘッダー (クリスタルホワイトボタンによる清潔なコントラスト) -->
+      <header class="header-bar">
+        <div class="header-controls">
+          <div class="octave-navigator-bar">
+            <button class="btn" id="octPrevBtn" style="min-height:30px; padding:0 8px;" title="Previous Octave">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <span class="octave-display-label" id="octDisplay">C5 - C6</span>
+            <button class="btn" id="octNextBtn" style="min-height:30px; padding:0 8px;" title="Next Octave">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="header-controls">
+          <button class="btn pedal-btn" id="sustainPedalBtn" title="Space key or Tap">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="12" height="16" rx="2"/></svg>
+            <span>Pedal</span>
+          </button>
+
+          <button class="btn" id="settingsToggleBtn" title="Toggle Physical Settings">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>Settings</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- リアルタイム物理音響可視化 -->
+      <div class="acoustic-canvas-wrap">
+        <div class="canvas-hud">
+          <div class="hud-stat">Fundamental &tau;<sub>f1</sub>: <span id="hudF1">1.50s</span></div>
+          <div class="hud-stat">Metal Decay: <span id="hudMetal">40ms</span></div>
+          <div class="hud-stat">Compass: <span id="hudCompass">66 Keys (C3 - F8)</span></div>
+        </div>
+        <canvas id="resonanceCanvas"></canvas>
+      </div>
+
+      <!-- 5.5オクターブ レンジスライダー -->
+      <div class="range-navigator-wrap">
+        <div class="range-meta-bar">
+          <span>Compass C3 (130Hz) - F8 (5587Hz)</span>
+          <span>Slide thumb or tap track to jump</span>
+        </div>
+        <div class="range-track-container" id="rangeTrack">
+          <div class="range-ticks-layer">
+            <div class="range-tick">C3</div>
+            <div class="range-tick">C4</div>
+            <div class="range-tick">C5</div>
+            <div class="range-tick">C6</div>
+            <div class="range-tick">C7</div>
+            <div class="range-tick">F8</div>
+          </div>
+          <div class="range-slider-thumb" id="rangeThumb" title="Drag to scroll keyboard">
+            <div class="range-thumb-grip"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 鍵盤エリア -->
+      <div class="keyboard-container">
+        <div class="keyboard-case" id="keyboardCase">
+          <div class="felt-rail"></div>
+          <div class="keys-bed" id="keysBed">
+            <!-- 66鍵動的生成 -->
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    /* =========================================================================
+       Chromium / Blink 屈折 (Refraction) エンジン検出
+       ========================================================================= */
+    const isChromium = !!(navigator.userAgentData?.brands?.some(b => b.brand === 'Chromium') || /Chrome|Chromium|Edg/.test(navigator.userAgent));
+    if (isChromium) {
+      document.documentElement.classList.add('can-refract');
+    }
+
+    /* =========================================================================
+       5.5-Octave Authentic Celesta Modal & 50th-Order LSP Engine
+       ========================================================================= */
+    class CelestaGrandEngine {
+      constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.compressor = null;
+        this.analyser = null;
+        this.pedalDown = false;
+        this.activeVoices = new Map();
+
+        this.params = {
+          malletMass: 0.0036,
+          hertzK: 8.0e7,
+          sparkleLevel: 0.80,
+          undercutFactor: 3.00,
+          metallicLevel: 0.75,
+          damperPlateDecay: 0.04,
+          f1Decay: 1.50,
+          resQ: 24.0,
+          radRatio: 0.85,
+          lspCoupling: 0.75,
+          viscousGamma: 0.993
+        };
+
+        this.lspCenters = [
+          85, 140, 210, 320, 440,
+          523, 659, 784, 880, 1046, 1200, 1390, 1580, 1760, 1970, 2093, 2300, 2500, 2750,
+          3100, 3600, 4200, 5000, 6200, 7800
+        ];
+      }
+
+      init() {
+        if (this.ctx) return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext({ latencyHint: 'interactive' });
+
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 1024;
+        this.analyser.smoothingTimeConstant = 0.8;
+
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.setValueAtTime(0.36, this.ctx.currentTime);
+
+        this.compressor = this.ctx.createDynamicsCompressor();
+        this.compressor.threshold.setValueAtTime(-1.0, this.ctx.currentTime);
+        this.compressor.knee.setValueAtTime(3.0, this.ctx.currentTime);
+        this.compressor.ratio.setValueAtTime(20.0, this.ctx.currentTime);
+        this.compressor.attack.setValueAtTime(0.001, this.ctx.currentTime);
+        this.compressor.release.setValueAtTime(0.05, this.ctx.currentTime);
+
+        this.lspBus = this.ctx.createGain();
+        this.lspBus.gain.setValueAtTime(this.params.lspCoupling, this.ctx.currentTime);
+
+        const lspSum = this.ctx.createGain();
+        lspSum.gain.setValueAtTime(0.16, this.ctx.currentTime);
+
+        for (let i = 0; i < 25; i++) {
+          const fc = this.lspCenters[i];
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(fc, this.ctx.currentTime);
+          filter.Q.setValueAtTime(i < 5 ? 12.0 : (i < 19 ? 22.0 : 8.0), this.ctx.currentTime);
+
+          const gain = this.ctx.createGain();
+          const logDiff = Math.log(fc) - Math.log(1200);
+          const weight = Math.exp(-(logDiff * logDiff) / (2 * 0.85 * 0.85));
+          gain.gain.setValueAtTime(weight * 0.40, this.ctx.currentTime);
+
+          this.lspBus.connect(filter);
+          filter.connect(gain);
+          gain.connect(lspSum);
+        }
+
+        lspSum.connect(this.masterGain);
+        this.masterGain.connect(this.compressor);
+        this.compressor.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+      }
+
+      midiToFreq(midi) {
+        return 440 * Math.pow(2, (midi - 69) / 12);
+      }
+
+      noteOn(midi, velocity = 0.85) {
+        if (!this.ctx) this.init();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        if (this.activeVoices.has(midi)) {
+          this.noteOff(midi, true);
+        }
+
+        const now = this.ctx.currentTime;
+        const f0 = this.midiToFreq(midi);
+
+        const fNorm = Math.max(0.0, Math.min(1.0, (Math.log2(f0) - Math.log2(130.81)) / 5.42));
+
+        const f1 = f0;
+        const f2 = f0 * this.params.undercutFactor;
+        const f3 = f0 * 5.404;
+        const f4 = f0 * 8.933;
+
+        const mLevel = this.params.metallicLevel;
+        const sparkle = this.params.sparkleLevel;
+        const a1 = 1.0;
+        const a2 = (0.75 - fNorm * 0.35) * mLevel * sparkle;
+        const a3 = (0.35 - fNorm * 0.20) * mLevel * sparkle;
+        const a4 = (0.18 - fNorm * 0.12) * mLevel * sparkle;
+
+        const tau1 = 3.6 - fNorm * 2.0;
+        const tau2 = 0.35 - fNorm * 0.25;
+        const tau3 = 0.10 - fNorm * 0.07;
+        const tau4 = 0.04 - fNorm * 0.02;
+
+        const oscList = [];
+        const metalGains = [];
+
+        const metalConfigs = [
+          { freq: f2, amp: a2, tau: tau2 },
+          { freq: f3, amp: a3, tau: tau3 },
+          { freq: f4, amp: a4, tau: tau4 }
+        ];
+
+        const voiceMetalBus = this.ctx.createGain();
+        voiceMetalBus.gain.setValueAtTime(velocity, now);
+
+        metalConfigs.forEach(cfg => {
+          if (cfg.freq > 19500) return;
+          const osc = this.ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(cfg.freq, now);
+
+          const g = this.ctx.createGain();
+          g.gain.setValueAtTime(0.00001, now);
+          g.gain.linearRampToValueAtTime(cfg.amp, now + 0.0015);
+          g.gain.setTargetAtTime(0.00001, now + 0.0015, cfg.tau);
+
+          osc.connect(g);
+          g.connect(voiceMetalBus);
+          osc.start(now);
+          oscList.push(osc);
+          metalGains.push(g);
+        });
+
+        if (fNorm > 0.35) {
+          const clickOsc = this.ctx.createOscillator();
+          clickOsc.type = 'sine';
+          clickOsc.frequency.setValueAtTime(Math.min(7500, f0 * 1.5), now);
+
+          const clickGain = this.ctx.createGain();
+          const clickLevel = (fNorm * 0.22) * sparkle * velocity;
+          clickGain.gain.setValueAtTime(clickLevel, now);
+          clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.008);
+
+          clickOsc.connect(clickGain);
+          clickGain.connect(this.masterGain);
+          clickOsc.start(now);
+          clickOsc.stop(now + 0.012);
+          oscList.push(clickOsc);
+        }
+
+        const radRatio = this.params.radRatio;
+        const directRatio = 1.0 - radRatio;
+
+        const osc1 = this.ctx.createOscillator();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(f1, now);
+
+        const gPlate = this.ctx.createGain();
+        gPlate.gain.setValueAtTime(0.00001, now);
+        gPlate.gain.linearRampToValueAtTime(a1 * directRatio * velocity, now + 0.002);
+        gPlate.gain.setTargetAtTime(0.00001, now + 0.002, tau1);
+
+        const gPipe = this.ctx.createGain();
+        gPipe.gain.setValueAtTime(0.00001, now);
+        gPipe.gain.linearRampToValueAtTime(a1 * radRatio * velocity, now + 0.0025);
+        gPipe.gain.setTargetAtTime(0.00001, now + 0.0025, tau1);
+
+        osc1.connect(gPlate);
+        osc1.connect(gPipe);
+        osc1.start(now);
+        oscList.push(osc1);
+
+        voiceMetalBus.connect(this.masterGain);
+        voiceMetalBus.connect(this.lspBus);
+
+        gPlate.connect(this.masterGain);
+        gPipe.connect(this.masterGain);
+        gPipe.connect(this.lspBus);
+
+        const voice = {
+          midi,
+          oscList,
+          metalGains,
+          gPlate,
+          gPipe,
+          isDamped: false,
+          stop: (quick = false) => {
+            const stopTime = this.ctx.currentTime;
+            
+            const plateRel = quick ? 0.02 : this.params.damperPlateDecay;
+            metalGains.forEach(g => {
+              g.gain.cancelScheduledValues(stopTime);
+              g.gain.setTargetAtTime(0.00001, stopTime, plateRel);
+            });
+            gPlate.gain.cancelScheduledValues(stopTime);
+            gPlate.gain.setTargetAtTime(0.00001, stopTime, plateRel);
+
+            const basePipeDecay = this.params.f1Decay * (1.1 - fNorm * 0.35);
+            const pipeRel = quick ? 0.04 : basePipeDecay;
+
+            gPipe.gain.cancelScheduledValues(stopTime);
+            gPipe.gain.setTargetAtTime(0.00001, stopTime, pipeRel);
+
+            const cleanupDelay = (pipeRel * 5.0) * 1000;
+            setTimeout(() => {
+              oscList.forEach(o => {
+                try { o.stop(); o.disconnect(); } catch (e) {}
+              });
+              voiceMetalBus.disconnect();
+              gPlate.disconnect();
+              gPipe.disconnect();
+            }, cleanupDelay);
+          }
+        };
+
+        this.activeVoices.set(midi, voice);
+      }
+
+      noteOff(midi, force = false) {
+        if (!this.activeVoices.has(midi)) return;
+        const voice = this.activeVoices.get(midi);
+
+        if (this.pedalDown && !force) {
+          voice.isDamped = true;
+          return;
+        }
+
+        voice.stop(false);
+        this.activeVoices.delete(midi);
+      }
+
+      setPedal(down) {
+        this.pedalDown = down;
+        if (!down) {
+          this.activeVoices.forEach((voice, midi) => {
+            if (voice.isDamped) {
+              voice.stop(false);
+              this.activeVoices.delete(midi);
+            }
+          });
+        }
+      }
+    }
+
+    /* =========================================================================
+       UI & 5.5-Octave Range Navigation
+       ========================================================================= */
+    const engine = new CelestaGrandEngine();
+
+    const START_MIDI = 48; // C3
+    const END_MIDI = 113;  // F8
+    const keyData = [];
+    const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+    function buildFullCompassKeyboard() {
+      const keysBed = document.getElementById('keysBed');
+      keysBed.innerHTML = '';
+      keyData.length = 0;
+
+      let whiteCount = 0;
+
+      for (let midi = START_MIDI; midi <= END_MIDI; midi++) {
+        const noteInOct = midi % 12;
+        const isBlack = [1, 3, 6, 8, 10].includes(noteInOct);
+        const octNum = Math.floor(midi / 12) - 1;
+
+        const keyObj = { midi, isBlack, element: null, whiteIndex: whiteCount };
+
+        if (!isBlack) {
+          const el = document.createElement('div');
+          el.className = 'key-white';
+          el.dataset.midi = midi;
+          if (noteInOct === 0) {
+            el.innerHTML = `<span>C${octNum}</span>`;
+          }
+          keysBed.appendChild(el);
+          keyObj.element = el;
+          whiteCount++;
+        }
+        keyData.push(keyObj);
+      }
+
+      const whiteWidth = window.innerWidth <= 860 ? 36 : 42;
+      const blackWidth = window.innerWidth <= 860 ? 22 : 25;
+
+      keyData.forEach(k => {
+        if (k.isBlack) {
+          const el = document.createElement('div');
+          el.className = 'key-black';
+          el.dataset.midi = k.midi;
+
+          const prevWhite = keyData.slice(0, keyData.indexOf(k)).filter(item => !item.isBlack).length;
+          const leftPos = prevWhite * whiteWidth - (blackWidth / 2);
+          el.style.left = `${leftPos}px`;
+
+          keysBed.appendChild(el);
+          k.element = el;
+        }
+      });
+
+      updateSliderThumb();
+    }
+
+    const keyboardCase = document.getElementById('keyboardCase');
+    const rangeTrack = document.getElementById('rangeTrack');
+    const rangeThumb = document.getElementById('rangeThumb');
+    const octDisplay = document.getElementById('octDisplay');
+
+    function updateSliderThumb() {
+      const scrollLeft = keyboardCase.scrollLeft;
+      const scrollWidth = keyboardCase.scrollWidth;
+      const clientWidth = keyboardCase.clientWidth;
+
+      if (scrollWidth <= clientWidth) {
+        rangeThumb.style.width = '100%';
+        rangeThumb.style.left = '0%';
+        return;
+      }
+
+      const trackWidth = rangeTrack.clientWidth;
+      const viewRatio = clientWidth / scrollWidth;
+      const thumbWidth = Math.max(28, trackWidth * viewRatio);
+      const maxScroll = scrollWidth - clientWidth;
+      const scrollRatio = Math.max(0, Math.min(1, scrollLeft / maxScroll));
+      const thumbLeft = (trackWidth - thumbWidth) * scrollRatio;
+
+      rangeThumb.style.width = `${thumbWidth}px`;
+      rangeThumb.style.left = `${thumbLeft}px`;
+
+      const centerScroll = scrollLeft + clientWidth * 0.45;
+      const whiteWidth = window.innerWidth <= 860 ? 36 : 42;
+      const centerWhiteIdx = Math.floor(centerScroll / whiteWidth);
+      const currentWhiteKey = keyData.filter(k => !k.isBlack)[centerWhiteIdx];
+      if (currentWhiteKey) {
+        const centerMidi = currentWhiteKey.midi;
+        const octNum = Math.floor(centerMidi / 12) - 1;
+        octDisplay.textContent = `C${octNum} - C${Math.min(8, octNum + 2)}`;
+      }
+    }
+
+    keyboardCase.addEventListener('scroll', updateSliderThumb, { passive: true });
+
+    let isDraggingThumb = false;
+    let dragStartX = 0;
+    let dragStartScroll = 0;
+
+    rangeThumb.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      isDraggingThumb = true;
+      rangeThumb.setPointerCapture(e.pointerId);
+      dragStartX = e.clientX;
+      dragStartScroll = keyboardCase.scrollLeft;
+    });
+
+    rangeThumb.addEventListener('pointermove', (e) => {
+      if (!isDraggingThumb) return;
+      const deltaX = e.clientX - dragStartX;
+      const trackWidth = rangeTrack.clientWidth;
+      const thumbWidth = rangeThumb.clientWidth;
+      const maxThumbMove = trackWidth - thumbWidth;
+      if (maxThumbMove <= 0) return;
+
+      const scrollWidth = keyboardCase.scrollWidth;
+      const clientWidth = keyboardCase.clientWidth;
+      const maxScroll = scrollWidth - clientWidth;
+
+      const scrollDelta = (deltaX / maxThumbMove) * maxScroll;
+      keyboardCase.scrollLeft = dragStartScroll + scrollDelta;
+    });
+
+    const stopThumbDrag = (e) => {
+      if (isDraggingThumb) {
+        isDraggingThumb = false;
+        try { rangeThumb.releasePointerCapture(e.pointerId); } catch (err) {}
+      }
+    };
+    rangeThumb.addEventListener('pointerup', stopThumbDrag);
+    rangeThumb.addEventListener('pointercancel', stopThumbDrag);
+
+    rangeTrack.addEventListener('pointerdown', (e) => {
+      if (isDraggingThumb) return;
+      const rect = rangeTrack.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const trackWidth = rect.width;
+      const thumbWidth = rangeThumb.clientWidth;
+
+      const targetRatio = Math.max(0, Math.min(1, (clickX - thumbWidth / 2) / (trackWidth - thumbWidth)));
+      const maxScroll = keyboardCase.scrollWidth - keyboardCase.clientWidth;
+      keyboardCase.scrollTo({ left: maxScroll * targetRatio, behavior: 'smooth' });
+    });
+
+    const whiteKeyWidth = () => (window.innerWidth <= 860 ? 36 : 42);
+
+    document.getElementById('octPrevBtn').addEventListener('click', () => {
+      const scrollStep = whiteKeyWidth() * 7;
+      keyboardCase.scrollBy({ left: -scrollStep, behavior: 'smooth' });
+    });
+
+    document.getElementById('octNextBtn').addEventListener('click', () => {
+      const scrollStep = whiteKeyWidth() * 7;
+      keyboardCase.scrollBy({ left: scrollStep, behavior: 'smooth' });
+    });
+
+    // 鍵盤ポインター演奏 (グリッサンド対応)
+    const pressedPointers = new Map();
+
+    function bindKeyboardEvents() {
+      const triggerNoteOn = (midi, el) => {
+        if (!midi) return;
+        engine.noteOn(midi, 0.85);
+        if (el) el.classList.add('is-pressed');
+      };
+
+      const triggerNoteOff = (midi, el) => {
+        if (!midi) return;
+        engine.noteOff(midi);
+        if (el) el.classList.remove('is-pressed');
+      };
+
+      const getKeyElementFromPoint = (x, y) => {
+        const el = document.elementFromPoint(x, y);
+        if (!el) return null;
+        return el.closest('.key-white, .key-black');
+      };
+
+      keyboardCase.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const keyEl = getKeyElementFromPoint(e.clientX, e.clientY);
+        if (keyEl) {
+          const midi = parseInt(keyEl.dataset.midi, 10);
+          pressedPointers.set(e.pointerId, { midi, element: keyEl });
+          triggerNoteOn(midi, keyEl);
+        }
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!pressedPointers.has(e.pointerId)) return;
+        const current = pressedPointers.get(e.pointerId);
+        const keyEl = getKeyElementFromPoint(e.clientX, e.clientY);
+
+        if (keyEl) {
+          const newMidi = parseInt(keyEl.dataset.midi, 10);
+          if (newMidi !== current.midi) {
+            triggerNoteOff(current.midi, current.element);
+            triggerNoteOn(newMidi, keyEl);
+            pressedPointers.set(e.pointerId, { midi: newMidi, element: keyEl });
+          }
+        }
+      });
+
+      const handlePointerUp = (e) => {
+        if (pressedPointers.has(e.pointerId)) {
+          const current = pressedPointers.get(e.pointerId);
+          triggerNoteOff(current.midi, current.element);
+          pressedPointers.delete(e.pointerId);
+        }
+      };
+
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+
+      // PCキーボード
+      const pcKeyMap = {
+        'KeyZ': 0, 'KeyS': 1, 'KeyX': 2, 'KeyD': 3, 'KeyC': 4, 'KeyV': 5, 'KeyG': 6,
+        'KeyB': 7, 'KeyH': 8, 'KeyN': 9, 'KeyJ': 10, 'KeyM': 11, 'Comma': 12,
+        'KeyQ': 12, 'Digit2': 13, 'KeyW': 14, 'Digit3': 15, 'KeyE': 16, 'KeyR': 17,
+        'Digit5': 18, 'KeyT': 19, 'Digit6': 20, 'KeyY': 21, 'Digit7': 22, 'KeyU': 23, 'KeyI': 24
+      };
+
+      window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          setPedalState(true);
+          return;
+        }
+        if (pcKeyMap[e.code] !== undefined) {
+          e.preventDefault();
+          const currentBase = 72; // C5
+          const midi = currentBase + pcKeyMap[e.code];
+          const kObj = keyData.find(k => k.midi === midi);
+          triggerNoteOn(midi, kObj ? kObj.element : null);
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          setPedalState(false);
+          return;
+        }
+        if (pcKeyMap[e.code] !== undefined) {
+          const currentBase = 72;
+          const midi = currentBase + pcKeyMap[e.code];
+          const kObj = keyData.find(k => k.midi === midi);
+          triggerNoteOff(midi, kObj ? kObj.element : null);
+        }
+      });
+    }
+
+    // サステインペダル
+    const pedalBtn = document.getElementById('sustainPedalBtn');
+    function setPedalState(isDown) {
+      engine.setPedal(isDown);
+      if (isDown) {
+        pedalBtn.classList.add('is-down');
+      } else {
+        pedalBtn.classList.remove('is-down');
+      }
+    }
+
+    pedalBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      setPedalState(!engine.pedalDown);
+    });
+
+    // スライダー塗り分け更新関数
+    function updateRangeTrackFill(slider) {
+      const min = parseFloat(slider.min);
+      const max = parseFloat(slider.max);
+      const val = parseFloat(slider.value);
+      const pct = ((val - min) / (max - min)) * 100;
+      slider.style.background = `linear-gradient(to right, rgb(var(--glass-tint)) 0%, rgb(var(--glass-tint)) ${pct}%, #CBD5E1 ${pct}%, #CBD5E1 100%)`;
+    }
+
+    function bindRangeControl(sliderId, dispId, onUpdate, formatFn) {
+      const slider = document.getElementById(sliderId);
+      const disp = document.getElementById(dispId);
+      const handler = () => {
+        const val = parseFloat(slider.value);
+        onUpdate(val);
+        disp.textContent = formatFn(val);
+        updateRangeTrackFill(slider);
+      };
+      slider.addEventListener('input', handler);
+      handler();
+    }
+
+    bindRangeControl('pMalletMass', 'valMalletMass', v => engine.params.malletMass = v * 0.001, v => v.toFixed(1) + ' g');
+    bindRangeControl('pHertzK', 'valHertzK', v => engine.params.hertzK = v * 1.0e7, v => {
+      if (v < 4.0) return 'Soft';
+      if (v > 11.0) return 'Hard';
+      return 'Medium';
+    });
+    bindRangeControl('pSparkle', 'valSparkle', v => engine.params.sparkleLevel = v / 100.0, v => v + '%');
+    bindRangeControl('pUndercut', 'valUndercut', v => engine.params.undercutFactor = v, v => v.toFixed(2) + '×');
+    bindRangeControl('pMetallic', 'valMetallic', v => engine.params.metallicLevel = v / 100.0, v => v + '%');
+    bindRangeControl('pDamperSpeed', 'valDamperSpeed', v => {
+      engine.params.damperPlateDecay = v;
+      document.getElementById('hudMetal').textContent = (v * 1000).toFixed(0) + 'ms';
+    }, v => (v * 1000).toFixed(0) + ' ms');
+    bindRangeControl('pF1Decay', 'valF1Decay', v => {
+      engine.params.f1Decay = v;
+      document.getElementById('hudF1').textContent = v.toFixed(2) + 's';
+    }, v => v.toFixed(2) + ' s');
+    bindRangeControl('pResQ', 'valResQ', v => engine.params.resQ = v, v => v.toFixed(1));
+    bindRangeControl('pRadRatio', 'valRadRatio', v => engine.params.radRatio = v / 100.0, v => v + '%');
+    bindRangeControl('pLspCouple', 'valLspCouple', v => {
+      engine.params.lspCoupling = v / 100.0;
+      if (engine.lspBus) engine.lspBus.gain.setValueAtTime(v / 100.0, engine.ctx.currentTime);
+    }, v => v + '%');
+    bindRangeControl('pViscous', 'valViscous', v => engine.params.viscousGamma = v, v => v.toFixed(3));
+
+    // 設定メニュー開閉
+    const settingsToggleBtn = document.getElementById('settingsToggleBtn');
+    const sidebar = document.getElementById('sidebar');
+    const mobileBackdrop = document.getElementById('mobileBackdrop');
+    const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
+
+    function openSidebar() {
+      sidebar.classList.add('is-open');
+      sidebar.classList.add('is-active');
+      mobileBackdrop.classList.add('is-visible');
+      settingsToggleBtn.classList.add('is-toggle-active');
+    }
+
+    function closeSidebar() {
+      sidebar.classList.remove('is-open');
+      sidebar.classList.remove('is-active');
+      mobileBackdrop.classList.remove('is-visible');
+      settingsToggleBtn.classList.remove('is-toggle-active');
+    }
+
+    settingsToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (sidebar.classList.contains('is-open')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
+    });
+
+    sidebarCloseBtn.addEventListener('click', closeSidebar);
+    mobileBackdrop.addEventListener('click', closeSidebar);
+
+    // 音響キャンバス描画
+    const canvas = document.getElementById('resonanceCanvas');
+    const ctx2d = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = canvas.clientWidth * window.devicePixelRatio;
+      canvas.height = canvas.clientHeight * window.devicePixelRatio;
+    }
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      buildFullCompassKeyboard();
+    });
+
+    function drawVisualizer() {
+      requestAnimationFrame(drawVisualizer);
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx2d.clearRect(0, 0, w, h);
+
+      if (!engine.analyser) {
+        ctx2d.strokeStyle = 'rgba(100, 116, 139, 0.12)';
+        ctx2d.lineWidth = 1;
+        ctx2d.beginPath();
+        ctx2d.moveTo(0, h * 0.75);
+        ctx2d.lineTo(w, h * 0.75);
+        ctx2d.stroke();
+        return;
+      }
+
+      const freqData = new Uint8Array(engine.analyser.frequencyBinCount);
+      engine.analyser.getByteFrequencyData(freqData);
+
+      // 50次 LSP キャビネット共振対ガイド線
+      ctx2d.lineWidth = 1 * window.devicePixelRatio;
+      for (let i = 0; i < 25; i++) {
+        const fc = engine.lspCenters[i];
+        const logX = (Math.log10(fc) - Math.log10(80)) / (Math.log10(10000) - Math.log10(80));
+        const px = logX * w;
+        if (px >= 0 && px <= w) {
+          ctx2d.strokeStyle = 'rgba(136, 187, 255, 0.16)';
+          ctx2d.beginPath();
+          ctx2d.moveTo(px, h);
+          ctx2d.lineTo(px, h * 0.35);
+          ctx2d.stroke();
+        }
+      }
+
+      // スペクトル波形
+      ctx2d.lineWidth = 2 * window.devicePixelRatio;
+      const sliceWidth = w / (freqData.length * 0.55);
+
+      const grad = ctx2d.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, 'rgba(96, 165, 250, 0.75)');
+      grad.addColorStop(1, 'rgba(191, 219, 254, 0.08)');
+
+      ctx2d.beginPath();
+      let x = 0;
+      for (let i = 0; i < freqData.length * 0.55; i++) {
+        const v = freqData[i] / 255.0;
+        const y = h - (v * (h * 0.82)) - (h * 0.08);
+
+        if (i === 0) ctx2d.moveTo(x, y);
+        else ctx2d.lineTo(x, y);
+        x += sliceWidth;
+      }
+      ctx2d.lineTo(w, h);
+      ctx2d.lineTo(0, h);
+      ctx2d.fillStyle = grad;
+      ctx2d.fill();
+
+      ctx2d.beginPath();
+      x = 0;
+      for (let i = 0; i < freqData.length * 0.55; i++) {
+        const v = freqData[i] / 255.0;
+        const y = h - (v * (h * 0.82)) - (h * 0.08);
+        if (i === 0) ctx2d.moveTo(x, y);
+        else ctx2d.lineTo(x, y);
+        x += sliceWidth;
+      }
+      ctx2d.strokeStyle = 'rgba(59, 130, 246, 0.85)';
+      ctx2d.stroke();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      resizeCanvas();
+      buildFullCompassKeyboard();
+      bindKeyboardEvents();
+      drawVisualizer();
+
+      setTimeout(() => {
+        const c5Key = keyData.find(k => k.midi === 72);
+        if (c5Key && c5Key.element) {
+          keyboardCase.scrollTo({ left: c5Key.element.offsetLeft - 100, behavior: 'instant' });
+          updateSliderThumb();
+        }
+      }, 50);
+    });
+  </script>
+</body>
+</html>
