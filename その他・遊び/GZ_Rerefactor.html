@@ -2,17 +2,67 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Dynamic Deflate Multi-Layer Generator</title>
     <style>
+        /* =========================================================
+           Tinted Glass UI Philosophy: Tokens
+           ========================================================= */
+        @property --drop           { syntax: "*"; inherits: false; }
+        @property --highlight-self { syntax: "*"; inherits: false; }
+        @property --hl             { syntax: "<number>"; inherits: true; initial-value: 0.22; }
+
         :root {
-            --bg-base: #EAF5FF;
-            --glass-bg: rgba(234, 245, 255, 0.45);
-            --glass-border: rgba(100, 116, 139, 0.15);
-            --text-main: #1E293B;
-            --text-sub: #64748B;
-            --primary: #007ACC;
-            --primary-hover: #00AEFF;
+            /* 色: HSV 色相200〜215°・明度100%、黒を混ぜず彩度差で落ち着かせる */
+            --surface-base: 234 245 255;       /* #EAF5FF サックスホワイト */
+            --glass-tint: 136 187 255;         /* #88BBFF サックスブルー */
+            --glass-alpha: 0.40;               /* 枠のガラス 0.3〜0.5 */
+            --glass-alpha-active: 0.50;
+            --glass-alpha-inactive: 0.35;
+            --content-tint: 234 245 255;       /* 本体は彩度を落としつつ透明度を保つ */
+            --content-alpha: 0.45;
+
+            /* 文字・意味色: 4.5:1 以上のコントラストを確保 */
+            --text: #0F172A;                   /* 深いネイビー */
+            --text-muted: #334155;
+            --text-sub: #475569;
+            --accent: #026CB3;                 /* 操作状態（実行・現在地） */
+            --accent-hover: #0278C6;           /* ホバー応答（鮮やかなスカイ寄り） */
+            --accent-fill: #0EA5E9;            /* スライダー・プログレス塗りつぶし */
+            --accent-fill-end: #38BDF8;
+            --accent-text: #0C4A6E;
+            --ok-bg: rgb(209 250 229 / 0.85);
+            --ok-text: #065F46;
+            --err-color: #B91C1C;
+
+            /* 光・材質（光源は左上1つ） */
+            --glass-blur: 4px;                 /* 濁りを避けるため弱め(4px)を既定 */
+            --mat-ambient: 1.03;
+            --mat-specular: 1;
+            --mat-reflect: 0.55;
+            --edge: rgb(100 116 139 / 0.25);   /* スモーキーなシルバーグレー縁取り */
+            --highlight: inset 0 1px 0 rgb(255 255 255 / 0.62);
+            --halo: 0 0 10px rgb(255 255 255 / 0.88), 0 1px 2px rgb(255 255 255 / 0.65);
+
+            /* 反射ハイライト帯（画面基準の1枚の光の層） */
+            --hl-angle: 115deg;
+            --hl-active: 0.22;
+            --hl-inactive: 0.10;
+            --hl-period: 320px;
+            --hl-shift: 0px;
+
+            /* 霜の粒（不透明度0.06以下、ブラーの代替にはしない） */
+            --frost-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .45 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.045'/></svg>");
+
+            /* 高さ段と影: 自分の段 - 直下の段 に比例 */
+            --sh-x: 4px;
+            --sh-k: 3px;
+            --sh-blur: 6px;
+            --sh-rgb: 15 40 80;
+            --shadow-1: 2px 4px 10px rgb(15 40 80 / 0.10);
+            --shadow-2: 4px 8px 20px rgb(15 40 80 / 0.12);
+
+            --radius: 4px;                     /* 固定px。サイズに比例させない */
             --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
@@ -22,269 +72,639 @@
             padding: 0;
         }
 
+        html, body {
+            height: 100%;
+        }
+
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: linear-gradient(135deg, var(--bg-base) 0%, #F1F7FF 100%);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow-x: hidden;
+            color: var(--text);
+            /* 透けるカラーガラスの背後で穏やかに光る低コントラストなライト背景 */
+            background-color: rgb(var(--surface-base));
+            background-image:
+                radial-gradient(640px circle at 12% 18%, rgb(154 205 255 / 0.55), transparent 65%),
+                radial-gradient(520px circle at 22% 82%, rgb(176 218 255 / 0.45), transparent 65%),
+                radial-gradient(760px circle at 78% 28%, rgb(206 232 255 / 0.45), transparent 70%);
+            background-attachment: fixed;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
 
+        /* =========================================================
+           ガラス面（枠専用）と本体面（コンテンツ専用）
+           ========================================================= */
+        .glass {
+            background-color: rgb(var(--glass-tint) / var(--glass-alpha));
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%) brightness(var(--mat-ambient));
+            backdrop-filter: blur(var(--glass-blur)) saturate(130%) brightness(var(--mat-ambient));
+            box-shadow:
+                var(--highlight-self, var(--highlight)),
+                0 0 0 1px var(--edge),
+                var(--drop, 0 0 0 0 transparent);
+            color: var(--text);
+            --hl: var(--hl-active);
+            transition: --hl 0.2s ease, background-color 0.2s ease;
+        }
+
+        .glass.is-lit {
+            --hl-stripes: repeating-linear-gradient(
+                var(--hl-angle),
+                transparent calc(var(--hl-shift) + 0px),
+                transparent calc(var(--hl-shift) + 90px),
+                rgb(255 255 255 / calc(var(--hl) * var(--mat-specular))) calc(var(--hl-shift) + 130px),
+                rgb(255 255 255 / calc(var(--hl) * var(--mat-specular))) calc(var(--hl-shift) + 170px),
+                transparent calc(var(--hl-shift) + 210px),
+                transparent calc(var(--hl-shift) + var(--hl-period))
+            );
+            background-image: var(--hl-stripes), var(--frost-grain);
+            background-attachment: fixed, scroll;
+        }
+
+        .glass.is-reflective:hover {
+            background-image:
+                radial-gradient(180px circle at var(--px, 50%) var(--py, 0%), rgb(255 255 255 / calc(0.20 * var(--mat-reflect))), transparent 70%),
+                var(--hl-stripes, none),
+                var(--frost-grain);
+            background-attachment: scroll, fixed, scroll;
+        }
+
+        .on-glass-text {
+            text-shadow: var(--halo);
+        }
+
+        .content {
+            background-color: rgb(var(--content-tint) / var(--content-alpha));
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+            backdrop-filter: blur(var(--glass-blur)) saturate(130%);
+            color: var(--text);
+        }
+
+        /* 縮退規則: 消すのは透け（ぼかし・透過）だけ。光の帯・ハイライト・縁・等価ティント色は維持 */
+        @supports not (backdrop-filter: blur(1px)) {
+            .glass, .content { -webkit-backdrop-filter: none; backdrop-filter: none; }
+            .glass   { background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))); }
+            .content { background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base))); }
+        }
+        @media (prefers-reduced-transparency: reduce) {
+            .glass, .content { -webkit-backdrop-filter: none; backdrop-filter: none; }
+            .glass   { background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))); }
+            .content { background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base))); }
+        }
+        html.no-glass .glass,
+        html.no-glass .content {
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+        html.no-glass .glass {
+            background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base)));
+        }
+        html.no-glass .content {
+            background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base)));
+        }
+
+        /* =========================================================
+           1つのOSウィンドウ骨格（ビューポート端に完全ドッキング）
+           ========================================================= */
         .app-window {
-            display: flex;
-            flex: 1;
-            height: 100vh;
+            display: grid;
+            grid-template-columns: 380px minmax(0, 1fr);
+            min-height: 100%;
+            height: 100%;
+            --elev: 0;
+        }
+        .surface { --below: var(--elev, 0); }
+
+        aside.sidebar {
             position: relative;
-        }
-
-        @media (max-width: 900px) {
-            .app-window {
-                flex-direction: column;
-                height: auto;
-            }
-        }
-
-        aside {
-            width: 380px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px) saturate(135%);
-            border-right: 1px solid var(--glass-border);
-            padding: 24px;
+            z-index: 10;
+            --elev: 1;
+            --dz: max(0, calc(var(--elev, 0) - var(--below, 0)));
+            --drop: calc(var(--sh-x) * min(1, var(--dz))) 0 calc(var(--sh-blur) * 2.5) rgb(var(--sh-rgb) / 0.12);
+            padding: 22px 24px 24px;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            z-index: 10;
-            flex-shrink: 0;
+            overflow-y: auto;
+            min-width: 0;
         }
 
-        @media (max-width: 900px) {
-            aside {
-                width: 100%;
-                border-right: none;
-                border-bottom: 1px solid var(--glass-border);
-            }
-        }
-
-        main {
-            flex: 1;
-            padding: 32px;
+        main.workspace {
+            min-width: 0;
+            padding: 28px 36px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 28px;
+        }
+
+        @media (max-width: 900px) {
+            html, body {
+                height: auto;
+                min-height: 100%;
+            }
+            .app-window {
+                grid-template-columns: minmax(0, 1fr);
+                height: auto;
+            }
+            aside.sidebar {
+                overflow-y: visible;
+                --drop: 0 4px 16px rgb(var(--sh-rgb) / 0.12);
+                padding: 20px 18px 22px;
+            }
+            main.workspace {
+                overflow-y: visible;
+                padding: 22px 18px 32px;
+                gap: 24px;
+            }
+        }
+
+        /* =========================================================
+           サイドバー見出し & ガラス効果スイッチ
+           ========================================================= */
+        .sidebar-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
         }
 
         h1 {
-            font-size: 1.3rem;
+            font-size: 1.25rem;
             font-weight: 700;
             letter-spacing: -0.02em;
-            color: var(--primary);
-            margin-bottom: 6px;
+            color: var(--accent-text);
+            line-height: 1.25;
         }
 
         .subtitle {
             font-size: 0.82rem;
-            color: var(--text-sub);
+            color: var(--text-muted);
+            margin-top: 4px;
             line-height: 1.4;
+        }
+
+        .glass-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            min-height: 32px;
+            padding: 5px 10px;
+            border: none;
+            border-radius: var(--radius);
+            background: rgb(255 255 255 / 0.56);
+            box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 0 0 1px rgb(100 116 139 / 0.22);
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .glass-toggle:hover {
+            background: rgb(255 255 255 / 0.82);
+            color: var(--text);
+        }
+        .glass-toggle:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px rgb(14 165 233 / 0.45), 0 0 0 1px var(--accent);
+        }
+        .glass-toggle[aria-pressed="false"] {
+            background: rgb(234 245 255 / 0.45);
+            color: var(--text-sub);
+        }
+
+        /* =========================================================
+           文脈グルーピング（枠線で小部屋を作らない）
+           ========================================================= */
+        .control-section {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
         }
 
         .control-group {
             display: flex;
             flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .label-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             gap: 8px;
+            flex-wrap: wrap;
         }
 
         label {
             font-size: 0.75rem;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-sub);
+            letter-spacing: 0.03em;
+            color: var(--text-muted);
         }
 
         .input-row {
             display: flex;
             gap: 8px;
+            min-width: 0;
         }
 
         .input-row input[type="text"] {
             flex: 1;
-            background: rgba(255, 255, 255, 0.6);
-            border: 1px solid var(--glass-border);
-            border-radius: 4px;
-            padding: 10px 12px;
-            font-size: 0.9rem;
+            min-width: 0;
             font-family: var(--font-mono);
-            color: var(--text-main);
-            outline: none;
         }
 
         .input-row select {
-            width: 110px;
+            width: 96px;
+            flex-shrink: 0;
         }
 
         .input-help {
-            font-size: 0.7rem;
-            color: var(--text-sub);
-            line-height: 1.3;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            line-height: 1.4;
         }
 
+        input[type="text"],
+        select,
+        input[type="number"] {
+            width: 100%;
+            min-height: 44px;
+            background: rgb(255 255 255 / 0.72);
+            border: none;
+            border-radius: var(--radius);
+            box-shadow: inset 0 1px 2px rgb(15 40 80 / 0.06), 0 0 0 1px rgb(100 116 139 / 0.22);
+            padding: 9px 12px;
+            font-size: 0.9rem;
+            color: var(--text);
+            outline: none;
+            transition: background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        input[type="text"]:hover,
+        select:hover,
+        input[type="number"]:hover {
+            background: rgb(255 255 255 / 0.86);
+        }
+
+        input[type="text"]:focus-visible,
+        select:focus-visible,
+        input[type="number"]:focus-visible,
+        input[type="text"]:focus,
+        select:focus,
+        input[type="number"]:focus {
+            background: rgb(255 255 255 / 0.94);
+            box-shadow: 0 0 0 2px rgb(14 165 233 / 0.35), 0 0 0 1px var(--accent);
+        }
+
+        input.is-invalid,
+        input.is-invalid:focus {
+            box-shadow: 0 0 0 2px rgb(185 28 28 / 0.28), 0 0 0 1px var(--err-color);
+            background: rgb(254 242 242 / 0.88);
+        }
+
+        /* スライダー（入力済み範囲の塗り分け＋常時ハロー無し） */
         .slider-sync-row {
             display: flex;
             align-items: center;
             gap: 12px;
+            min-height: 44px;
         }
 
         .slider-sync-row input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
             flex: 1;
-            accent-color: var(--primary);
+            min-width: 0;
+            height: 6px;
+            border-radius: 999px;
+            --range-pct: 28%;
+            background: linear-gradient(
+                90deg,
+                var(--accent) 0%,
+                var(--accent-fill-end) var(--range-pct),
+                rgb(15 40 80 / 0.14) var(--range-pct)
+            );
+            box-shadow: inset 0 1px 1px rgb(15 40 80 / 0.12);
             cursor: pointer;
+            outline: none;
+        }
+
+        .slider-sync-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #FFFFFF 0%, #E0F2FE 100%);
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.9),
+                0 0 0 1px rgb(2 108 179 / 0.45),
+                0 2px 5px rgb(15 40 80 / 0.18);
+            transition: transform 0.12s ease, box-shadow 0.15s ease;
+        }
+
+        .slider-sync-row input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #FFFFFF 0%, #E0F2FE 100%);
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.9),
+                0 0 0 1px rgb(2 108 179 / 0.45),
+                0 2px 5px rgb(15 40 80 / 0.18);
+            transition: transform 0.12s ease, box-shadow 0.15s ease;
+        }
+
+        .slider-sync-row input[type="range"]:hover::-webkit-slider-thumb {
+            transform: scale(1.08);
+        }
+
+        .slider-sync-row input[type="range"]:focus-visible::-webkit-slider-thumb {
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.9),
+                0 0 0 1px var(--accent),
+                0 0 0 4px rgb(14 165 233 / 0.28);
+        }
+
+        .slider-sync-row input[type="range"]:focus-visible::-moz-range-thumb {
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.9),
+                0 0 0 1px var(--accent),
+                0 0 0 4px rgb(14 165 233 / 0.28);
         }
 
         .slider-sync-row input[type="number"] {
-            width: 70px;
+            width: 76px;
+            flex-shrink: 0;
             text-align: center;
-            background: rgba(255, 255, 255, 0.6);
-            border: 1px solid var(--glass-border);
-            border-radius: 4px;
-            padding: 6px;
-            font-size: 0.85rem;
             font-family: var(--font-mono);
-            outline: none;
-        }
-
-        input[type="text"], select, input[type="number"] {
-            width: 100%;
-            background: rgba(255, 255, 255, 0.6);
-            border: 1px solid var(--glass-border);
-            border-radius: 4px;
-            padding: 10px 12px;
-            font-size: 0.9rem;
-            color: var(--text-main);
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        input[type="text"]:focus, select:focus, input[type="number"]:focus {
-            border-color: var(--primary-hover);
+            padding: 8px 6px;
         }
 
         .optimal-badge {
-            font-size: 0.7rem;
-            background: rgba(16, 185, 129, 0.12);
-            color: #10B981;
-            padding: 2px 6px;
-            border-radius: 3px;
+            font-size: 0.72rem;
+            background: var(--ok-bg);
+            color: var(--ok-text);
+            border: none;
+            padding: 4px 8px;
+            min-height: 28px;
+            border-radius: var(--radius);
             font-family: var(--font-mono);
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
+            box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 0 0 1px rgb(6 95 70 / 0.20);
+            transition: background-color 0.15s ease;
         }
         .optimal-badge:hover {
-            background: rgba(16, 185, 129, 0.25);
+            background: rgb(167 243 208 / 0.92);
+        }
+        .optimal-badge:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px rgb(16 185 129 / 0.45), 0 0 0 1px var(--ok-text);
         }
 
-        .prediction-badge {
-            background: rgba(0, 122, 204, 0.05);
-            border: 1px dashed var(--glass-border);
-            border-radius: 4px;
-            padding: 12px;
+        /* =========================================================
+           予測・進捗・アクション（ゼロ・レイアウトシフト固定スロット）
+           ========================================================= */
+        .action-area {
+            margin-top: auto;
+            padding-top: 16px;
+            box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45);
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 12px;
+        }
+
+        .prediction-summary {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
         }
 
         .prediction-title {
-            font-size: 0.72rem;
-            text-transform: uppercase;
+            font-size: 0.75rem;
             font-weight: 600;
-            color: var(--text-sub);
+            color: var(--text-muted);
         }
 
         .prediction-value {
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             font-weight: 700;
-            color: var(--primary);
+            color: var(--accent-text);
             font-family: var(--font-mono);
+            text-align: right;
+            min-width: 0;
+            word-break: break-word;
         }
 
+        /* 進捗領域は常に高さを確保してボタン移動を防ぐ */
         .progress-box {
-            background: rgba(100, 116, 139, 0.06);
-            border: 1px solid var(--glass-border);
-            border-radius: 4px;
-            padding: 14px;
-            display: none;
+            display: flex;
             flex-direction: column;
+            gap: 6px;
+            min-height: 36px;
+            opacity: 0.72;
+            transition: opacity 0.15s ease;
+        }
+        .progress-box.is-active {
+            opacity: 1;
+        }
+
+        .progress-text {
+            font-size: 0.74rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
             gap: 8px;
         }
 
         .progress-bar-bg {
             width: 100%;
             height: 6px;
-            background: rgba(0, 0, 0, 0.05);
-            border-radius: 3px;
+            background: rgb(15 40 80 / 0.10);
+            border-radius: 999px;
             overflow: hidden;
+            box-shadow: inset 0 1px 1px rgb(15 40 80 / 0.12);
         }
 
         .progress-bar-fg {
             width: 0%;
             height: 100%;
-            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%);
-            transition: width 0.1s ease;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-fill-end) 100%);
+            transition: width 0.15s ease;
         }
 
-        .progress-text {
-            font-size: 0.75rem;
-            color: var(--text-sub);
+        .button-stack {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 44px;
+            padding: 10px 14px;
+            background: rgb(255 255 255 / 0.72);
+            color: var(--accent-text);
+            border: none;
+            border-radius: var(--radius);
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.85),
+                0 0 0 1px rgb(2 108 179 / 0.28),
+                0 1px 3px rgb(15 40 80 / 0.08);
+            font-size: 0.86rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: rgb(255 255 255 / 0.92);
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.95),
+                0 0 0 1px rgb(2 120 198 / 0.45),
+                0 3px 8px rgb(15 40 80 / 0.12);
+        }
+        .btn-secondary:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+        .btn-secondary:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px rgb(14 165 233 / 0.45), 0 0 0 1px var(--accent);
+        }
+        .btn-secondary:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
         }
 
         .btn-generate {
-            display: block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             width: 100%;
-            background: linear-gradient(135deg, var(--primary) 0%, #005F9E 100%);
+            min-height: 46px;
+            background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%);
             color: #FFFFFF;
             border: none;
-            border-radius: 3px;
-            padding: 14px;
-            font-size: 0.9rem;
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            font-size: 0.92rem;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.1s, box-shadow 0.2s;
-            box-shadow: 0 4px 12px rgba(0, 122, 204, 0.15);
-            text-align: center;
-            text-decoration: none;
-            margin-top: auto;
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.45),
+                0 0 0 1px rgb(2 84 140 / 0.45),
+                var(--shadow-1);
+            transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
         }
 
         .btn-generate:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(0, 122, 204, 0.25);
-            background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
+            filter: brightness(1.06);
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.55),
+                0 0 0 1px rgb(2 84 140 / 0.55),
+                var(--shadow-2);
         }
 
         .btn-generate:active:not(:disabled) {
             transform: translateY(1px);
-            box-shadow: 0 2px 6px rgba(0, 122, 204, 0.1);
+            box-shadow:
+                inset 0 1px 2px rgb(15 40 80 / 0.25),
+                0 0 0 1px rgb(2 84 140 / 0.55);
+        }
+
+        .btn-generate:focus-visible {
+            outline: none;
+            box-shadow:
+                inset 0 1px 0 rgb(255 255 255 / 0.5),
+                0 0 0 1px #FFFFFF,
+                0 0 0 3px var(--accent-fill);
         }
 
         .btn-generate:disabled {
-            opacity: 0.5;
+            opacity: 0.55;
             cursor: not-allowed;
         }
 
+        /* =========================================================
+           本体作業領域（境界線なし・統合された行とコンテキスト概要）
+           ========================================================= */
+        .workspace-overview {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 14px 28px;
+            padding-bottom: 16px;
+            box-shadow: 0 1px 0 rgb(100 116 139 / 0.10);
+        }
+
+        .overview-title h2 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .overview-title p {
+            font-size: 0.82rem;
+            color: var(--text-sub);
+            margin-top: 2px;
+        }
+
+        .overview-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .meta-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-sub);
+        }
+
+        .meta-value {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--accent-text);
+            font-family: var(--font-mono);
+        }
+
+        .section-block {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .section-heading {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.02em;
+        }
+
+        /* 連続する階層データは枠線カードで囲まず、1つの統合された行集合にする */
         .table-container {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px) saturate(135%);
-            border: 1px solid var(--glass-border);
-            border-radius: 3px;
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.01);
+            width: 100%;
+            min-width: 0;
+            border-radius: var(--radius);
+            background: rgb(255 255 255 / 0.34);
         }
 
         table {
@@ -294,57 +714,104 @@
         }
 
         th, td {
-            padding: 14px 18px;
+            padding: 12px 14px;
             font-size: 0.85rem;
+            vertical-align: middle;
         }
 
         th {
-            background: rgba(100, 116, 139, 0.05);
             color: var(--text-sub);
             font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-            border-bottom: 1px solid var(--glass-border);
+            font-size: 0.74rem;
+            letter-spacing: 0.03em;
+            background: rgb(136 187 255 / 0.08);
         }
 
-        tr {
-            border-bottom: 1px solid rgba(100, 116, 139, 0.08);
-            transition: background-color 0.2s;
+        tbody tr {
+            transition: background-color 0.14s ease;
         }
 
-        tr:hover {
-            background-color: rgba(100, 116, 139, 0.02);
+        tbody tr:nth-child(even) {
+            background-color: rgb(234 245 255 / 0.32);
         }
 
-        tr:last-child {
-            border-bottom: none;
+        tbody tr:hover {
+            background-color: rgb(136 187 255 / 0.16);
+        }
+
+        tbody tr.empty-row td {
+            padding: 28px 16px;
+            text-align: center;
+            color: var(--text-sub);
+            font-size: 0.84rem;
+        }
+
+        tbody tr.empty-row:hover {
+            background-color: transparent;
         }
 
         .mono {
             font-family: var(--font-mono);
             letter-spacing: -0.02em;
+            word-break: break-word;
         }
 
         .ratio-badge {
             display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            background: rgba(0, 122, 204, 0.1);
-            color: var(--primary);
+            padding: 2px 8px;
+            border-radius: var(--radius);
+            background: rgb(224 242 254 / 0.85);
+            color: var(--accent-text);
             font-weight: 600;
-            font-size: 0.75rem;
+            font-size: 0.76rem;
         }
 
+        /* モバイルでは横スクロールさせず、行を自然な2列グリッドへ組み替える */
+        @media (max-width: 640px) {
+            thead {
+                display: none;
+            }
+            table, tbody {
+                display: block;
+                width: 100%;
+            }
+            tbody tr {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                gap: 6px 12px;
+                padding: 12px 14px;
+            }
+            tbody tr.empty-row {
+                display: block;
+                padding: 0;
+            }
+            tbody td {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                padding: 2px 0;
+                min-width: 0;
+            }
+            tbody td::before {
+                content: attr(data-label);
+                font-size: 0.68rem;
+                font-weight: 600;
+                color: var(--text-sub);
+            }
+            tbody tr.empty-row td::before {
+                content: none;
+            }
+        }
+
+        /* ログ行（罫線コンテナで囲まず、静かな行の連なりとして配置） */
         .console-container {
-            background: rgba(30, 41, 59, 0.03);
-            border: 1px solid var(--glass-border);
-            border-radius: 3px;
-            padding: 16px;
+            background: rgb(255 255 255 / 0.28);
+            border-radius: var(--radius);
+            padding: 12px 14px;
             font-family: var(--font-mono);
             font-size: 0.8rem;
-            color: var(--text-sub);
-            height: 150px;
+            color: var(--text-muted);
+            height: 156px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -353,21 +820,23 @@
 
         .console-line {
             display: flex;
+            align-items: baseline;
             gap: 8px;
+            min-width: 0;
+            word-break: break-word;
         }
 
         .console-tag {
-            color: var(--primary);
-            font-weight: 600;
+            color: var(--accent-text);
+            font-weight: 700;
+            flex-shrink: 0;
         }
-
-        .console-tag.err { color: #EF4444; }
-        .console-tag.ok { color: #10B981; }
+        .console-tag.err { color: var(--err-color); }
+        .console-tag.ok { color: var(--ok-text); }
     </style>
 </head>
 <body>
 
-    <!-- Web Worker 統合計算エンジン（予測・生成を共通化し、MTIME=0で完全一致させる） -->
     <script type="text/plain" id="predictionWorkerCode">
         const assert = (condition, msg = "Assertion failed") => {
             if (!condition) throw new Error(msg);
@@ -1258,99 +1727,155 @@
         };
     </script>
 
-    <div class="app-window">
-        <aside>
-            <div>
-                <h1>Symbolic Deflate</h1>
-                <div class="subtitle">メモリ効率特化型、超巨大多重圧縮ジェネレーター</div>
+    <div class="app-window surface">
+        <aside class="sidebar glass is-lit is-reflective">
+            <div class="sidebar-header">
+                <div>
+                    <h1 class="on-glass-text">Symbolic Deflate</h1>
+                    <p class="subtitle on-glass-text">メモリ非展開・超巨大多重 GZIP 生成</p>
+                </div>
+                <button type="button" class="glass-toggle" id="glassToggleBtn" aria-pressed="true" title="ガラス透過効果の切り替え">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="2.5" y="2.5" width="11" height="11" rx="2"/>
+                        <path d="M5 11L11 5M5 7L7 5"/>
+                    </svg>
+                    <span>ガラス</span>
+                </button>
             </div>
 
-            <div class="control-group">
-                <label>目標展開サイズ (TARGET_SIZE)</label>
-                <div class="input-row">
-                    <input type="text" id="sizeInput" value="1.0">
-                    <select id="unitSelect">
-                        <option value="MiB">MiB</option>
-                        <option value="GiB">GiB</option>
-                        <option value="TiB" selected>TiB</option>
-                        <option value="PiB">PiB</option>
-                        <option value="EiB">EiB</option>
-                        <option value="ZiB">ZiB</option>
-                        <option value="YiB">YiB</option>
-                        <option value="RiB">RiB</option>
-                        <option value="QiB">QiB</option>
+            <div class="control-section">
+                <div class="control-group">
+                    <label class="on-glass-text" for="sizeInput">目標展開サイズ (TARGET_SIZE)</label>
+                    <div class="input-row">
+                        <input type="text" id="sizeInput" value="1.0" autocomplete="off">
+                        <select id="unitSelect" aria-label="サイズ単位">
+                            <option value="MiB">MiB</option>
+                            <option value="GiB">GiB</option>
+                            <option value="TiB" selected>TiB</option>
+                            <option value="PiB">PiB</option>
+                            <option value="EiB">EiB</option>
+                            <option value="ZiB">ZiB</option>
+                            <option value="YiB">YiB</option>
+                            <option value="RiB">RiB</option>
+                            <option value="QiB">QiB</option>
+                        </select>
+                    </div>
+                    <div class="input-help">
+                        数式（2^120・1&lt;&lt;100・0x1p100）や大きな整数をそのまま入力できます。
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="label-row">
+                        <label class="on-glass-text" for="layerRange">圧縮レイヤー数</label>
+                        <button type="button" class="optimal-badge" id="optimalBadge" style="display:none;" title="1/1032理論限界から算出した最適解を適用">推奨: --層 (適用)</button>
+                    </div>
+                    <div class="slider-sync-row">
+                        <input type="range" id="layerRange" min="1" max="50" value="15" aria-label="圧縮レイヤー数スライダー">
+                        <input type="number" id="layerInput" min="1" max="5000" value="15" aria-label="圧縮レイヤー数数値入力">
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="control-group">
+                    <label class="on-glass-text" for="filenameInput">仮想展開ファイル名</label>
+                    <input type="text" id="filenameInput" value="bomb.txt">
+                </div>
+
+                <div class="control-group">
+                    <label class="on-glass-text" for="namingModeSelect">各層のファイル名規則</label>
+                    <select id="namingModeSelect">
+                        <option value="layer_num" selected>レイヤー番号付与 (~l.gz)</option>
+                        <option value="uniform">全層同一 (ファイル名統一)</option>
+                        <option value="cumulative">累積拡張子 (.gz 連続)</option>
                     </select>
-                </div>
-                <div class="input-help">
-                    ※「2^120」「1&lt;&lt;100」「0x1p100」「1329227995784915872903807060280344576」などの数式・16進数表記を入力可能。
+                    <div class="input-help">「~l」は現在の階層番号に自動置換されます。</div>
                 </div>
             </div>
 
-            <div class="control-group">
-                <label>
-                    <span>圧縮レイヤー数 (Nesting Layers)</span>
-                    <span class="optimal-badge" id="optimalBadge" style="display:none;" title="1/1032理論限界から算出した最適解">推奨: --層 (適用)</span>
-                </label>
-                <div class="slider-sync-row">
-                    <input type="range" id="layerRange" min="1" max="50" value="15">
-                    <input type="number" id="layerInput" min="1" max="5000" value="15">
+            <div class="action-area">
+                <div class="prediction-summary">
+                    <span class="prediction-title on-glass-text">予測圧縮サイズ</span>
+                    <span class="prediction-value on-glass-text" id="predictValue">-- B</span>
+                </div>
+
+                <div class="progress-box" id="progressBox">
+                    <div class="progress-text">
+                        <span id="progressState">待機中</span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fg" id="progressBar"></div>
+                    </div>
+                </div>
+
+                <div class="button-stack">
+                    <button type="button" class="btn-secondary" id="predictBtn">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M2.5 11.5L6 8l2.5 2.5L13.5 5"/>
+                            <path d="M10.5 5h3v3"/>
+                        </svg>
+                        <span>予測を計算</span>
+                    </button>
+                    <button type="button" class="btn-generate" id="generateBtn">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M8 2.5v7.5"/>
+                            <path d="M4.8 7.2L8 10.4l3.2-3.2"/>
+                            <path d="M2.5 12.5h11"/>
+                        </svg>
+                        <span>生成 &amp; ダウンロード</span>
+                    </button>
                 </div>
             </div>
-
-            <div class="control-group">
-                <label>仮想展開ファイル名</label>
-                <input type="text" id="filenameInput" value="bomb.txt">
-            </div>
-
-            <div class="control-group">
-                <label>各層のファイル名命名規則</label>
-                <select id="namingModeSelect">
-                    <option value="layer_num" selected>レイヤー番号付与 (~l.gz)</option>
-                    <option value="uniform">全層同一 (ファイル名統一)</option>
-                    <option value="cumulative">累積拡張子 (.gz 連続)</option>
-                </select>
-                <div class="input-help">※「~l」は現在の階層番号に自動置換されます。</div>
-            </div>
-
-            <div class="prediction-badge">
-                <div class="prediction-title">予測される圧縮後サイズ</div>
-                <div class="prediction-value" id="predictValue">-- B</div>
-                <button type="button" id="predictBtn" style="margin-top: 8px; width: 100%; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 3px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary)'">予測を計算</button>
-            </div>
-
-            <div class="progress-box" id="progressBox">
-                <div class="progress-text">
-                    <span id="progressState">Initializing...</span>
-                    <span id="progressPercent">0%</span>
-                </div>
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fg" id="progressBar"></div>
-                </div>
-            </div>
-
-            <button class="btn-generate" id="generateBtn">生成 & ダウンロード</button>
         </aside>
 
-        <main>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>階層</th>
-                            <th>入力サイズ（仮想）</th>
-                            <th>出力サイズ</th>
-                            <th>削減率</th>
-                            <th>CRC32（前層チェック）</th>
-                        </tr>
-                    </thead>
-                    <tbody id="statsTableBody">
-                    </tbody>
-                </table>
-            </div>
+        <main class="workspace content">
+            <header class="workspace-overview">
+                <div class="overview-title">
+                    <h2>多重圧縮シミュレーションと出力構造</h2>
+                    <p>実データを展開せず記号トークンのまま階層圧縮し、各層のサイズ推移と CRC32 を検証します。</p>
+                </div>
+                <div class="overview-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">現在の目標</span>
+                        <span class="meta-value" id="overviewTarget">1.0 TiB</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">レイヤー設定</span>
+                        <span class="meta-value" id="overviewLayers">15 層</span>
+                    </div>
+                </div>
+            </header>
 
-            <div class="console-container" id="consoleLogs">
-                <div class="console-line"><span class="console-tag">[System]</span><span>初期化完了。パラメータを入力して予測または生成を実行してください。</span></div>
-            </div>
+            <section class="section-block" aria-label="階層別圧縮統計">
+                <div class="section-heading">階層別推移</div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>階層</th>
+                                <th>入力サイズ（仮想）</th>
+                                <th>出力サイズ</th>
+                                <th>削減率</th>
+                                <th>CRC32（前層チェック）</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statsTableBody">
+                            <tr class="empty-row">
+                                <td colspan="5">「予測を計算」または「生成 &amp; ダウンロード」を実行すると、各階層のサイズがここに行として並びます。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="section-block" aria-label="処理ログ">
+                <div class="section-heading">処理ログ</div>
+                <div class="console-container" id="consoleLogs">
+                    <div class="console-line"><span class="console-tag">[System]</span><span>初期化完了。パラメータを確認して予測または生成を実行してください。</span></div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -1452,9 +1977,33 @@
         const unitSelect = document.getElementById('unitSelect');
         const predictBtn = document.getElementById('predictBtn');
         const generateBtn = document.getElementById('generateBtn');
+        const glassToggleBtn = document.getElementById('glassToggleBtn');
+
+        function syncSliderVisual() {
+            const min = Number(layerRange.min) || 1;
+            const max = Number(layerRange.max) || 50;
+            const cur = Math.min(max, Math.max(min, Number(layerRange.value) || min));
+            const pct = ((cur - min) / (max - min)) * 100;
+            layerRange.style.setProperty('--range-pct', pct.toFixed(1) + '%');
+        }
+
+        function syncOverviewMeta() {
+            const ovTarget = document.getElementById('overviewTarget');
+            const ovLayers = document.getElementById('overviewLayers');
+            if (ovTarget) {
+                const bytes = getTargetSizeBytes();
+                ovTarget.textContent = bytes > 0n ? formatBytes(bytes) : "--";
+            }
+            if (ovLayers) {
+                const l = parseInt(layerInput.value, 10);
+                ovLayers.textContent = (!isNaN(l) && l >= 1) ? `${l} 層` : "--";
+            }
+        }
 
         layerRange.addEventListener('input', () => {
             layerInput.value = layerRange.value;
+            syncSliderVisual();
+            syncOverviewMeta();
             triggerFastUpdate();
         });
         layerInput.addEventListener('input', () => {
@@ -1462,14 +2011,18 @@
             if (isNaN(val) || val < 1) val = 1;
             if (val > MAX_LAYERS) val = MAX_LAYERS;
             layerRange.value = Math.min(val, 50);
+            syncSliderVisual();
+            syncOverviewMeta();
             triggerFastUpdate();
         });
         sizeInput.addEventListener('input', () => {
             updateOptimalDisplay();
+            syncOverviewMeta();
             triggerFastUpdate();
         });
         unitSelect.addEventListener('change', () => {
             updateOptimalDisplay();
+            syncOverviewMeta();
             triggerFastUpdate();
         });
         document.getElementById('filenameInput').addEventListener('input', triggerFastUpdate);
@@ -1481,10 +2034,31 @@
                 const opt = Math.min(calculateOptimalLayers(bytes), MAX_LAYERS);
                 layerInput.value = opt;
                 layerRange.value = Math.min(opt, 50);
+                syncSliderVisual();
+                syncOverviewMeta();
                 addLog("Opt", `最適レイヤー数 ${opt} 層を適用しました (1/1032 理論限界・1MiB境界基準)`, "ok");
                 triggerFastUpdate();
             }
         });
+
+        // ガラス効果オンオフのユーザー切替（縮退と同等に透けだけ制御）
+        glassToggleBtn.addEventListener('click', () => {
+            const isOff = document.documentElement.classList.toggle('no-glass');
+            glassToggleBtn.setAttribute('aria-pressed', String(!isOff));
+        });
+
+        // 枠上のポインタ反射（ホバー中のみ・1フレーム1回）
+        let reflectRaf = 0;
+        document.addEventListener('pointermove', (e) => {
+            const g = e.target.closest?.('.is-reflective');
+            if (!g || reflectRaf) return;
+            reflectRaf = requestAnimationFrame(() => {
+                const r = g.getBoundingClientRect();
+                g.style.setProperty('--px', (e.clientX - r.left) + 'px');
+                g.style.setProperty('--py', (e.clientY - r.top) + 'px');
+                reflectRaf = 0;
+            });
+        }, { passive: true });
 
         function computeLayerFilename(base, count, mode) {
             if (count === 0) return base.replace(/~l/g, '0');
@@ -1509,12 +2083,12 @@
             const badge = document.getElementById('optimalBadge');
             if (!badge) return;
             if (bytes <= 0n) {
-                badge.innerText = "推奨: --層";
+                badge.textContent = "推奨: --層";
                 badge.style.display = "none";
                 return;
             }
             const opt = Math.min(calculateOptimalLayers(bytes), MAX_LAYERS);
-            badge.innerText = `推奨: ${opt}層 (適用)`;
+            badge.textContent = `推奨: ${opt}層 (適用)`;
             badge.style.display = "inline-block";
         }
 
@@ -1522,10 +2096,10 @@
             const valStr = sizeInput.value.trim();
             const parsed = parseBigSize(valStr);
             if (parsed === null) {
-                sizeInput.style.borderColor = "#EF4444";
+                sizeInput.classList?.add('is-invalid');
                 return -1n;
             }
-            sizeInput.style.borderColor = "";
+            sizeInput.classList?.remove('is-invalid');
             const mult = UNIT_MULTIPLIERS[unitSelect.value];
             if (!mult) return 0n;
 
@@ -1585,7 +2159,7 @@
         }
 
         function triggerFastUpdate() {
-            document.getElementById('predictValue').innerText = "-- B";
+            document.getElementById('predictValue').textContent = "-- B";
         }
 
         let worker = null;
@@ -1595,32 +2169,44 @@
             currentAction = busy ? action : null;
             predictBtn.disabled = busy;
             generateBtn.disabled = busy;
+            const progressBox = document.getElementById('progressBox');
+            const predictLabel = predictBtn.querySelector('span');
             if (busy && action === 'predict') {
-                predictBtn.innerText = "計算中（スレッド分離）...";
+                if (predictLabel) predictLabel.textContent = "計算中（スレッド分離）...";
             } else {
-                predictBtn.innerText = "予測を計算";
+                if (predictLabel) predictLabel.textContent = "予測を計算";
             }
-            if (!busy) {
-                document.getElementById('progressBox').style.display = "none";
+            if (busy) {
+                progressBox.classList?.add('is-active');
+            } else {
+                progressBox.classList?.remove('is-active');
             }
+        }
+
+        function clearStatsTable() {
+            document.getElementById('statsTableBody').innerHTML = '';
         }
 
         function appendLayerRow(data) {
             const tableBody = document.getElementById('statsTableBody');
+            const emptyRow = tableBody.querySelector?.('.empty-row');
+            if (emptyRow) emptyRow.remove();
+
             const tr = document.createElement('tr');
             const rawUncompressed = BigInt(data.uncompressed);
             const rawCompressed = BigInt(data.compressed);
 
             const cells = [
-                { text: `L${data.layer}`, cls: "mono", style: "font-weight: 600;" },
-                { text: formatBytes(rawUncompressed), cls: "mono" },
-                { text: formatBytes(rawCompressed), cls: "mono" },
-                { badge: formatRatioPercent(rawCompressed, rawUncompressed) },
-                { text: data.crc, cls: "mono", style: "color: var(--text-sub); font-size: 0.8rem;" }
+                { label: "階層", text: `L${data.layer}`, cls: "mono", style: "font-weight: 600;" },
+                { label: "入力サイズ（仮想）", text: formatBytes(rawUncompressed), cls: "mono" },
+                { label: "出力サイズ", text: formatBytes(rawCompressed), cls: "mono" },
+                { label: "削減率", badge: formatRatioPercent(rawCompressed, rawUncompressed) },
+                { label: "CRC32（前層）", text: data.crc, cls: "mono", style: "color: var(--text-sub); font-size: 0.8rem;" }
             ];
 
             for (const c of cells) {
                 const td = document.createElement('td');
+                td.setAttribute('data-label', c.label);
                 if (c.cls) td.className = c.cls;
                 if (c.style) td.setAttribute('style', c.style);
                 if (c.badge) {
@@ -1649,22 +2235,27 @@
 
                 if (type === 'layer_progress') {
                     appendLayerRow(data);
-                    if (currentAction === 'generate') {
-                        const pct = Math.floor((data.layer / data.totalLayers) * 100);
-                        document.getElementById('progressState').textContent = `Compressing Layer ${data.layer}/${data.totalLayers}...`;
-                        document.getElementById('progressPercent').textContent = `${pct}%`;
-                        document.getElementById('progressBar').style.width = `${pct}%`;
-                    }
+                    const pct = Math.floor((data.layer / data.totalLayers) * 100);
+                    document.getElementById('progressState').textContent = `Layer ${data.layer} / ${data.totalLayers} 処理中`;
+                    document.getElementById('progressPercent').textContent = `${pct}%`;
+                    document.getElementById('progressBar').style.width = `${pct}%`;
                     addLog(
                         currentAction === 'generate' ? "Gen" : "Progress",
-                        `L${data.layer} 処理完了: ${formatBytes(BigInt(data.uncompressed))} -> ${formatBytes(BigInt(data.compressed))}`
+                        `L${data.layer} 完了: ${formatBytes(BigInt(data.uncompressed))} -> ${formatBytes(BigInt(data.compressed))}`
                     );
                 } else if (type === 'prediction_complete') {
-                    document.getElementById('predictValue').innerText = formatBytes(BigInt(finalSize));
+                    document.getElementById('predictValue').textContent = formatBytes(BigInt(finalSize));
+                    document.getElementById('progressState').textContent = "予測完了";
+                    document.getElementById('progressPercent').textContent = "100%";
+                    document.getElementById('progressBar').style.width = "100%";
                     setBusyState(false);
                     addLog("Success", `計算完了。最終サイズ予測: ${formatBytes(BigInt(finalSize))}`, "ok");
                 } else if (type === 'generation_complete') {
-                    document.getElementById('predictValue').innerText = formatBytes(BigInt(finalSize));
+                    document.getElementById('predictValue').textContent = formatBytes(BigInt(finalSize));
+                    document.getElementById('progressState').textContent = "生成完了";
+                    document.getElementById('progressPercent').textContent = "100%";
+                    document.getElementById('progressBar').style.width = "100%";
+
                     const baseFilename = document.getElementById('filenameInput').value;
                     const count_layers = parseInt(layerInput.value, 10);
                     const namingMode = document.getElementById('namingModeSelect').value;
@@ -1687,12 +2278,14 @@
                     setBusyState(false);
                     addLog("Success", `ファイル「${downloadFilename}」(${formatBytes(BigInt(finalSize))}) の書き出し完了。`, "ok");
                 } else if (type === 'worker_error') {
+                    document.getElementById('progressState').textContent = "中断しました";
                     setBusyState(false);
                     addLog("Error", message || "不明なエラーが発生しました。", "err");
                 }
             };
 
             worker.onerror = function(err) {
+                document.getElementById('progressState').textContent = "エラーで停止";
                 setBusyState(false);
                 if (worker) {
                     worker.terminate();
@@ -1721,17 +2314,18 @@
             setBusyState(true, action);
 
             if (action === 'predict') {
-                document.getElementById('predictValue').innerText = "Calculating...";
-                document.getElementById('statsTableBody').innerHTML = '';
-                addLog("System", "バックグラウンドでの圧縮予測シミュレーションを開始しました。");
-            } else {
-                const progressBox = document.getElementById('progressBox');
-                progressBox.style.display = "flex";
-                document.getElementById('progressState').textContent = "Generating in Worker...";
+                document.getElementById('predictValue').textContent = "計算中...";
+                document.getElementById('progressState').textContent = `Layer 1 / ${count_layers} 準備中`;
                 document.getElementById('progressPercent').textContent = "0%";
                 document.getElementById('progressBar').style.width = "0%";
-                if (document.getElementById('predictValue').innerText === "-- B") {
-                    document.getElementById('statsTableBody').innerHTML = '';
+                clearStatsTable();
+                addLog("System", "バックグラウンドでの圧縮予測シミュレーションを開始しました。");
+            } else {
+                document.getElementById('progressState').textContent = `Layer 1 / ${count_layers} 準備中`;
+                document.getElementById('progressPercent').textContent = "0%";
+                document.getElementById('progressBar').style.width = "0%";
+                if (document.getElementById('predictValue').textContent === "-- B") {
+                    clearStatsTable();
                 }
                 addLog("Gen", "Web Workerで圧縮ファイルの生成を開始しました。");
             }
@@ -1749,8 +2343,10 @@
         predictBtn.addEventListener('click', () => startWorkerJob('predict'));
         generateBtn.addEventListener('click', () => startWorkerJob('generate'));
 
-        document.getElementById('predictValue').innerText = "-- B";
+        document.getElementById('predictValue').textContent = "-- B";
+        syncSliderVisual();
         updateOptimalDisplay();
+        syncOverviewMeta();
     </script>
 </body>
 </html>
