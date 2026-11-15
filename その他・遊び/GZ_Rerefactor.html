@@ -1832,34 +1832,98 @@
             return base + ".gz".repeat(count);
         }
 
-        // Worker 側 O(1) バイトサイズ／削減率整形（50,000bit BigInt の10進文字列変換を回避）
-        function fastFormatBytes(bi) {
-            if (bi < 1024n) return bi.toString() + " B";
-            const bitLen = bi.toString(2).length - 1;
+        const UNIT_SHIFTS = {
+            "Bytes": 0n, "KiB": 10n, "MiB": 20n, "GiB": 30n, "TiB": 40n,
+            "PiB": 50n, "EiB": 60n, "ZiB": 70n, "YiB": 80n, "RiB": 90n, "QiB": 100n
+        };
+
+        function parseBigSizeInWorker(valStr, unitName) {
+            valStr = valStr.trim();
+            if (!valStr) return 0n;
+            const unitShift = UNIT_SHIFTS[unitName];
+            if (unitShift === undefined) return 0n;
+
+            const powMatch = valStr.match(/^(2|10)\s*(\^|\*\*)\s*(\d+)$/);
+            if (powMatch) {
+                const base = BigInt(powMatch[1]);
+                const exp = BigInt(powMatch[3]);
+                return base === 2n ? (1n << (exp + unitShift)) : ((10n ** exp) << unitShift);
+            }
+
+            const shiftMatch = valStr.match(/^1\s*<<\s*(\d+)$/);
+            if (shiftMatch) {
+                return 1n << (BigInt(shiftMatch[1]) + unitShift);
+            }
+
+            const hexFloatMatch = valStr.match(/^0[xX]([0-9a-fA-F]+)?(?:\.([0-9a-fA-F]+))?[pP]([+-]?\d+)$/);
+            if (hexFloatMatch) {
+                const intPartStr = hexFloatMatch[1] || "0";
+                const fracPartStr = hexFloatMatch[2] || "";
+                if (!hexFloatMatch[1] && !hexFloatMatch[2]) throw new Error("入力数値が不正です。");
+                const expVal = BigInt(hexFloatMatch[3]);
+                const intPart = BigInt("0x" + intPartStr);
+                const fracPart = fracPartStr ? BigInt("0x" + fracPartStr) : 0n;
+                const fracLen = BigInt(fracPartStr.length);
+                const scaledBase = (intPart << (4n * fracLen)) + fracPart;
+                const netExp = expVal - 4n * fracLen + unitShift;
+                return netExp >= 0n ? (scaledBase << netExp) : (scaledBase >> (-netExp));
+            }
+
+            if (/^0[xX][0-9a-fA-F]+$/.test(valStr)) {
+                return BigInt(valStr) << unitShift;
+            }
+
+            if (valStr.includes('.')) {
+                const parts = valStr.split('.');
+                if (parts.length !== 2 || !/^\d*$/.test(parts[0]) || !/^\d*$/.test(parts[1]) || (parts[0] === '' && parts[1] === '')) {
+                    throw new Error("小数入力が不正です。");
+                }
+                const mult = 1n << unitShift;
+                const intPart = BigInt(parts[0] || "0");
+                const decStr = parts[1].slice(0, 18);
+                return (intPart * mult) + ((BigInt(decStr || "0") * mult) / (10n ** BigInt(decStr.length)));
+            }
+
+            if (/^\d+$/.test(valStr)) {
+                return BigInt(valStr) << unitShift;
+            }
+            throw new Error("入力サイズが解析不能な形式です。");
+        }
+
+        function describeSize(bi) {
+            if (bi < 1024n) {
+                const bitLen = bi <= 0n ? 0 : (bi.toString(2).length - 1);
+                return { bitLen, str: bi.toString() + " B" };
+            }
+            const hex = bi.toString(16);
+            const bitLen = (hex.length - 1) * 4 + (31 - Math.clz32(parseInt(hex[0], 16)));
             const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"];
             const unitIdx = Math.min(Math.floor(bitLen / 10) - 1, units.length - 1);
             const divBits = (unitIdx + 1) * 10;
             if (bitLen - divBits > 59) {
-                const shift = BigInt(bitLen - 53);
-                const top54 = Number(bi >> shift);
-                const log10Val = (bitLen - divBits) * Math.LOG10E * Math.LN2 + Math.log10(top54 / 9007199254740992);
+                const topHex = hex.slice(0, 14);
+                const topVal = Number(BigInt("0x" + topHex));
+                const remBits = (hex.length - topHex.length) * 4;
+                const log10Val = (remBits - divBits) * Math.LOG10E * Math.LN2 + Math.log10(topVal);
                 let exp10 = Math.floor(log10Val);
                 let mant = Math.pow(10, log10Val - exp10);
                 if (Number(mant.toFixed(2)) >= 10) { mant /= 10; exp10++; }
-                return `${mant.toFixed(2)}e+${exp10} ${units[unitIdx]} (~2^${bitLen} B)`;
+                return { bitLen, str: `${mant.toFixed(2)}e+${exp10} ${units[unitIdx]} (~2^${bitLen} B)` };
             }
             const divider = 1n << BigInt(divBits);
             const integerPart = bi / divider;
             const remainder = bi % divider;
             const fractionalPart = (remainder * 100n) / divider;
-            return integerPart.toString() + "." + fractionalPart.toString().padStart(2, '0') + " " + units[unitIdx];
+            return { bitLen, str: integerPart.toString() + "." + fractionalPart.toString().padStart(2, '0') + " " + units[unitIdx] };
         }
 
-        function fastFormatRatio(compressed, uncompressed) {
+        function fastFormatBytes(bi) {
+            return describeSize(bi).str;
+        }
+
+        function fastFormatRatio(compressed, uncompressed, compBitLen, uncompBitLen) {
             if (uncompressed <= 0n) return "0.000000%";
-            const uBits = uncompressed.toString(2).length;
-            const cBits = compressed.toString(2).length;
-            if (uBits - cBits > 30) return "< 0.000001%";
+            if (uncompBitLen - compBitLen > 30) return "< 0.000001%";
             const scaled = (compressed * 100000000n) / uncompressed;
             if (scaled === 0n && compressed > 0n) return "< 0.000001%";
             return (Number(scaled) / 1e6).toFixed(6) + "%";
@@ -1867,24 +1931,36 @@
 
         let cachedKey = null;
         let cachedStream = null;
-        let cachedFinalSize = null;
+        let cachedFinalInfo = null;
 
         self.onmessage = function(e) {
             try {
-                const { action, target_size_setting_str, count_layers, filename, naming_mode, max_download_bytes } = e.data;
-                const reqKey = JSON.stringify([target_size_setting_str, count_layers, filename, naming_mode]);
+                const { action, size_expr, unit_name, count_layers, filename, naming_mode, max_download_bytes } = e.data;
+                const reqKey = JSON.stringify([size_expr, unit_name, count_layers, filename, naming_mode]);
 
                 if (action === 'generate' && cachedKey === reqKey && cachedStream) {
                     const bytes = cachedStream.to_bytes(max_download_bytes);
                     self.postMessage({
                         type: 'generation_complete',
-                        finalSizeStr: fastFormatBytes(cachedFinalSize),
+                        finalSizeStr: cachedFinalInfo.str,
                         buffer: bytes.buffer
                     }, [bytes.buffer]);
                     return;
                 }
 
-                const target_size_setting = BigInt(target_size_setting_str);
+                let target_size_setting;
+                try {
+                    target_size_setting = parseBigSizeInWorker(size_expr, unit_name);
+                } catch (parseErr) {
+                    if (parseErr instanceof RangeError) {
+                        throw new Error("展開サイズが JavaScript の BigInt 最大上限（約 10 億 bit）を超えているため計算できません。");
+                    }
+                    throw parseErr;
+                }
+                if (target_size_setting <= 0n) {
+                    throw new Error("目標展開サイズは 1 バイト以上を指定してください。");
+                }
+
                 const layers = Number(count_layers);
                 const te = new TextEncoder();
                 const storedSkipState = new Map();
@@ -1896,6 +1972,7 @@
 
                 let stream = null;
                 let current_uncompressed = target_size_setting;
+                let curInfo = describeSize(current_uncompressed);
 
                 for (let count = 0; count < layers; count++) {
                     const data_size = current_uncompressed;
@@ -1938,38 +2015,40 @@
 
                     tokens = stream.finalize_tokens();
                     const compressed_size = stream.total_bytes();
+                    const compInfo = describeSize(compressed_size);
 
                     self.postMessage({
                         type: 'layer_progress',
                         data: {
                             layer: count + 1,
                             totalLayers: layers,
-                            uncompressedStr: fastFormatBytes(current_uncompressed),
-                            compressedStr: fastFormatBytes(compressed_size),
-                            ratioStr: fastFormatRatio(compressed_size, current_uncompressed),
+                            uncompressedStr: curInfo.str,
+                            compressedStr: compInfo.str,
+                            ratioStr: fastFormatRatio(compressed_size, current_uncompressed, compInfo.bitLen, curInfo.bitLen),
                             crc: "0x" + data_crc.toString(16).toUpperCase().padStart(8, '0')
                         }
                     });
 
                     current_uncompressed = compressed_size;
+                    curInfo = compInfo;
                     data_crc = stream.get_crc();
                 }
 
                 cachedKey = reqKey;
                 cachedStream = stream;
-                cachedFinalSize = current_uncompressed;
+                cachedFinalInfo = curInfo;
 
                 if (action === 'generate') {
                     const bytes = stream.to_bytes(max_download_bytes);
                     self.postMessage({
                         type: 'generation_complete',
-                        finalSizeStr: fastFormatBytes(current_uncompressed),
+                        finalSizeStr: curInfo.str,
                         buffer: bytes.buffer
                     }, [bytes.buffer]);
                 } else {
                     self.postMessage({
                         type: 'prediction_complete',
-                        finalSizeStr: fastFormatBytes(current_uncompressed)
+                        finalSizeStr: curInfo.str
                     });
                 }
             } catch (err) {
@@ -2026,7 +2105,7 @@
                     </div>
                     <div class="slider-sync-row">
                         <input type="range" id="layerRange" min="1" max="50" value="15" aria-label="圧縮レイヤー数スライダー">
-                        <input type="number" id="layerInput" min="1" max="5000" value="15" aria-label="圧縮レイヤー数数値入力">
+                        <input type="number" id="layerInput" min="1" max="100000" value="15" aria-label="圧縮レイヤー数数値入力">
                     </div>
                 </div>
             </div>
@@ -2143,31 +2222,74 @@
     </div>
 
     <script>
-        const MAX_EXP_BIN = 50000n;
-        const MAX_EXP_DEC = 15000n;
-        const MAX_LAYERS = 5000;
+        const MAX_LAYERS = 100000;
         const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
         const TABLE_PAGE_SIZE = 100;
         const MAX_LOG_NODES = 120;
 
-        function parseBigSize(valStr) {
+        const UNIT_SHIFTS = {
+            "Bytes": 0, "KiB": 10, "MiB": 20, "GiB": 30, "TiB": 40,
+            "PiB": 50, "EiB": 60, "ZiB": 70, "YiB": 80, "RiB": 90, "QiB": 100
+        };
+        const LOG2_10 = Math.log2(10);
+        const LOG2_1032 = Math.log2(1032);
+
+        function exactLog2BigInt(bi) {
+            if (bi <= 0n) return 0;
+            const hex = bi.toString(16);
+            const bitLen = (hex.length - 1) * 4 + (31 - Math.clz32(parseInt(hex[0], 16)));
+            if (bitLen <= 52) return Math.log2(Number(bi));
+            const topHex = hex.slice(0, 14);
+            const topVal = Number(BigInt("0x" + topHex));
+            const remBits = (hex.length - topHex.length) * 4;
+            return remBits + Math.log2(topVal);
+        }
+
+        function formatBytesFromLog2(log2Val, exactBI = null) {
+            if (exactBI !== null && exactBI < 1024n) return exactBI.toString() + " B";
+            const bitLen = Math.floor(log2Val);
+            if (bitLen < 10) return Math.round(Math.pow(2, log2Val)) + " B";
+            const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"];
+            const unitIdx = Math.min(Math.floor(bitLen / 10) - 1, units.length - 1);
+            const divBits = (unitIdx + 1) * 10;
+            if (exactBI !== null && (bitLen - divBits) <= 59) {
+                const divider = 1n << BigInt(divBits);
+                const integerPart = exactBI / divider;
+                const remainder = exactBI % divider;
+                const fractionalPart = (remainder * 100n) / divider;
+                return integerPart.toString() + "." + fractionalPart.toString().padStart(2, '0') + " " + units[unitIdx];
+            }
+            const log10Val = (log2Val - divBits) * Math.LOG10E * Math.LN2;
+            let exp10 = Math.floor(log10Val);
+            let mant = Math.pow(10, log10Val - exp10);
+            if (Number(mant.toFixed(2)) >= 10) { mant /= 10; exp10++; }
+            return `${mant.toFixed(2)}e+${exp10} ${units[unitIdx]} (~2^${bitLen} B)`;
+        }
+
+        // O(1) 入力メタ解析（キー入力時に巨大 BigInt を生成せず即応させる）
+        function parseSizeMeta(valStr, unitShift) {
             valStr = valStr.trim();
-            if (!valStr) return 0n;
+            if (!valStr) return { empty: true, isZero: true, log2: -Infinity, exactBI: 0n };
 
             const powMatch = valStr.match(/^(2|10)\s*(\^|\*\*)\s*(\d+)$/);
             if (powMatch) {
-                const base = BigInt(powMatch[1]);
-                const exp = BigInt(powMatch[3]);
-                const limit = base === 2n ? MAX_EXP_BIN : MAX_EXP_DEC;
-                if (exp > limit) return null;
-                return base ** exp;
+                const base = Number(powMatch[1]);
+                const expStr = powMatch[3];
+                const expNum = Number(expStr);
+                if (!Number.isFinite(expNum)) return null;
+                const log2Val = (base === 2 ? expNum : expNum * LOG2_10) + unitShift;
+                const exactBI = (log2Val <= 120) ? ((BigInt(base) ** BigInt(expStr)) << BigInt(unitShift)) : null;
+                return { empty: false, isZero: false, log2: log2Val, exactBI };
             }
 
             const shiftMatch = valStr.match(/^1\s*<<\s*(\d+)$/);
             if (shiftMatch) {
-                const exp = BigInt(shiftMatch[1]);
-                if (exp > MAX_EXP_BIN) return null;
-                return 1n << exp;
+                const expStr = shiftMatch[1];
+                const expNum = Number(expStr);
+                if (!Number.isFinite(expNum)) return null;
+                const log2Val = expNum + unitShift;
+                const exactBI = (log2Val <= 120) ? (1n << BigInt(expNum + unitShift)) : null;
+                return { empty: false, isZero: false, log2: log2Val, exactBI };
             }
 
             const hexFloatMatch = valStr.match(/^0[xX]([0-9a-fA-F]+)?(?:\.([0-9a-fA-F]+))?[pP]([+-]?\d+)$/);
@@ -2175,66 +2297,69 @@
                 const intPartStr = hexFloatMatch[1] || "0";
                 const fracPartStr = hexFloatMatch[2] || "";
                 if (!hexFloatMatch[1] && !hexFloatMatch[2]) return null;
-                const expVal = BigInt(hexFloatMatch[3]);
-                const intPart = BigInt("0x" + intPartStr);
-                const fracPart = fracPartStr ? BigInt("0x" + fracPartStr) : 0n;
-                const fracLen = BigInt(fracPartStr.length);
-                const scaledBase = (intPart << (4n * fracLen)) + fracPart;
-                const netExp = expVal - 4n * fracLen;
-                if (netExp > MAX_EXP_BIN) return null;
-                return netExp >= 0n ? (scaledBase << netExp) : (scaledBase >> (-netExp));
+                const expNum = Number(hexFloatMatch[3]);
+                if (!Number.isFinite(expNum)) return null;
+                const trimmed = (intPartStr + fracPartStr).replace(/^0+/, '');
+                if (!trimmed) return { empty: false, isZero: true, log2: -Infinity, exactBI: 0n };
+                const topHex = trimmed.slice(0, 14);
+                const topVal = parseInt(topHex, 16);
+                const remHexDigits = trimmed.length - topHex.length;
+                const netExp = expNum - 4 * fracPartStr.length + 4 * remHexDigits + unitShift;
+                const log2Val = Math.log2(topVal) + netExp;
+                if (log2Val < 0) return { empty: false, isZero: true, log2: -Infinity, exactBI: 0n };
+                let exactBI = null;
+                if (log2Val <= 120 && intPartStr.length + fracPartStr.length <= 32) {
+                    const sb = (BigInt("0x" + intPartStr) << BigInt(4 * fracPartStr.length)) + (fracPartStr ? BigInt("0x" + fracPartStr) : 0n);
+                    const ne = BigInt(hexFloatMatch[3]) - BigInt(4 * fracPartStr.length) + BigInt(unitShift);
+                    exactBI = ne >= 0n ? (sb << ne) : (sb >> (-ne));
+                    if (exactBI === 0n) return { empty: false, isZero: true, log2: -Infinity, exactBI: 0n };
+                }
+                return { empty: false, isZero: false, log2: log2Val, exactBI };
             }
 
             if (/^0[xX][0-9a-fA-F]+$/.test(valStr)) {
-                try {
-                    return BigInt(valStr);
-                } catch {
-                    return null;
-                }
+                const hex = valStr.slice(2).replace(/^0+/, '');
+                if (!hex) return { empty: false, isZero: true, log2: -Infinity, exactBI: 0n };
+                const topHex = hex.slice(0, 14);
+                const topVal = parseInt(topHex, 16);
+                const remBits = (hex.length - topHex.length) * 4 + unitShift;
+                const log2Val = Math.log2(topVal) + remBits;
+                const exactBI = (log2Val <= 120) ? (BigInt(valStr) << BigInt(unitShift)) : null;
+                return { empty: false, isZero: false, log2: log2Val, exactBI };
             }
 
             if (valStr.includes('.')) {
                 const parts = valStr.split('.');
-                if (parts.length !== 2 || !/^\d*$/.test(parts[0]) || !/^\d*$/.test(parts[1]) || (parts[0] === '' && parts[1] === '')) {
-                    return null;
+                if (parts.length !== 2 || !/^\d*$/.test(parts[0]) || !/^\d*$/.test(parts[1]) || (parts[0] === '' && parts[1] === '')) return null;
+                const intClean = parts[0].replace(/^0+/, '') || '0';
+                const fracClean = parts[1];
+                if (intClean === '0' && /^0*$/.test(fracClean)) return { empty: false, isZero: true, log2: -Infinity, exactBI: 0n };
+                if (intClean.length <= 20) {
+                    const intPart = BigInt(intClean);
+                    const decStr = fracClean.slice(0, 18);
+                    const mult = 1n << BigInt(unitShift);
+                    const bi = (intPart * mult) + ((BigInt(decStr || "0") * mult) / (10n ** BigInt(decStr.length)));
+                    if (bi === 0n) return { empty: false, isZero: true, log2: -Infinity, exactBI: 0n };
+                    return { empty: false, isZero: false, log2: exactLog2BigInt(bi), exactBI: bi };
                 }
-                try {
-                    const integerPart = BigInt(parts[0] || "0");
-                    const decimalStr = parts[1].slice(0, 18);
-                    return {
-                        isFraction: true,
-                        integer: integerPart,
-                        fraction: BigInt(decimalStr || "0"),
-                        fractionLen: BigInt(decimalStr.length)
-                    };
-                } catch {
-                    return null;
-                }
+                const top15 = Number(intClean.slice(0, 15));
+                const log2Val = (Math.log10(top15) + (intClean.length - 15)) * LOG2_10 + unitShift;
+                return { empty: false, isZero: false, log2: log2Val, exactBI: null };
             }
 
             if (/^\d+$/.test(valStr)) {
-                try {
-                    return BigInt(valStr);
-                } catch {
-                    return null;
+                const clean = valStr.replace(/^0+/, '');
+                if (!clean) return { empty: false, isZero: true, log2: -Infinity, exactBI: 0n };
+                if (clean.length <= 36) {
+                    const bi = BigInt(clean) << BigInt(unitShift);
+                    return { empty: false, isZero: false, log2: exactLog2BigInt(bi), exactBI: bi };
                 }
+                const top15 = Number(clean.slice(0, 15));
+                const log2Val = (Math.log10(top15) + (clean.length - 15)) * LOG2_10 + unitShift;
+                return { empty: false, isZero: false, log2: log2Val, exactBI: null };
             }
             return null;
         }
-
-        const UNIT_MULTIPLIERS = {
-            "Bytes": 1n,
-            "KiB": 1024n,
-            "MiB": 1024n ** 2n,
-            "GiB": 1024n ** 3n,
-            "TiB": 1024n ** 4n,
-            "PiB": 1024n ** 5n,
-            "EiB": 1024n ** 6n,
-            "ZiB": 1024n ** 7n,
-            "YiB": 1024n ** 8n,
-            "RiB": 1024n ** 9n,
-            "QiB": 1024n ** 10n
-        };
 
         const layerRange = document.getElementById('layerRange');
         const layerInput = document.getElementById('layerInput');
@@ -2244,27 +2369,21 @@
         const generateBtn = document.getElementById('generateBtn');
         const glassToggleBtn = document.getElementById('glassToggleBtn');
 
-        function formatBytes(bi) {
-            bi = BigInt(bi);
-            if (bi < 1024n) return bi.toString() + " B";
-            const bitLen = bi.toString(2).length - 1;
-            const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"];
-            const unitIdx = Math.min(Math.floor(bitLen / 10) - 1, units.length - 1);
-            const divBits = (unitIdx + 1) * 10;
-            if (bitLen - divBits > 59) {
-                const shift = BigInt(bitLen - 53);
-                const top54 = Number(bi >> shift);
-                const log10Val = (bitLen - divBits) * Math.LOG10E * Math.LN2 + Math.log10(top54 / 9007199254740992);
-                let exp10 = Math.floor(log10Val);
-                let mant = Math.pow(10, log10Val - exp10);
-                if (Number(mant.toFixed(2)) >= 10) { mant /= 10; exp10++; }
-                return `${mant.toFixed(2)}e+${exp10} ${units[unitIdx]} (~2^${bitLen} B)`;
+        function getCurrentSizeMeta() {
+            const unitShift = UNIT_SHIFTS[unitSelect.value] ?? 0;
+            const meta = parseSizeMeta(sizeInput.value, unitShift);
+            if (meta === null) {
+                sizeInput.classList?.add('is-invalid');
+                return null;
             }
-            const divider = 1n << BigInt(divBits);
-            const integerPart = bi / divider;
-            const remainder = bi % divider;
-            const fractionalPart = (remainder * 100n) / divider;
-            return integerPart.toString() + "." + fractionalPart.toString().padStart(2, '0') + " " + units[unitIdx];
+            sizeInput.classList?.remove('is-invalid');
+            return meta;
+        }
+
+        function calculateOptimalLayersFromLog2(log2Val) {
+            if (!Number.isFinite(log2Val)) return 1;
+            const est = Math.ceil((log2Val - 5.2) / LOG2_1032);
+            return Math.max(1, est);
         }
 
         function syncSliderVisual() {
@@ -2275,23 +2394,39 @@
             layerRange.style.setProperty('--range-pct', pct.toFixed(1) + '%');
         }
 
-        function syncOverviewMeta() {
+        function updateOptimalAndOverview() {
+            const meta = getCurrentSizeMeta();
+            const badge = document.getElementById('optimalBadge');
             const ovTarget = document.getElementById('overviewTarget');
             const ovLayers = document.getElementById('overviewLayers');
-            if (ovTarget) {
-                const bytes = getTargetSizeBytes();
-                ovTarget.textContent = bytes > 0n ? formatBytes(bytes) : "--";
-            }
+
             if (ovLayers) {
                 const l = parseInt(layerInput.value, 10);
                 ovLayers.textContent = (!isNaN(l) && l >= 1) ? `${l} 層` : "--";
+            }
+
+            if (!meta || meta.isZero) {
+                if (badge) {
+                    badge.textContent = "推奨: --層";
+                    badge.style.display = "none";
+                }
+                if (ovTarget) ovTarget.textContent = (meta && meta.isZero && !meta.empty) ? "0 B" : "--";
+                return;
+            }
+
+            if (ovTarget) ovTarget.textContent = formatBytesFromLog2(meta.log2, meta.exactBI);
+            if (badge) {
+                const opt = calculateOptimalLayersFromLog2(meta.log2);
+                const optLabel = opt >= 1e9 ? `~${opt.toExponential(2)}` : `${opt}`;
+                badge.textContent = `推奨: ${optLabel}層 (適用)`;
+                badge.style.display = "inline-block";
             }
         }
 
         layerRange.addEventListener('input', () => {
             layerInput.value = layerRange.value;
             syncSliderVisual();
-            syncOverviewMeta();
+            updateOptimalAndOverview();
             triggerFastUpdate();
         });
         layerInput.addEventListener('input', () => {
@@ -2300,31 +2435,34 @@
             if (val > MAX_LAYERS) val = MAX_LAYERS;
             layerRange.value = Math.min(val, 50);
             syncSliderVisual();
-            syncOverviewMeta();
+            updateOptimalAndOverview();
             triggerFastUpdate();
         });
         sizeInput.addEventListener('input', () => {
-            updateOptimalDisplay();
-            syncOverviewMeta();
+            updateOptimalAndOverview();
             triggerFastUpdate();
         });
         unitSelect.addEventListener('change', () => {
-            updateOptimalDisplay();
-            syncOverviewMeta();
+            updateOptimalAndOverview();
             triggerFastUpdate();
         });
         document.getElementById('filenameInput').addEventListener('input', triggerFastUpdate);
         document.getElementById('namingModeSelect').addEventListener('change', triggerFastUpdate);
 
         document.getElementById('optimalBadge').addEventListener('click', () => {
-            const bytes = getTargetSizeBytes();
-            if (bytes > 0n) {
-                const opt = Math.min(calculateOptimalLayers(bytes), MAX_LAYERS);
-                layerInput.value = opt;
-                layerRange.value = Math.min(opt, 50);
+            const meta = getCurrentSizeMeta();
+            if (meta && !meta.isZero) {
+                const opt = calculateOptimalLayersFromLog2(meta.log2);
+                const applied = Math.min(opt, MAX_LAYERS);
+                layerInput.value = applied;
+                layerRange.value = Math.min(applied, 50);
                 syncSliderVisual();
-                syncOverviewMeta();
-                addLog("Opt", `最適レイヤー数 ${opt} 層を適用しました (1/1032 理論限界基準)`, "ok");
+                updateOptimalAndOverview();
+                if (opt > MAX_LAYERS) {
+                    addLog("Opt", `最適理論値は ${opt} 層ですが、UI上限の ${MAX_LAYERS} 層を適用しました。`, "ok");
+                } else {
+                    addLog("Opt", `最適レイヤー数 ${applied} 層を適用しました (1/1032 理論限界基準)`, "ok");
+                }
                 triggerFastUpdate();
             }
         });
@@ -2352,54 +2490,6 @@
             if (mode === 'uniform') return base.endsWith('.gz') ? base : `${base}.gz`;
             if (mode === 'layer_num') return `${base}~l.gz`.replace(/~l/g, count);
             return base + ".gz".repeat(count);
-        }
-
-        const LOG2_1032 = Math.log2(1032);
-        function exactLog2BigInt(bi) {
-            const bitLen = bi.toString(2).length - 1;
-            if (bitLen <= 52) return Math.log2(Number(bi));
-            const top = Number(bi >> BigInt(bitLen - 52)) / 4503599627370496;
-            return bitLen + Math.log2(top);
-        }
-
-        function calculateOptimalLayers(targetSizeBytes) {
-            if (targetSizeBytes <= 0n) return 1;
-            const bits = exactLog2BigInt(targetSizeBytes);
-            // 残余の繰り返し本体が 1 層分の最小ヘッダ経費 (~2^5.2 ≈ 37 B) を下回る最小層数
-            return Math.max(1, Math.ceil((bits - 5.2) / LOG2_1032));
-        }
-
-        function updateOptimalDisplay() {
-            const bytes = getTargetSizeBytes();
-            const badge = document.getElementById('optimalBadge');
-            if (!badge) return;
-            if (bytes <= 0n) {
-                badge.textContent = "推奨: --層";
-                badge.style.display = "none";
-                return;
-            }
-            const opt = Math.min(calculateOptimalLayers(bytes), MAX_LAYERS);
-            badge.textContent = `推奨: ${opt}層 (適用)`;
-            badge.style.display = "inline-block";
-        }
-
-        function getTargetSizeBytes() {
-            const valStr = sizeInput.value.trim();
-            const parsed = parseBigSize(valStr);
-            if (parsed === null) {
-                sizeInput.classList?.add('is-invalid');
-                return -1n;
-            }
-            sizeInput.classList?.remove('is-invalid');
-            const mult = UNIT_MULTIPLIERS[unitSelect.value];
-            if (!mult) return 0n;
-
-            if (parsed && parsed.isFraction) {
-                const intVal = parsed.integer * mult;
-                const decVal = (parsed.fraction * mult) / (10n ** parsed.fractionLen);
-                return intVal + decVal;
-            }
-            return BigInt(parsed) * mult;
         }
 
         // =========================================================
@@ -2480,7 +2570,6 @@
         function flushLogs() {
             if (pendingLogs.length === 0) return;
             const consoleBox = document.getElementById('consoleLogs');
-            // 1フレームに大量到着した場合は末尾 MAX_LOG_NODES 件だけを描画
             const sliceStart = Math.max(0, pendingLogs.length - MAX_LOG_NODES);
             const frag = document.createDocumentFragment();
             for (let i = sliceStart; i < pendingLogs.length; i++) {
@@ -2588,7 +2677,6 @@
                     allLayerRows.push(data);
                     pendingLatestProgress = data;
                     tableDirty = true;
-                    // 大量層実行時はログを適度な間引き（先頭5層・末尾付近・250層毎）にしつつ進捗は即反映
                     if (data.totalLayers <= 200 || data.layer <= 5 || data.layer === data.totalLayers || data.layer % 250 === 0) {
                         pendingLogs.push({
                             tag: currentAction === 'generate' ? "Gen" : "Progress",
@@ -2656,16 +2744,16 @@
         }
 
         function startWorkerJob(action) {
-            const target_size_setting = getTargetSizeBytes();
+            const meta = getCurrentSizeMeta();
             const count_layers = parseInt(layerInput.value, 10);
             const filename = document.getElementById('filenameInput').value;
             const namingMode = document.getElementById('namingModeSelect').value;
 
-            if (target_size_setting === -1n) {
-                addLog("Error", "入力サイズが解析不能な形式（数式・数値エラーまたは指数上限超過）です。", "err");
+            if (meta === null) {
+                addLog("Error", "入力サイズが解析不能な形式（数式または数値エラー）です。", "err");
                 return;
             }
-            if (target_size_setting <= 0n || isNaN(count_layers) || count_layers < 1 || count_layers > MAX_LAYERS) {
+            if (meta.isZero || isNaN(count_layers) || count_layers < 1 || count_layers > MAX_LAYERS) {
                 addLog("Error", `パラメータが正しくありません。サイズとレイヤー数(1〜${MAX_LAYERS})を確認してください。`, "err");
                 return;
             }
@@ -2692,7 +2780,8 @@
 
             worker.postMessage({
                 action,
-                target_size_setting_str: target_size_setting.toString(),
+                size_expr: sizeInput.value.trim(),
+                unit_name: unitSelect.value,
                 count_layers,
                 filename,
                 naming_mode: namingMode,
@@ -2705,8 +2794,7 @@
 
         document.getElementById('predictValue').textContent = "-- B";
         syncSliderVisual();
-        updateOptimalDisplay();
-        syncOverviewMeta();
+        updateOptimalAndOverview();
     </script>
 </body>
 </html>
