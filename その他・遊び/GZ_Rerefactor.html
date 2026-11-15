@@ -833,6 +833,57 @@
         }
         .console-tag.err { color: var(--err-color); }
         .console-tag.ok { color: var(--ok-text); }
+    
+        /* 大量階層（100層超）向けの控えめなページネーション（枠線なし） */
+        .section-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .table-pager {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .table-pager.is-visible {
+            display: inline-flex;
+        }
+
+        .pager-btn {
+            min-height: 32px;
+            min-width: 36px;
+            padding: 4px 10px;
+            border: none;
+            border-radius: var(--radius);
+            background: rgb(255 255 255 / 0.60);
+            box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 0 0 1px rgb(100 116 139 / 0.20);
+            color: var(--accent-text);
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.14s ease;
+        }
+        .pager-btn:hover:not(:disabled) {
+            background: rgb(255 255 255 / 0.88);
+        }
+        .pager-btn:disabled {
+            opacity: 0.42;
+            cursor: not-allowed;
+        }
+        .pager-btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px rgb(14 165 233 / 0.45), 0 0 0 1px var(--accent);
+        }
+        .pager-info {
+            font-size: 0.76rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            padding: 0 4px;
+        }
     </style>
 </head>
 <body>
@@ -850,6 +901,12 @@
             let s = '';
             for (let i = 0; i < size; i++) s += ((n >>> i) & 1) ? '1' : '0';
             return s;
+        }
+
+        function revBits(val, len) {
+            let r = 0;
+            for (let i = 0; i < len; i++) r = (r << 1) | ((val >>> i) & 1);
+            return r >>> 0;
         }
 
         function pack_b(bit_string) {
@@ -891,11 +948,12 @@
             return new Uint8Array(buf);
         }
 
-        // 高速 GF(2)[x] CRC32（2^(2^k)キャッシュ + 256バイトテーブル）
+        // 高速 GF(2)[x] CRC32（原始多項式位数 2^32 - 1 で指数を簡約）
         const POW2_CACHE = [2];
+        const CRC_ORDER = 0xFFFFFFFFn;
         function crcMul(a, b) {
             let res = 0;
-            a = a >>> 0; b = b >>> 0;
+            a >>>= 0; b >>>= 0;
             while (b !== 0) {
                 if (b & 1) res = (res ^ a) >>> 0;
                 b >>>= 1;
@@ -904,16 +962,16 @@
             return res;
         }
         function crcPow2(exp) {
-            exp = BigInt(exp);
+            let e = Number(BigInt(exp) % CRC_ORDER);
             let res = 1;
             let k = 0;
-            while (exp > 0n) {
+            while (e !== 0) {
                 if (k >= POW2_CACHE.length) {
                     const prev = POW2_CACHE[POW2_CACHE.length - 1];
                     POW2_CACHE.push(crcMul(prev, prev));
                 }
-                if (exp & 1n) res = crcMul(res, POW2_CACHE[k]);
-                exp >>= 1n;
+                if (e & 1) res = crcMul(res, POW2_CACHE[k]);
+                e >>>= 1;
                 k++;
             }
             return res;
@@ -932,41 +990,12 @@
 
         class CRC32 {
             constructor() { this.crc = 0; this.size = 0n; }
-            normalize_bits(bits) {
-                let ret = 0;
-                for (let i = 0; i < bits.length; i++) {
-                    const bit = bits.charCodeAt(i) === 49 ? 1 : 0;
-                    ret = (((ret << 1) ^ ((ret >>> 31) ? 0x04C11DB7 : 0)) ^ bit) >>> 0;
-                }
-                return ret;
-            }
             normalize_bytes(bytes) {
                 let ret = 0;
                 for (let i = 0; i < bytes.length; i++) {
                     ret = (((ret << 8) | BYTE_REV[bytes[i]]) ^ NORM_BYTE_TABLE[ret >>> 24]) >>> 0;
                 }
                 return ret;
-            }
-            concat(a, b, b_size) { return (crcMul(a, crcPow2(b_size)) ^ b) >>> 0; }
-            repeat(a, size, times) {
-                let ret = 0;
-                let exp_size = crcPow2(BigInt(size));
-                let exp_ret_size = 1;
-                a = a >>> 0; times = BigInt(times);
-                while (times > 0n) {
-                    if (times & 1n) {
-                        ret = (crcMul(a, exp_ret_size) ^ ret) >>> 0;
-                        exp_ret_size = crcMul(exp_ret_size, exp_size);
-                    }
-                    a = (crcMul(a, exp_size) ^ a) >>> 0;
-                    exp_size = crcMul(exp_size, exp_size);
-                    times >>= 1n;
-                }
-                return [ret, exp_ret_size];
-            }
-            push(bits) {
-                this.crc = this.concat(this.crc, this.normalize_bits(bits), BigInt(bits.length));
-                this.size += BigInt(bits.length);
             }
             push_bytes(bytes) {
                 let c = this.crc;
@@ -976,17 +1005,29 @@
                 this.crc = c;
                 this.size += BigInt(bytes.length) * 8n;
             }
-            push_repeat(bits, times) {
-                times = BigInt(times);
-                if (times === 0n || !bits) return;
-                const [rep_crc, exp_total] = this.repeat(this.normalize_bits(bits), bits.length, times);
-                this.crc = (crcMul(this.crc, exp_total) ^ rep_crc) >>> 0;
-                this.size += BigInt(bits.length) * times;
-            }
             push_repeat_bytes(bytes, times) {
                 times = BigInt(times);
                 if (times === 0n || bytes.length === 0) return;
-                const [rep_crc, exp_total] = this.repeat(this.normalize_bytes(bytes), bytes.length * 8, times);
+                const a = this.normalize_bytes(bytes);
+                const exp_size = crcPow2(BigInt(bytes.length) * 8n);
+                let rep_crc = 0;
+                let exp_total = 1;
+                if (exp_size === 1) {
+                    rep_crc = (times & 1n) !== 0n ? a : 0;
+                } else {
+                    let t = Number(times % CRC_ORDER);
+                    let cur_a = a;
+                    let cur_exp = exp_size;
+                    while (t !== 0) {
+                        if (t & 1) {
+                            rep_crc = (crcMul(cur_a, exp_total) ^ rep_crc) >>> 0;
+                            exp_total = crcMul(exp_total, cur_exp);
+                        }
+                        cur_a = (crcMul(cur_a, cur_exp) ^ cur_a) >>> 0;
+                        cur_exp = crcMul(cur_exp, cur_exp);
+                        t >>>= 1;
+                    }
+                }
                 this.crc = (crcMul(this.crc, exp_total) ^ rep_crc) >>> 0;
                 this.size += BigInt(bytes.length) * 8n * times;
             }
@@ -1009,11 +1050,56 @@
             return a;
         }
 
-        // O(N) チャンク蓄積型 BitStream
+        class ByteBitWriter {
+            constructor(cap = 4096) {
+                this.buf = new Uint8Array(cap);
+                this.pos = 0;
+                this.bitBuf = 0;
+                this.bitCount = 0;
+            }
+            _grow(need) {
+                if (this.pos + need <= this.buf.length) return;
+                let n = this.buf.length * 2;
+                while (n < this.pos + need) n *= 2;
+                const nb = new Uint8Array(n);
+                nb.set(this.buf.subarray(0, this.pos));
+                this.buf = nb;
+            }
+            writeBits(val, len) {
+                this.bitBuf |= (val << this.bitCount);
+                this.bitCount += len;
+                if (this.bitCount >= 8) {
+                    this._grow(4);
+                    while (this.bitCount >= 8) {
+                        this.buf[this.pos++] = this.bitBuf & 0xFF;
+                        this.bitBuf >>>= 8;
+                        this.bitCount -= 8;
+                    }
+                }
+            }
+            writeBitStr(s) {
+                for (let i = 0; i < s.length; i++) {
+                    if (s.charCodeAt(i) === 49) this.bitBuf |= (1 << this.bitCount);
+                    this.bitCount++;
+                    if (this.bitCount === 8) {
+                        this._grow(1);
+                        this.buf[this.pos++] = this.bitBuf;
+                        this.bitBuf = 0;
+                        this.bitCount = 0;
+                    }
+                }
+            }
+            finishBytes() {
+                const full = this.buf.slice(0, this.pos);
+                let rem = '';
+                for (let i = 0; i < this.bitCount; i++) rem += ((this.bitBuf >>> i) & 1) ? '1' : '0';
+                return { full, rem };
+            }
+        }
+
         class BitStream {
             constructor(header_bytes = null) {
                 this.tokens = [];
-                this.crc = new CRC32();
                 this.register = '';
                 if (header_bytes && header_bytes.length > 0) this.push_bytes(header_bytes);
             }
@@ -1031,39 +1117,36 @@
             }
             push(bits) {
                 if (!bits) return;
-                this.crc.push(bits);
-                this.push_once(bits);
+                this.register += bits;
+                if (this.register.length >= 8) {
+                    const bytes_count = this.register.length >> 3;
+                    this._append_bytes_to_single(pack_b(this.register.slice(0, 8 * bytes_count)));
+                    this.register = this.register.slice(8 * bytes_count);
+                }
             }
             push_bytes(bytes) {
                 if (bytes.length === 0) return;
                 if (this.register.length === 0) {
-                    this.crc.push_bytes(bytes);
                     this._append_bytes_to_single(bytes);
                 } else {
                     this.push(unpack_b(bytes));
                 }
             }
-            push_once(bits) {
-                if (!bits) return;
-                this.register += bits;
-                if (this.register.length >= 8) {
-                    const bytes_count = this.register.length >> 3;
-                    const data = pack_b(this.register.slice(0, 8 * bytes_count));
-                    this._append_bytes_to_single(data);
-                    this.register = this.register.slice(8 * bytes_count);
-                }
+            push_writer(bw) {
+                const { full, rem } = bw.finishBytes();
+                if (full.length > 0) this._append_bytes_to_single(full);
+                if (rem) this.push(rem);
             }
             push_repeat(bits, times) {
                 times = BigInt(times);
                 if (times === 0n || !bits) return;
-                this.crc.push_repeat(bits, times);
                 let lead = '';
                 while (this.register.length !== 0) {
                     const push_bits_len = Math.min(8 - this.register.length, bits.length);
-                    this.push_once(bits.slice(0, push_bits_len));
+                    this.push(bits.slice(0, push_bits_len));
                     lead = bits.slice(push_bits_len);
                     times--;
-                    if (times === 0n) { this.push_once(lead); return; }
+                    if (times === 0n) { this.push(lead); return; }
                 }
                 const bit_len = BigInt(bits.length);
                 const lcm_val = (bit_len * 8n) / gcd(bit_len, 8n);
@@ -1073,13 +1156,10 @@
                 if (cycle_times > 0n) {
                     const cycle_data_bits = (lead + bits.repeat(Number(cycle_size))).slice(0, Number(bit_len * cycle_size));
                     const packed = pack_b(cycle_data_bits);
-                    if (cycle_times === 1n) {
-                        this._append_bytes_to_single(packed);
-                    } else {
-                        this.tokens.push({ data: packed, times: cycle_times });
-                    }
+                    if (cycle_times === 1n) this._append_bytes_to_single(packed);
+                    else this.tokens.push({ data: packed, times: cycle_times });
                 }
-                this.push_once(lead + bits.repeat(Number(cycle_remainder)));
+                this.push(lead + bits.repeat(Number(cycle_remainder)));
             }
             align() {
                 if (this.register.length % 8 !== 0) {
@@ -1091,9 +1171,8 @@
                 for (const tok of this.tokens) {
                     let data = tok.data;
                     if (!data && tok.chunks) {
-                        if (tok.chunks.length === 1) {
-                            data = tok.chunks[0];
-                        } else {
+                        if (tok.chunks.length === 1) data = tok.chunks[0];
+                        else {
                             data = new Uint8Array(tok.totalLen);
                             let off = 0;
                             for (const c of tok.chunks) { data.set(c, off); off += c.length; }
@@ -1137,7 +1216,7 @@
             to_bytes(maxBytes = 512 * 1024 * 1024) {
                 const totalBI = this.total_bytes();
                 if (totalBI > BigInt(maxBytes)) {
-                    throw new Error(`出力サイズがブラウザ安全上限 (${Math.floor(maxBytes / (1024 * 1024))} MiB) を超えています: ${totalBI} B（レイヤー数を増やしてください）`);
+                    throw new Error(`出力サイズがブラウザ安全上限 (${Math.floor(maxBytes / (1024 * 1024))} MiB) を超えています: ${fastFormatBytes(totalBI)}（レイヤー数を増やしてください）`);
                 }
                 const tokens = this.finalize_tokens();
                 const res = new Uint8Array(Number(totalBI));
@@ -1152,50 +1231,60 @@
                 }
                 return res;
             }
-            get_crc() { return this.crc.to_crc32(); }
+            get_crc() {
+                const tokens = this.finalize_tokens();
+                const crc = new CRC32();
+                for (const tok of tokens) {
+                    if (tok.times === 1n) crc.push_bytes(tok.data);
+                    else crc.push_repeat_bytes(tok.data, tok.times);
+                }
+                return crc.to_crc32();
+            }
         }
 
-        // RFC 1951 長さ・距離ルックアップテーブル
-        const LEN_LUT = new Array(259);
+        const LEN_SYM = new Uint16Array(259);
+        const LEN_EXT_VAL = new Uint8Array(259);
+        const LEN_EXT_BITS = new Uint8Array(259);
         for (let n = 3; n <= 258; n++) {
-            if (n === 258) LEN_LUT[n] = [285, ''];
-            else if (n < 11) LEN_LUT[n] = [257 + n - 3, ''];
-            else if (n < 19) LEN_LUT[n] = [265 + ((n - 11) >> 1), b_str_rev((n - 11) & 1, 1)];
-            else if (n < 35) LEN_LUT[n] = [269 + ((n - 19) >> 2), b_str_rev((n - 19) & 3, 2)];
-            else if (n < 67) LEN_LUT[n] = [273 + ((n - 35) >> 3), b_str_rev((n - 35) & 7, 3)];
-            else if (n < 131) LEN_LUT[n] = [277 + ((n - 67) >> 4), b_str_rev((n - 67) & 15, 4)];
-            else LEN_LUT[n] = [281 + ((n - 131) >> 5), b_str_rev((n - 131) & 31, 5)];
+            if (n === 258) { LEN_SYM[n] = 285; }
+            else if (n < 11) { LEN_SYM[n] = 257 + n - 3; }
+            else if (n < 19) { LEN_SYM[n] = 265 + ((n - 11) >> 1); LEN_EXT_BITS[n] = 1; LEN_EXT_VAL[n] = (n - 11) & 1; }
+            else if (n < 35) { LEN_SYM[n] = 269 + ((n - 19) >> 2); LEN_EXT_BITS[n] = 2; LEN_EXT_VAL[n] = (n - 19) & 3; }
+            else if (n < 67) { LEN_SYM[n] = 273 + ((n - 35) >> 3); LEN_EXT_BITS[n] = 3; LEN_EXT_VAL[n] = (n - 35) & 7; }
+            else if (n < 131) { LEN_SYM[n] = 277 + ((n - 67) >> 4); LEN_EXT_BITS[n] = 4; LEN_EXT_VAL[n] = (n - 67) & 15; }
+            else { LEN_SYM[n] = 281 + ((n - 131) >> 5); LEN_EXT_BITS[n] = 5; LEN_EXT_VAL[n] = (n - 131) & 31; }
         }
-        function get_len_literal(n) {
-            assert(3 <= n && n <= 258, "Invalid length: " + n);
-            return LEN_LUT[n];
-        }
-        function get_dist_literal(n) {
-            assert(1 <= n && n <= 32768, "Invalid distance: " + n);
-            if (n <= 4) return [n - 1, ''];
-            const m = n - 1;
-            const msb = 31 - Math.clz32(m);
-            const ebits = msb - 1;
-            const sym = (ebits << 1) + 2 + ((m >>> ebits) & 1);
-            const extra = m & ((1 << ebits) - 1);
-            return [sym, b_str_rev(extra, ebits)];
+        const DIST_SYM = new Uint8Array(32769);
+        const DIST_EXT_VAL = new Uint16Array(32769);
+        const DIST_EXT_BITS = new Uint8Array(32769);
+        for (let n = 1; n <= 32768; n++) {
+            if (n <= 4) { DIST_SYM[n] = n - 1; }
+            else {
+                const m = n - 1, msb = 31 - Math.clz32(m), eb = msb - 1;
+                DIST_SYM[n] = (eb << 1) + 2 + ((m >>> eb) & 1);
+                DIST_EXT_BITS[n] = eb;
+                DIST_EXT_VAL[n] = m & ((1 << eb) - 1);
+            }
         }
 
-        // ハッシュチェーン型 LZSS（dist >= 1 のオーバーラップ RLE も検出）
-        function lzss_compress(data_bytes) {
+        const LZ_HEAD = new Int32Array(65536);
+        function lzss_fast(data_bytes) {
             const n = data_bytes.length;
-            const compressed = [];
-            if (n === 0) return compressed;
-            const head = new Int32Array(65536).fill(-1);
-            const prev = new Int32Array(n).fill(-1);
+            const out = new Int32Array(n);
+            let outLen = 0;
+            if (n < 3) {
+                for (let k = 0; k < n; k++) out[outLen++] = data_bytes[k];
+                return out.subarray(0, outLen);
+            }
+            LZ_HEAD.fill(-1);
+            const prev = new Int32Array(n);
+            const maxChain = n > 16384 ? 8 : 32;
             let i = 0;
             while (i < n) {
-                let best_len = 0;
-                let best_dist = 0;
+                let best_len = 0, best_dist = 0;
                 if (i + 2 < n) {
                     const h = ((data_bytes[i] << 10) ^ (data_bytes[i + 1] << 5) ^ data_bytes[i + 2]) & 0xFFFF;
-                    let pos = head[h];
-                    let chain = 64;
+                    let pos = LZ_HEAD[h], chain = maxChain;
                     const max_l = Math.min(258, n - i);
                     while (pos !== -1 && (i - pos) <= 32768 && chain-- > 0) {
                         if (data_bytes[pos] === data_bytes[i] &&
@@ -1213,82 +1302,138 @@
                         }
                         pos = prev[pos];
                     }
-                    prev[i] = head[h];
-                    head[h] = i;
+                    prev[i] = LZ_HEAD[h];
+                    LZ_HEAD[h] = i;
                 }
                 if (best_len >= 3) {
-                    compressed.push({ type: "copy", len: best_len, dist: best_dist });
+                    out[outLen++] = ~((best_len << 16) | best_dist);
                     const end = Math.min(i + best_len, n - 2);
                     for (let j = i + 1; j < end; j++) {
                         const h2 = ((data_bytes[j] << 10) ^ (data_bytes[j + 1] << 5) ^ data_bytes[j + 2]) & 0xFFFF;
-                        prev[j] = head[h2];
-                        head[h2] = j;
+                        prev[j] = LZ_HEAD[h2];
+                        LZ_HEAD[h2] = j;
                     }
                     i += best_len;
                 } else {
-                    compressed.push({ type: "value", value: data_bytes[i] });
+                    out[outLen++] = data_bytes[i];
                     i++;
                 }
             }
-            return compressed;
+            return out.subarray(0, outLen);
         }
 
-        // Package-Merge 法による最適長さ制限ハフマン符号化（BigInt重み完全対応）
-        function huffman_encoding(char_count, max_size) {
+        function greedy_huffman_lengths(items) {
+            const n = items.length;
+            const left = new Int32Array(2 * n - 1).fill(-1);
+            const right = new Int32Array(2 * n - 1).fill(-1);
+            const weight = new Array(2 * n - 1);
+            for (let i = 0; i < n; i++) weight[i] = items[i].w;
+            let i = 0, j = n, nextNode = n;
+            const takeMin = () => (i < n && (j >= nextNode || weight[i] <= weight[j])) ? i++ : j++;
+            for (let step = 0; step < n - 1; step++) {
+                const a = takeMin(), b = takeMin();
+                left[nextNode] = a; right[nextNode] = b;
+                weight[nextNode] = weight[a] + weight[b];
+                nextNode++;
+            }
+            const depth = new Int32Array(2 * n - 1);
+            let maxD = 0;
+            for (let node = nextNode - 1; node >= n; node--) {
+                const d = depth[node] + 1;
+                depth[left[node]] = d; depth[right[node]] = d;
+                if (d > maxD) maxD = d;
+            }
+            const lengths = new Array(n);
+            for (let k = 0; k < n; k++) lengths[k] = depth[k];
+            return { lengths, maxD };
+        }
+
+        function huffman_encoding_big(char_count, max_size) {
             const items = [];
             for (const k in char_count) {
                 const w = BigInt(char_count[k]);
                 if (w > 0n) items.push({ sym: Number(k), w });
             }
             if (items.length === 0) return {};
-            if (items.length === 1) {
-                const sym = items[0].sym;
-                return { [sym]: 1, [sym === 0 ? 1 : 0]: 1 };
-            }
+            if (items.length === 1) { const s = items[0].sym; return { [s]: 1, [s === 0 ? 1 : 0]: 1 }; }
             items.sort((a, b) => (a.w < b.w ? -1 : a.w > b.w ? 1 : a.sym - b.sym));
             const n = items.length;
+            const g = greedy_huffman_lengths(items);
+            if (g.maxD <= max_size) {
+                const res = {};
+                for (let i = 0; i < n; i++) res[items[i].sym] = g.lengths[i];
+                return res;
+            }
             const leaves = items.map((it, idx) => ({ w: it.w, idxs: [idx] }));
             let current = leaves.slice();
             for (let d = 0; d < max_size - 1; d++) {
                 current.sort((a, b) => (a.w < b.w ? -1 : a.w > b.w ? 1 : 0));
                 const packages = [];
                 for (let j = 0; j + 1 < current.length; j += 2) {
-                    packages.push({
-                        w: current[j].w + current[j + 1].w,
-                        idxs: current[j].idxs.concat(current[j + 1].idxs)
-                    });
+                    packages.push({ w: current[j].w + current[j + 1].w, idxs: current[j].idxs.concat(current[j + 1].idxs) });
                 }
                 current = packages.concat(leaves);
             }
             current.sort((a, b) => (a.w < b.w ? -1 : a.w > b.w ? 1 : 0));
             const lengths = new Array(n).fill(0);
-            const limit = 2 * n - 2;
-            for (let i = 0; i < limit; i++) {
-                for (const idx of current[i].idxs) lengths[idx]++;
-            }
+            for (let i = 0; i < 2 * n - 2; i++) for (const idx of current[i].idxs) lengths[idx]++;
             const res = {};
             for (let i = 0; i < n; i++) res[items[i].sym] = lengths[i];
             return res;
         }
 
-        function generate_encoding(table) {
-            const sorted_items = Object.entries(table)
+        function huffman_encoding_num(counts, maxLenSym, max_size) {
+            const items = [];
+            for (let k = 0; k < maxLenSym; k++) {
+                const w = counts[k];
+                if (w > 0) items.push({ sym: k, w });
+            }
+            if (items.length === 0) return {};
+            if (items.length === 1) { const s = items[0].sym; return { [s]: 1, [s === 0 ? 1 : 0]: 1 }; }
+            items.sort((a, b) => a.w - b.w || a.sym - b.sym);
+            const n = items.length;
+            const g = greedy_huffman_lengths(items);
+            if (g.maxD <= max_size) {
+                const res = {};
+                for (let i = 0; i < n; i++) res[items[i].sym] = g.lengths[i];
+                return res;
+            }
+            const leaves = items.map((it, idx) => ({ w: it.w, idxs: [idx] }));
+            let current = leaves.slice();
+            for (let d = 0; d < max_size - 1; d++) {
+                current.sort((a, b) => a.w - b.w);
+                const packages = [];
+                for (let j = 0; j + 1 < current.length; j += 2) {
+                    packages.push({ w: current[j].w + current[j + 1].w, idxs: current[j].idxs.concat(current[j + 1].idxs) });
+                }
+                current = packages.concat(leaves);
+            }
+            current.sort((a, b) => a.w - b.w);
+            const lengths = new Array(n).fill(0);
+            for (let i = 0; i < 2 * n - 2; i++) for (const idx of current[i].idxs) lengths[idx]++;
+            const res = {};
+            for (let i = 0; i < n; i++) res[items[i].sym] = lengths[i];
+            return res;
+        }
+
+        function generate_encoding_int(table, maxSym) {
+            const sorted = Object.entries(table)
                 .map(([k, v]) => [Number(k), v])
                 .filter(([, v]) => v > 0)
                 .sort((a, b) => (a[1] !== b[1] ? a[1] - b[1] : a[0] - b[0]));
-            let prev_value = 0;
-            let prev_width = 0;
-            const res = {};
-            for (let i = 0; i < sorted_items.length; i++) {
-                const [k, v] = sorted_items[i];
-                if (i !== 0) {
-                    prev_value += 1;
-                    prev_value <<= (v - prev_width);
-                }
-                prev_width = v;
-                res[k] = b_str(prev_value, v);
+            let prev_val = 0, prev_w = 0;
+            const codeRev = new Uint32Array(maxSym);
+            const codeLen = new Uint8Array(maxSym);
+            const codeStr = {};
+            for (let i = 0; i < sorted.length; i++) {
+                const [k, v] = sorted[i];
+                if (i !== 0) { prev_val += 1; prev_val <<= (v - prev_w); }
+                prev_w = v;
+                codeRev[k] = revBits(prev_val, v);
+                codeLen[k] = v;
+                codeStr[k] = b_str(prev_val, v);
             }
-            return res;
+            return { codeRev, codeLen, codeStr };
         }
 
         function encode_len_table(lst) {
@@ -1304,30 +1449,15 @@
                 i = j;
                 if (val === 0) {
                     while (c > 0) {
-                        if (c <= 2) {
-                            for (let k = 0; k < c; k++) encoded.push(0);
-                            c = 0;
-                        } else if (c <= 10) {
-                            encoded.push(17, b_str_rev(c - 3, 3));
-                            c = 0;
-                        } else {
-                            const take = Math.min(c, 138);
-                            encoded.push(18, b_str_rev(take - 11, 7));
-                            c -= take;
-                        }
+                        if (c <= 2) { for (let k = 0; k < c; k++) encoded.push(0); c = 0; }
+                        else if (c <= 10) { encoded.push(17, b_str_rev(c - 3, 3)); c = 0; }
+                        else { const take = Math.min(c, 138); encoded.push(18, b_str_rev(take - 11, 7)); c -= take; }
                     }
                 } else {
-                    encoded.push(val);
-                    c--;
+                    encoded.push(val); c--;
                     while (c > 0) {
-                        if (c < 3) {
-                            for (let k = 0; k < c; k++) encoded.push(val);
-                            c = 0;
-                        } else {
-                            const take = (c === 7 || c === 8) ? (c - 3) : Math.min(c, 6);
-                            encoded.push(16, b_str_rev(take - 3, 2));
-                            c -= take;
-                        }
+                        if (c < 3) { for (let k = 0; k < c; k++) encoded.push(val); c = 0; }
+                        else { const take = (c === 7 || c === 8) ? (c - 3) : Math.min(c, 6); encoded.push(16, b_str_rev(take - 3, 2)); c -= take; }
                     }
                 }
             }
@@ -1339,264 +1469,359 @@
             const dist_size = Math.max(...Object.keys(dist_table).map(Number).concat([0])) + 1;
             const lit_list = Array.from({length: lit_size}, (_, i) => lit_table[i] || 0);
             const dist_list = Array.from({length: dist_size}, (_, i) => dist_table[i] || 0);
-
             const lit_encoded = encode_len_table(lit_list);
             const dist_encoded = encode_len_table(dist_list);
             const all_encoded = lit_encoded.concat(dist_encoded);
-
             const tally = {};
-            for (const val of all_encoded) {
-                if (typeof val === 'number') tally[val] = (tally[val] || 0n) + 1n;
-            }
-
-            const encoding_huffman = huffman_encoding(tally, 7);
-            const encoding_table = generate_encoding(encoding_huffman);
-
-            const lit_data = lit_encoded.map(val => typeof val === 'number' ? encoding_table[val] : val).join('');
-            const dist_data = dist_encoded.map(val => typeof val === 'number' ? encoding_table[val] : val).join('');
-
+            for (const val of all_encoded) if (typeof val === 'number') tally[val] = (tally[val] || 0n) + 1n;
+            const eh = huffman_encoding_big(tally, 7);
+            const et = generate_encoding_int(eh, 19).codeStr;
+            const lit_data = lit_encoded.map(v => typeof v === 'number' ? et[v] : v).join('');
+            const dist_data = dist_encoded.map(v => typeof v === 'number' ? et[v] : v).join('');
             const order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
-            const encoding_list = order.map(val => encoding_huffman[val] || 0);
+            const el = order.map(v => eh[v] || 0);
             let r_idx = -1;
-            for (let idx = encoding_list.length - 1; idx >= 0; idx--) {
-                if (encoding_list[idx] !== 0) { r_idx = idx; break; }
-            }
-            const end_idx = Math.max(r_idx, 3);
-            const final_encoding_list = encoding_list.slice(0, end_idx + 1);
-
+            for (let idx = el.length - 1; idx >= 0; idx--) if (el[idx] !== 0) { r_idx = idx; break; }
+            const fel = el.slice(0, Math.max(r_idx, 3) + 1);
             return [
                 b_str_rev(lit_size - 257, 5),
                 b_str_rev(dist_size - 1, 5),
-                b_str_rev(final_encoding_list.length - 4, 4),
-                final_encoding_list.map(v => b_str_rev(v, 3)).join(''),
+                b_str_rev(fel.length - 4, 4),
+                fel.map(v => b_str_rev(v, 3)).join(''),
                 lit_data,
                 dist_data
             ].join('');
         }
 
-        const FIXED_LT = (() => {
+        const FIXED_INT = (() => {
             const lengths = {};
             for (let s = 0; s <= 143; s++) lengths[s] = 8;
             for (let s = 144; s <= 255; s++) lengths[s] = 9;
             for (let s = 256; s <= 279; s++) lengths[s] = 7;
             for (let s = 280; s <= 287; s++) lengths[s] = 8;
-            return generate_encoding(lengths);
+            const lit = generate_encoding_int(lengths, 288);
+            const dRev = new Uint32Array(30), dLen = new Uint8Array(30);
+            for (let d = 0; d < 30; d++) { dRev[d] = revBits(d, 5); dLen[d] = 5; }
+            return { lit, dRev, dLen };
         })();
-        const FIXED_DT = Array.from({length: 30}, (_, d) => b_str(d, 5));
 
-        function encode_group_dynamic(group_tokens, is_final) {
-            const lit_count = {};
-            const dist_count = {};
-            const addLit = (k, v) => { lit_count[k] = (lit_count[k] || 0n) + v; };
-            const addDist = (k, v) => { dist_count[k] = (dist_count[k] || 0n) + v; };
-
-            const cached = [];
-            for (const token of group_tokens) {
-                const lzss_res = lzss_compress(token.data);
-                cached.push({ token, lzss_res });
-                const dlen = token.data.length;
-
-                const data_lit_count = {};
-                const data_dist_count = {};
-                for (const datum of lzss_res) {
-                    if (datum.type === "value") {
-                        data_lit_count[datum.value] = (data_lit_count[datum.value] || 0n) + 1n;
-                    } else {
-                        const [ll] = get_len_literal(datum.len);
-                        const [dl] = get_dist_literal(datum.dist);
-                        data_lit_count[ll] = (data_lit_count[ll] || 0n) + 1n;
-                        data_dist_count[dl] = (data_dist_count[dl] || 0n) + 1n;
-                    }
+        function write_lzss_to_writer(bw, lz, lRev, lLen, dRev, dLen) {
+            for (let i = 0; i < lz.length; i++) {
+                const code = lz[i];
+                if (code >= 0) {
+                    bw.writeBits(lRev[code], lLen[code]);
+                } else {
+                    const raw = ~code, len = raw >>> 16, dist = raw & 0xFFFF;
+                    const ls = LEN_SYM[len], leb = LEN_EXT_BITS[len];
+                    bw.writeBits(lRev[ls], lLen[ls]);
+                    if (leb > 0) bw.writeBits(LEN_EXT_VAL[len], leb);
+                    const ds = DIST_SYM[dist], deb = DIST_EXT_BITS[dist];
+                    bw.writeBits(dRev[ds], dLen[ds]);
+                    if (deb > 0) bw.writeBits(DIST_EXT_VAL[dist], deb);
                 }
+            }
+        }
 
-                if (dlen <= 258 && token.times > 1n) {
-                    const per_chunk = Math.floor(258 / dlen);
-                    const per_chunk_bi = BigInt(per_chunk);
-                    const match_len = dlen * per_chunk;
-                    const reps = (token.times - 1n) / per_chunk_bi;
-                    const rem_t = (token.times - 1n) % per_chunk_bi;
+        const TMP_DLC = new Uint32Array(286);
+        const TMP_DDC = new Uint32Array(30);
+        const TMP_LIT = new Uint32Array(286);
+        const TMP_DIST = new Uint32Array(30);
 
-                    for (const k in data_lit_count) addLit(k, data_lit_count[k]);
-                    for (const k in data_dist_count) addDist(k, data_dist_count[k]);
-
-                    if (reps > 0n) {
-                        const [ll] = get_len_literal(match_len);
-                        const [dl] = get_dist_literal(dlen);
-                        addLit(ll, reps);
-                        addDist(dl, reps);
+        function emit_stored_chunks(stream, group_tokens, is_final, rawLen, firstPad, numStored) {
+            const raw = (group_tokens.length === 1 && group_tokens[0].times === 1n)
+                ? group_tokens[0].data
+                : (() => {
+                    const b = new Uint8Array(rawLen); let off = 0;
+                    for (const t of group_tokens) {
+                        const tm = Number(t.times);
+                        for (let i = 0; i < tm; i++) { b.set(t.data, off); off += t.data.length; }
                     }
-                    const rem_bytes = dlen * Number(rem_t);
-                    if (rem_bytes > 0) {
-                        if (rem_bytes < 3) {
-                            for (const k in data_lit_count) addLit(k, data_lit_count[k] * rem_t);
-                            for (const k in data_dist_count) addDist(k, data_dist_count[k] * rem_t);
-                        } else {
-                            const [rl] = get_len_literal(rem_bytes);
-                            const [rd] = get_dist_literal(dlen);
-                            addLit(rl, 1n);
-                            addDist(rd, 1n);
-                        }
-                    }
-                } else if (dlen > 258 && dlen <= 32768 && token.times > 1n) {
-                    for (const k in data_lit_count) addLit(k, data_lit_count[k]);
-                    for (const k in data_dist_count) addDist(k, data_dist_count[k]);
-                    const rem_times = token.times - 1n;
-                    for (let s = 0; s < dlen; s += 258) {
-                        const slen = Math.min(258, dlen - s);
-                        if (slen < 3) {
-                            for (let j = s; j < s + slen; j++) addLit(token.data[j], rem_times);
-                        } else {
-                            const [sl] = get_len_literal(slen);
-                            const [sd] = get_dist_literal(dlen);
-                            addLit(sl, rem_times);
-                            addDist(sd, rem_times);
+                    return b;
+                })();
+            let pos = 0;
+            for (let c = 0; c < numStored; c++) {
+                const chunkLen = Math.min(65535, rawLen - pos);
+                const chunkIsFinal = is_final && (c === numStored - 1);
+                const pad = (c === 0) ? firstPad : 5;
+                stream.push((chunkIsFinal ? '1' : '0') + '00' + '0'.repeat(pad));
+                stream.push_bytes(pack16LE(chunkLen));
+                stream.push_bytes(pack16LE((~chunkLen) & 0xFFFF));
+                if (chunkLen > 0) stream.push_bytes(raw.subarray(pos, pos + chunkLen));
+                pos += chunkLen;
+            }
+        }
+
+        function emit_small_group_fast(stream, group_tokens, is_final, rawLen, groupKey, storedSkipState) {
+            const numStored = Math.max(1, Math.ceil(rawLen / 65535));
+            const firstPad = (8 - ((stream.register.length + 3) % 8)) % 8;
+            const storedBits = 3 + firstPad + 32 + (numStored - 1) * 40 + 8 * rawLen;
+
+            if (groupKey >= 0 && rawLen > 32768) {
+                const st = storedSkipState.get(groupKey);
+                if (st && st.skipLeft > 0) {
+                    st.skipLeft--;
+                    emit_stored_chunks(stream, group_tokens, is_final, rawLen, firstPad, numStored);
+                    return;
+                }
+            }
+
+            TMP_LIT.fill(0);
+            TMP_DIST.fill(0);
+            let dynExtraBits = 0;
+            const cached = new Array(group_tokens.length);
+
+            for (let ti = 0; ti < group_tokens.length; ti++) {
+                const token = group_tokens[ti];
+                const lz = lzss_fast(token.data);
+                cached[ti] = { token, lz };
+                const dlen = token.data.length;
+                const tNum = Number(token.times);
+
+                if (tNum === 1) {
+                    for (let i = 0; i < lz.length; i++) {
+                        const c = lz[i];
+                        if (c >= 0) TMP_LIT[c]++;
+                        else {
+                            const raw = ~c, len = raw >>> 16, dist = raw & 0xFFFF;
+                            TMP_LIT[LEN_SYM[len]]++;
+                            TMP_DIST[DIST_SYM[dist]]++;
+                            dynExtraBits += LEN_EXT_BITS[len] + DIST_EXT_BITS[dist];
                         }
                     }
                 } else {
-                    for (const k in data_lit_count) addLit(k, data_lit_count[k] * token.times);
-                    for (const k in data_dist_count) addDist(k, data_dist_count[k] * token.times);
+                    TMP_DLC.fill(0); TMP_DDC.fill(0);
+                    let eb = 0;
+                    for (let i = 0; i < lz.length; i++) {
+                        const c = lz[i];
+                        if (c >= 0) TMP_DLC[c]++;
+                        else {
+                            const raw = ~c, len = raw >>> 16, dist = raw & 0xFFFF;
+                            TMP_DLC[LEN_SYM[len]]++; TMP_DDC[DIST_SYM[dist]]++;
+                            eb += LEN_EXT_BITS[len] + DIST_EXT_BITS[dist];
+                        }
+                    }
+                    if (dlen <= 258 && tNum > 1) {
+                        const pc = Math.floor(258 / dlen), match_len = dlen * pc;
+                        const reps = Math.floor((tNum - 1) / pc), rem_t = (tNum - 1) % pc;
+                        for (let k = 0; k < 286; k++) if (TMP_DLC[k]) TMP_LIT[k] += TMP_DLC[k];
+                        for (let k = 0; k < 30; k++) if (TMP_DDC[k]) TMP_DIST[k] += TMP_DDC[k];
+                        dynExtraBits += eb;
+                        if (reps > 0) {
+                            TMP_LIT[LEN_SYM[match_len]] += reps; TMP_DIST[DIST_SYM[dlen]] += reps;
+                            dynExtraBits += (LEN_EXT_BITS[match_len] + DIST_EXT_BITS[dlen]) * reps;
+                        }
+                        const rem_bytes = dlen * rem_t;
+                        if (rem_bytes > 0) {
+                            if (rem_bytes < 3) {
+                                for (let k = 0; k < 286; k++) if (TMP_DLC[k]) TMP_LIT[k] += TMP_DLC[k] * rem_t;
+                                for (let k = 0; k < 30; k++) if (TMP_DDC[k]) TMP_DIST[k] += TMP_DDC[k] * rem_t;
+                                dynExtraBits += eb * rem_t;
+                            } else {
+                                TMP_LIT[LEN_SYM[rem_bytes]]++; TMP_DIST[DIST_SYM[dlen]]++;
+                                dynExtraBits += LEN_EXT_BITS[rem_bytes] + DIST_EXT_BITS[dlen];
+                            }
+                        }
+                    } else if (dlen > 258 && dlen <= 32768 && tNum > 1) {
+                        for (let k = 0; k < 286; k++) if (TMP_DLC[k]) TMP_LIT[k] += TMP_DLC[k];
+                        for (let k = 0; k < 30; k++) if (TMP_DDC[k]) TMP_DIST[k] += TMP_DDC[k];
+                        dynExtraBits += eb;
+                        const rt = tNum - 1;
+                        for (let s = 0; s < dlen; s += 258) {
+                            const slen = Math.min(258, dlen - s);
+                            if (slen < 3) { for (let j = s; j < s + slen; j++) TMP_LIT[token.data[j]] += rt; }
+                            else {
+                                TMP_LIT[LEN_SYM[slen]] += rt; TMP_DIST[DIST_SYM[dlen]] += rt;
+                                dynExtraBits += (LEN_EXT_BITS[slen] + DIST_EXT_BITS[dlen]) * rt;
+                            }
+                        }
+                    } else {
+                        for (let k = 0; k < 286; k++) if (TMP_DLC[k]) TMP_LIT[k] += TMP_DLC[k] * tNum;
+                        for (let k = 0; k < 30; k++) if (TMP_DDC[k]) TMP_DIST[k] += TMP_DDC[k] * tNum;
+                        dynExtraBits += eb * tNum;
+                    }
+                }
+            }
+            TMP_LIT[0x100]++;
+
+            const lit_huff = huffman_encoding_num(TMP_LIT, 286, 15);
+            let hasDist = false;
+            for (let k = 0; k < 30; k++) if (TMP_DIST[k] > 0) { hasDist = true; break; }
+            const dist_huff = hasDist ? huffman_encoding_num(TMP_DIST, 30, 15) : { 0: 0 };
+            const huffHdrBits = get_huffman_block(lit_huff, dist_huff);
+
+            let dynBodyBits = dynExtraBits;
+            for (let k = 0; k < 286; k++) if (TMP_LIT[k] > 0) dynBodyBits += TMP_LIT[k] * lit_huff[k];
+            if (hasDist) for (let k = 0; k < 30; k++) if (TMP_DIST[k] > 0) dynBodyBits += TMP_DIST[k] * dist_huff[k];
+            const dynTotalBits = 3 + huffHdrBits.length + dynBodyBits;
+
+            let fixedTotalBits = Infinity, fixedLz = null;
+            if (rawLen <= 4096) {
+                if (group_tokens.length === 1 && group_tokens[0].times === 1n) fixedLz = cached[0].lz;
+                else {
+                    const raw = new Uint8Array(rawLen); let off = 0;
+                    for (const t of group_tokens) { const tm = Number(t.times); for (let i = 0; i < tm; i++) { raw.set(t.data, off); off += t.data.length; } }
+                    fixedLz = lzss_fast(raw);
+                }
+                let fb = 3 + FIXED_INT.lit.codeLen[0x100];
+                const flLen = FIXED_INT.lit.codeLen, fdLen = FIXED_INT.dLen;
+                for (let i = 0; i < fixedLz.length; i++) {
+                    const c = fixedLz[i];
+                    if (c >= 0) fb += flLen[c];
+                    else { const r = ~c, l = r >>> 16, d = r & 0xFFFF; fb += flLen[LEN_SYM[l]] + LEN_EXT_BITS[l] + fdLen[DIST_SYM[d]] + DIST_EXT_BITS[d]; }
+                }
+                fixedTotalBits = fb;
+            }
+
+            if (storedBits < dynTotalBits && storedBits <= fixedTotalBits) {
+                if (groupKey >= 0 && rawLen > 32768 && (dynTotalBits - storedBits) > 200) {
+                    storedSkipState.set(groupKey, { skipLeft: 32 });
+                } else if (groupKey >= 0) storedSkipState.delete(groupKey);
+                emit_stored_chunks(stream, group_tokens, is_final, rawLen, firstPad, numStored);
+                return;
+            }
+            if (groupKey >= 0) storedSkipState.delete(groupKey);
+
+            if (rawLen <= 4096 && fixedTotalBits < dynTotalBits) {
+                const bw = new ByteBitWriter(Math.ceil(fixedTotalBits / 8) + 8);
+                bw.writeBitStr(stream.register);
+                stream.register = '';
+                bw.writeBits(is_final ? 1 : 0, 1);
+                bw.writeBits(1, 2);
+                write_lzss_to_writer(bw, fixedLz, FIXED_INT.lit.codeRev, FIXED_INT.lit.codeLen, FIXED_INT.dRev, FIXED_INT.dLen);
+                bw.writeBits(FIXED_INT.lit.codeRev[0x100], FIXED_INT.lit.codeLen[0x100]);
+                stream.push_writer(bw);
+                return;
+            }
+
+            const litEnc = generate_encoding_int(lit_huff, 286);
+            const distEnc = hasDist ? generate_encoding_int(dist_huff, 30) : { codeRev: new Uint32Array(30), codeLen: new Uint8Array(30), codeStr: {} };
+            if (group_tokens.length === 1 && group_tokens[0].times === 1n) {
+                const bw = new ByteBitWriter(Math.ceil(dynTotalBits / 8) + 16);
+                bw.writeBitStr(stream.register);
+                stream.register = '';
+                bw.writeBits(is_final ? 1 : 0, 1);
+                bw.writeBits(2, 2);
+                bw.writeBitStr(huffHdrBits);
+                write_lzss_to_writer(bw, cached[0].lz, litEnc.codeRev, litEnc.codeLen, distEnc.codeRev, distEnc.codeLen);
+                bw.writeBits(litEnc.codeRev[0x100], litEnc.codeLen[0x100]);
+                stream.push_writer(bw);
+            } else {
+                stream.push((is_final ? '1' : '0') + '01' + huffHdrBits);
+                for (const { token, lz } of cached) {
+                    const bw = new ByteBitWriter(token.data.length + 16);
+                    write_lzss_to_writer(bw, lz, litEnc.codeRev, litEnc.codeLen, distEnc.codeRev, distEnc.codeLen);
+                    const { full, rem } = bw.finishBytes();
+                    const dlen = token.data.length, tNum = Number(token.times);
+                    if (dlen <= 258 && tNum > 1) {
+                        stream.push_bytes(full); if (rem) stream.push(rem);
+                        const pc = Math.floor(258 / dlen), match_len = dlen * pc;
+                        const reps = Math.floor((tNum - 1) / pc), rem_t = (tNum - 1) % pc;
+                        if (reps > 0) {
+                            const ls = LEN_SYM[match_len], ds = DIST_SYM[dlen];
+                            stream.push_repeat(litEnc.codeStr[ls] + b_str_rev(LEN_EXT_VAL[match_len], LEN_EXT_BITS[match_len]) + distEnc.codeStr[ds] + b_str_rev(DIST_EXT_VAL[dlen], DIST_EXT_BITS[dlen]), BigInt(reps));
+                        }
+                        const rem_bytes = dlen * rem_t;
+                        if (rem_bytes > 0) {
+                            if (rem_bytes < 3) {
+                                for (let r = 0; r < rem_t; r++) { stream.push_bytes(full); if (rem) stream.push(rem); }
+                            } else {
+                                const rs = LEN_SYM[rem_bytes], ds = DIST_SYM[dlen];
+                                stream.push(litEnc.codeStr[rs] + b_str_rev(LEN_EXT_VAL[rem_bytes], LEN_EXT_BITS[rem_bytes]) + distEnc.codeStr[ds] + b_str_rev(DIST_EXT_VAL[dlen], DIST_EXT_BITS[dlen]));
+                            }
+                        }
+                    } else if (dlen > 258 && dlen <= 32768 && tNum > 1) {
+                        stream.push_bytes(full); if (rem) stream.push(rem);
+                        const parts = [];
+                        for (let s = 0; s < dlen; s += 258) {
+                            const slen = Math.min(258, dlen - s);
+                            if (slen < 3) { for (let j = s; j < s + slen; j++) parts.push(litEnc.codeStr[token.data[j]]); }
+                            else { const ls = LEN_SYM[slen], ds = DIST_SYM[dlen]; parts.push(litEnc.codeStr[ls] + b_str_rev(LEN_EXT_VAL[slen], LEN_EXT_BITS[slen]) + distEnc.codeStr[ds] + b_str_rev(DIST_EXT_VAL[dlen], DIST_EXT_BITS[dlen])); }
+                        }
+                        stream.push_repeat(parts.join(''), BigInt(tNum - 1));
+                    } else {
+                        for (let r = 0; r < tNum; r++) { stream.push_bytes(full); if (rem) stream.push(rem); }
+                    }
+                }
+                stream.push(litEnc.codeStr[0x100]);
+            }
+        }
+
+        function emit_huge_group(stream, group_tokens, is_final) {
+            const lit_count = {}, dist_count = {};
+            const addLit = (k, v) => { lit_count[k] = (lit_count[k] || 0n) + v; };
+            const addDist = (k, v) => { dist_count[k] = (dist_count[k] || 0n) + v; };
+            const cached = [];
+            for (const token of group_tokens) {
+                const lz = lzss_fast(token.data);
+                cached.push({ token, lz });
+                const dlen = token.data.length;
+                const dlc = {}, ddc = {};
+                for (let i = 0; i < lz.length; i++) {
+                    const c = lz[i];
+                    if (c >= 0) dlc[c] = (dlc[c] || 0n) + 1n;
+                    else { const r = ~c; dlc[LEN_SYM[r >>> 16]] = (dlc[LEN_SYM[r >>> 16]] || 0n) + 1n; ddc[DIST_SYM[r & 0xFFFF]] = (ddc[DIST_SYM[r & 0xFFFF]] || 0n) + 1n; }
+                }
+                if (dlen <= 258 && token.times > 1n) {
+                    const pc = Math.floor(258 / dlen), pc_bi = BigInt(pc), match_len = dlen * pc;
+                    const reps = (token.times - 1n) / pc_bi, rem_t = (token.times - 1n) % pc_bi;
+                    for (const k in dlc) addLit(k, dlc[k]); for (const k in ddc) addDist(k, ddc[k]);
+                    if (reps > 0n) { addLit(LEN_SYM[match_len], reps); addDist(DIST_SYM[dlen], reps); }
+                    const rem_bytes = dlen * Number(rem_t);
+                    if (rem_bytes > 0) {
+                        if (rem_bytes < 3) { for (const k in dlc) addLit(k, dlc[k] * rem_t); for (const k in ddc) addDist(k, ddc[k] * rem_t); }
+                        else { addLit(LEN_SYM[rem_bytes], 1n); addDist(DIST_SYM[dlen], 1n); }
+                    }
+                } else {
+                    for (const k in dlc) addLit(k, dlc[k] * token.times); for (const k in ddc) addDist(k, ddc[k] * token.times);
                 }
             }
             addLit(0x100, 1n);
-
-            const lit_huffman = huffman_encoding(lit_count, 15);
+            const lit_huff = huffman_encoding_big(lit_count, 15);
             const hasDist = Object.keys(dist_count).length > 0;
-            const dist_huffman = hasDist ? huffman_encoding(dist_count, 15) : { 0: 0 };
-            const lit_table = generate_encoding(lit_huffman);
-            const dist_table = hasDist ? generate_encoding(dist_huffman) : {};
+            const dist_huff = hasDist ? huffman_encoding_big(dist_count, 15) : { 0: 0 };
+            const huffHdrBits = get_huffman_block(lit_huff, dist_huff);
+            const litEnc = generate_encoding_int(lit_huff, 286);
+            const distEnc = hasDist ? generate_encoding_int(dist_huff, 30) : { codeRev: new Uint32Array(30), codeLen: new Uint8Array(30), codeStr: {} };
 
-            const headerBits = (is_final ? '1' : '0') + '01' + get_huffman_block(lit_huffman, dist_huffman);
-            const ops = [{ type: 'push', bits: headerBits }];
-            let totalBits = BigInt(headerBits.length);
-
-            for (const { token, lzss_res } of cached) {
-                const parts = [];
-                for (const datum of lzss_res) {
-                    if (datum.type === "value") {
-                        parts.push(lit_table[datum.value]);
-                    } else {
-                        const [ll, lb] = get_len_literal(datum.len);
-                        const [dl, db] = get_dist_literal(datum.dist);
-                        parts.push(lit_table[ll] + lb + dist_table[dl] + db);
-                    }
-                }
-                const data_huffman = parts.join('');
+            stream.push((is_final ? '1' : '0') + '01' + huffHdrBits);
+            for (const { token, lz } of cached) {
+                const bw = new ByteBitWriter(token.data.length + 16);
+                write_lzss_to_writer(bw, lz, litEnc.codeRev, litEnc.codeLen, distEnc.codeRev, distEnc.codeLen);
+                const { full, rem } = bw.finishBytes();
                 const dlen = token.data.length;
-
                 if (dlen <= 258 && token.times > 1n) {
-                    const per_chunk = Math.floor(258 / dlen);
-                    const per_chunk_bi = BigInt(per_chunk);
-                    const match_len = dlen * per_chunk;
-                    const reps = (token.times - 1n) / per_chunk_bi;
-                    const rem_t = (token.times - 1n) % per_chunk_bi;
-
-                    ops.push({ type: 'push', bits: data_huffman });
-                    totalBits += BigInt(data_huffman.length);
-
+                    stream.push_bytes(full); if (rem) stream.push(rem);
+                    const pc = Math.floor(258 / dlen), pc_bi = BigInt(pc), match_len = dlen * pc;
+                    const reps = (token.times - 1n) / pc_bi, rem_t = (token.times - 1n) % pc_bi;
                     if (reps > 0n) {
-                        const [ll, lb] = get_len_literal(match_len);
-                        const [dl, db] = get_dist_literal(dlen);
-                        const rep = lit_table[ll] + lb + dist_table[dl] + db;
-                        ops.push({ type: 'repeat', bits: rep, times: reps });
-                        totalBits += BigInt(rep.length) * reps;
+                        const ls = LEN_SYM[match_len], ds = DIST_SYM[dlen];
+                        stream.push_repeat(litEnc.codeStr[ls] + b_str_rev(LEN_EXT_VAL[match_len], LEN_EXT_BITS[match_len]) + distEnc.codeStr[ds] + b_str_rev(DIST_EXT_VAL[dlen], DIST_EXT_BITS[dlen]), reps);
                     }
                     const rem_bytes = dlen * Number(rem_t);
                     if (rem_bytes > 0) {
                         if (rem_bytes < 3) {
-                            ops.push({ type: 'repeat', bits: data_huffman, times: rem_t });
-                            totalBits += BigInt(data_huffman.length) * rem_t;
+                            for (let r = 0n; r < rem_t; r++) { stream.push_bytes(full); if (rem) stream.push(rem); }
                         } else {
-                            const [rl, rlb] = get_len_literal(rem_bytes);
-                            const [rd, rdb] = get_dist_literal(dlen);
-                            const remBits = lit_table[rl] + rlb + dist_table[rd] + rdb;
-                            ops.push({ type: 'push', bits: remBits });
-                            totalBits += BigInt(remBits.length);
+                            const rs = LEN_SYM[rem_bytes], ds = DIST_SYM[dlen];
+                            stream.push(litEnc.codeStr[rs] + b_str_rev(LEN_EXT_VAL[rem_bytes], LEN_EXT_BITS[rem_bytes]) + distEnc.codeStr[ds] + b_str_rev(DIST_EXT_VAL[dlen], DIST_EXT_BITS[dlen]));
                         }
                     }
-                } else if (dlen > 258 && dlen <= 32768 && token.times > 1n) {
-                    ops.push({ type: 'push', bits: data_huffman });
-                    totalBits += BigInt(data_huffman.length);
-                    const rep_parts = [];
-                    for (let s = 0; s < dlen; s += 258) {
-                        const slen = Math.min(258, dlen - s);
-                        if (slen < 3) {
-                            for (let j = s; j < s + slen; j++) rep_parts.push(lit_table[token.data[j]]);
-                        } else {
-                            const [sl, slb] = get_len_literal(slen);
-                            const [sd, sdb] = get_dist_literal(dlen);
-                            rep_parts.push(lit_table[sl] + slb + dist_table[sd] + sdb);
-                        }
-                    }
-                    const rep = rep_parts.join('');
-                    const rem_times = token.times - 1n;
-                    ops.push({ type: 'repeat', bits: rep, times: rem_times });
-                    totalBits += BigInt(rep.length) * rem_times;
                 } else {
-                    if (token.times === 1n) {
-                        ops.push({ type: 'push', bits: data_huffman });
-                        totalBits += BigInt(data_huffman.length);
-                    } else {
-                        ops.push({ type: 'repeat', bits: data_huffman, times: token.times });
-                        totalBits += BigInt(data_huffman.length) * token.times;
-                    }
+                    let s = ''; for (let i = 0; i < full.length; i++) s += UNPACK_TABLE[full[i]];
+                    stream.push_repeat(s + rem, token.times);
                 }
             }
-            const eob = lit_table[0x100];
-            ops.push({ type: 'push', bits: eob });
-            totalBits += BigInt(eob.length);
-            return { ops, totalBits };
+            stream.push(litEnc.codeStr[0x100]);
         }
 
-        // ブロック毎に Dynamic / Stored / Fixed の最小ビット長を選択
-        function encode_group_best(group_tokens, is_final, cur_bit_offset) {
-            const dyn = encode_group_dynamic(group_tokens, is_final);
+        function emit_group_best(stream, group_tokens, is_final, groupKey, storedSkipState) {
             let totalRaw = 0n;
             for (const t of group_tokens) totalRaw += BigInt(t.data.length) * t.times;
-            if (totalRaw > 65535n) return dyn.ops;
-
-            const rawLen = Number(totalRaw);
-            const raw = new Uint8Array(rawLen);
-            let off = 0;
-            for (const t of group_tokens) {
-                const times = Number(t.times);
-                for (let i = 0; i < times; i++) {
-                    raw.set(t.data, off);
-                    off += t.data.length;
-                }
+            if (totalRaw <= 16n * 1024n * 1024n) {
+                emit_small_group_fast(stream, group_tokens, is_final, Number(totalRaw), groupKey, storedSkipState);
+            } else {
+                emit_huge_group(stream, group_tokens, is_final);
             }
-
-            let bestOps = dyn.ops;
-            let bestBits = dyn.totalBits;
-
-            const pad = (8 - ((cur_bit_offset + 3) % 8)) % 8;
-            const storedBits = BigInt(3 + pad + 32 + 8 * rawLen);
-            if (storedBits < bestBits) {
-                const hdr = (is_final ? '1' : '0') + '00' + '0'.repeat(pad);
-                const lenBits = unpack_b(pack16LE(rawLen)) + unpack_b(pack16LE((~rawLen) & 0xFFFF));
-                bestOps = [
-                    { type: 'push', bits: hdr + lenBits },
-                    { type: 'push_bytes', bytes: raw }
-                ];
-                bestBits = storedBits;
-            }
-
-            const lz = lzss_compress(raw);
-            const fparts = [(is_final ? '1' : '0') + '10'];
-            for (const datum of lz) {
-                if (datum.type === "value") {
-                    fparts.push(FIXED_LT[datum.value]);
-                } else {
-                    const [ll, lb] = get_len_literal(datum.len);
-                    const [dl, db] = get_dist_literal(datum.dist);
-                    fparts.push(FIXED_LT[ll] + lb + FIXED_DT[dl] + db);
-                }
-            }
-            fparts.push(FIXED_LT[0x100]);
-            const fixedStr = fparts.join('');
-            if (BigInt(fixedStr.length) < bestBits) {
-                bestOps = [{ type: 'push', bits: fixedStr }];
-            }
-            return bestOps;
         }
 
         function computeLayerFilename(base, count, mode) {
@@ -1605,6 +1830,39 @@
             if (mode === 'uniform') return base.endsWith('.gz') ? base : `${base}.gz`;
             if (mode === 'layer_num') return `${base}~l.gz`.replace(/~l/g, count);
             return base + ".gz".repeat(count);
+        }
+
+        // Worker 側 O(1) バイトサイズ／削減率整形（50,000bit BigInt の10進文字列変換を回避）
+        function fastFormatBytes(bi) {
+            if (bi < 1024n) return bi.toString() + " B";
+            const bitLen = bi.toString(2).length - 1;
+            const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"];
+            const unitIdx = Math.min(Math.floor(bitLen / 10) - 1, units.length - 1);
+            const divBits = (unitIdx + 1) * 10;
+            if (bitLen - divBits > 59) {
+                const shift = BigInt(bitLen - 53);
+                const top54 = Number(bi >> shift);
+                const log10Val = (bitLen - divBits) * Math.LOG10E * Math.LN2 + Math.log10(top54 / 9007199254740992);
+                let exp10 = Math.floor(log10Val);
+                let mant = Math.pow(10, log10Val - exp10);
+                if (Number(mant.toFixed(2)) >= 10) { mant /= 10; exp10++; }
+                return `${mant.toFixed(2)}e+${exp10} ${units[unitIdx]} (~2^${bitLen} B)`;
+            }
+            const divider = 1n << BigInt(divBits);
+            const integerPart = bi / divider;
+            const remainder = bi % divider;
+            const fractionalPart = (remainder * 100n) / divider;
+            return integerPart.toString() + "." + fractionalPart.toString().padStart(2, '0') + " " + units[unitIdx];
+        }
+
+        function fastFormatRatio(compressed, uncompressed) {
+            if (uncompressed <= 0n) return "0.000000%";
+            const uBits = uncompressed.toString(2).length;
+            const cBits = compressed.toString(2).length;
+            if (uBits - cBits > 30) return "< 0.000001%";
+            const scaled = (compressed * 100000000n) / uncompressed;
+            if (scaled === 0n && compressed > 0n) return "< 0.000001%";
+            return (Number(scaled) / 1e6).toFixed(6) + "%";
         }
 
         let cachedKey = null;
@@ -1620,7 +1878,7 @@
                     const bytes = cachedStream.to_bytes(max_download_bytes);
                     self.postMessage({
                         type: 'generation_complete',
-                        finalSize: cachedFinalSize.toString(),
+                        finalSizeStr: fastFormatBytes(cachedFinalSize),
                         buffer: bytes.buffer
                     }, [bytes.buffer]);
                     return;
@@ -1629,6 +1887,7 @@
                 const target_size_setting = BigInt(target_size_setting_str);
                 const layers = Number(count_layers);
                 const te = new TextEncoder();
+                const storedSkipState = new Map();
 
                 let tokens = [{ data: new Uint8Array([65]), times: target_size_setting }];
                 const initial_crc = new CRC32();
@@ -1657,7 +1916,6 @@
 
                     stream = new BitStream(fullHeader);
 
-                    // 巨大繰り返しトークンを独立ブロックに分離してハフマン符号圧迫を防ぐ
                     const groups = [];
                     let curSmall = [];
                     for (const tok of tokens) {
@@ -1671,12 +1929,7 @@
                     if (curSmall.length > 0) groups.push(curSmall);
 
                     for (let gi = 0; gi < groups.length; gi++) {
-                        const ops = encode_group_best(groups[gi], gi === groups.length - 1, stream.register.length);
-                        for (const op of ops) {
-                            if (op.type === 'push') stream.push(op.bits);
-                            else if (op.type === 'push_bytes') stream.push_bytes(op.bytes);
-                            else stream.push_repeat(op.bits, op.times);
-                        }
+                        emit_group_best(stream, groups[gi], gi === groups.length - 1, gi, storedSkipState);
                     }
 
                     stream.align();
@@ -1691,8 +1944,9 @@
                         data: {
                             layer: count + 1,
                             totalLayers: layers,
-                            uncompressed: current_uncompressed.toString(),
-                            compressed: compressed_size.toString(),
+                            uncompressedStr: fastFormatBytes(current_uncompressed),
+                            compressedStr: fastFormatBytes(compressed_size),
+                            ratioStr: fastFormatRatio(compressed_size, current_uncompressed),
                             crc: "0x" + data_crc.toString(16).toUpperCase().padStart(8, '0')
                         }
                     });
@@ -1709,13 +1963,13 @@
                     const bytes = stream.to_bytes(max_download_bytes);
                     self.postMessage({
                         type: 'generation_complete',
-                        finalSize: current_uncompressed.toString(),
+                        finalSizeStr: fastFormatBytes(current_uncompressed),
                         buffer: bytes.buffer
                     }, [bytes.buffer]);
                 } else {
                     self.postMessage({
                         type: 'prediction_complete',
-                        finalSize: current_uncompressed.toString()
+                        finalSizeStr: fastFormatBytes(current_uncompressed)
                     });
                 }
             } catch (err) {
@@ -1849,7 +2103,16 @@
             </header>
 
             <section class="section-block" aria-label="階層別圧縮統計">
-                <div class="section-heading">階層別推移</div>
+                <div class="section-header-row">
+                    <div class="section-heading">階層別推移</div>
+                    <div class="table-pager" id="tablePager" aria-label="階層テーブルページ送り">
+                        <button type="button" class="pager-btn" id="pagerFirstBtn" title="最初のページ">先頭</button>
+                        <button type="button" class="pager-btn" id="pagerPrevBtn" title="前のページ">前</button>
+                        <span class="pager-info" id="pagerInfo">1-100 / 0</span>
+                        <button type="button" class="pager-btn" id="pagerNextBtn" title="次のページ">次</button>
+                        <button type="button" class="pager-btn" id="pagerLastBtn" title="最新ページ">末尾</button>
+                    </div>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead>
@@ -1884,6 +2147,8 @@
         const MAX_EXP_DEC = 15000n;
         const MAX_LAYERS = 5000;
         const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
+        const TABLE_PAGE_SIZE = 100;
+        const MAX_LOG_NODES = 120;
 
         function parseBigSize(valStr) {
             valStr = valStr.trim();
@@ -1979,6 +2244,29 @@
         const generateBtn = document.getElementById('generateBtn');
         const glassToggleBtn = document.getElementById('glassToggleBtn');
 
+        function formatBytes(bi) {
+            bi = BigInt(bi);
+            if (bi < 1024n) return bi.toString() + " B";
+            const bitLen = bi.toString(2).length - 1;
+            const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"];
+            const unitIdx = Math.min(Math.floor(bitLen / 10) - 1, units.length - 1);
+            const divBits = (unitIdx + 1) * 10;
+            if (bitLen - divBits > 59) {
+                const shift = BigInt(bitLen - 53);
+                const top54 = Number(bi >> shift);
+                const log10Val = (bitLen - divBits) * Math.LOG10E * Math.LN2 + Math.log10(top54 / 9007199254740992);
+                let exp10 = Math.floor(log10Val);
+                let mant = Math.pow(10, log10Val - exp10);
+                if (Number(mant.toFixed(2)) >= 10) { mant /= 10; exp10++; }
+                return `${mant.toFixed(2)}e+${exp10} ${units[unitIdx]} (~2^${bitLen} B)`;
+            }
+            const divider = 1n << BigInt(divBits);
+            const integerPart = bi / divider;
+            const remainder = bi % divider;
+            const fractionalPart = (remainder * 100n) / divider;
+            return integerPart.toString() + "." + fractionalPart.toString().padStart(2, '0') + " " + units[unitIdx];
+        }
+
         function syncSliderVisual() {
             const min = Number(layerRange.min) || 1;
             const max = Number(layerRange.max) || 50;
@@ -2036,18 +2324,16 @@
                 layerRange.value = Math.min(opt, 50);
                 syncSliderVisual();
                 syncOverviewMeta();
-                addLog("Opt", `最適レイヤー数 ${opt} 層を適用しました (1/1032 理論限界・1MiB境界基準)`, "ok");
+                addLog("Opt", `最適レイヤー数 ${opt} 層を適用しました (1/1032 理論限界基準)`, "ok");
                 triggerFastUpdate();
             }
         });
 
-        // ガラス効果オンオフのユーザー切替（縮退と同等に透けだけ制御）
         glassToggleBtn.addEventListener('click', () => {
             const isOff = document.documentElement.classList.toggle('no-glass');
             glassToggleBtn.setAttribute('aria-pressed', String(!isOff));
         });
 
-        // 枠上のポインタ反射（ホバー中のみ・1フレーム1回）
         let reflectRaf = 0;
         document.addEventListener('pointermove', (e) => {
             const g = e.target.closest?.('.is-reflective');
@@ -2068,14 +2354,19 @@
             return base + ".gz".repeat(count);
         }
 
+        const LOG2_1032 = Math.log2(1032);
+        function exactLog2BigInt(bi) {
+            const bitLen = bi.toString(2).length - 1;
+            if (bitLen <= 52) return Math.log2(Number(bi));
+            const top = Number(bi >> BigInt(bitLen - 52)) / 4503599627370496;
+            return bitLen + Math.log2(top);
+        }
+
         function calculateOptimalLayers(targetSizeBytes) {
-            const ONE_MIB = 1048576n;
-            if (targetSizeBytes <= ONE_MIB) {
-                return targetSizeBytes <= 1024n ? 1 : 2;
-            }
-            const B = targetSizeBytes.toString(2).length - 1;
-            const cruiseLayers = (B - 20) / 10.0112;
-            return Math.ceil(cruiseLayers) + 2;
+            if (targetSizeBytes <= 0n) return 1;
+            const bits = exactLog2BigInt(targetSizeBytes);
+            // 残余の繰り返し本体が 1 層分の最小ヘッダ経費 (~2^5.2 ≈ 37 B) を下回る最小層数
+            return Math.max(1, Math.ceil((bits - 5.2) / LOG2_1032));
         }
 
         function updateOptimalDisplay() {
@@ -2111,56 +2402,147 @@
             return BigInt(parsed) * mult;
         }
 
-        function formatBytes(bytes) {
-            const bi = BigInt(bytes);
-            if (bi < 1024n) return bi + " B";
-            const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "RiB", "QiB"];
-            let idx = -1;
-            let temp = bi;
-            while (temp >= 1024n && idx < units.length - 1) {
-                temp /= 1024n;
-                idx++;
+        // =========================================================
+        // 軽量・高フレームレート DOM 描画（rAFバッチ + テーブルページング + ログ上限）
+        // =========================================================
+        let allLayerRows = [];
+        let currentPage = 0;
+        let autoFollowPage = true;
+        let pendingLogs = [];
+        let pendingLatestProgress = null;
+        let uiRafId = 0;
+        let tableDirty = false;
+
+        function createRowElement(data) {
+            const tr = document.createElement('tr');
+            const cells = [
+                { label: "階層", text: `L${data.layer}`, cls: "mono", style: "font-weight: 600;" },
+                { label: "入力サイズ（仮想）", text: data.uncompressedStr, cls: "mono" },
+                { label: "出力サイズ", text: data.compressedStr, cls: "mono" },
+                { label: "削減率", badge: data.ratioStr },
+                { label: "CRC32（前層）", text: data.crc, cls: "mono", style: "color: var(--text-sub); font-size: 0.8rem;" }
+            ];
+            for (const c of cells) {
+                const td = document.createElement('td');
+                td.setAttribute('data-label', c.label);
+                if (c.cls) td.className = c.cls;
+                if (c.style) td.setAttribute('style', c.style);
+                if (c.badge) {
+                    const span = document.createElement('span');
+                    span.className = 'ratio-badge';
+                    span.textContent = c.badge;
+                    td.appendChild(span);
+                } else {
+                    td.textContent = c.text;
+                }
+                tr.appendChild(td);
             }
-            const divider = 1024n ** BigInt(idx + 1);
-            const integerPart = bi / divider;
-            const intStr = integerPart.toString();
-            if (intStr.length > 18) {
-                const bitLen = bi.toString(2).length - 1;
-                return `${intStr[0]}.${intStr.slice(1, 3)}e+${intStr.length - 1} ${units[idx]} (~2^${bitLen} B)`;
-            }
-            const remainder = bi % divider;
-            const fractionalPart = (remainder * 100n) / divider;
-            return intStr + "." + fractionalPart.toString().padStart(2, '0') + " " + units[idx];
+            return tr;
         }
 
-        function formatRatioPercent(compressed, uncompressed) {
-            if (uncompressed <= 0n) return "0.000000%";
-            const scaled = (compressed * 100000000n) / uncompressed;
-            if (scaled === 0n && compressed > 0n) return "< 0.000001%";
-            return (Number(scaled) / 1e6).toFixed(6) + "%";
+        function renderTablePage() {
+            const tableBody = document.getElementById('statsTableBody');
+            const pager = document.getElementById('tablePager');
+            const total = allLayerRows.length;
+
+            if (total === 0) {
+                pager.classList?.remove('is-visible');
+                tableBody.innerHTML = '<tr class="empty-row"><td colspan="5">「予測を計算」または「生成 &amp; ダウンロード」を実行すると、各階層のサイズがここに行として並びます。</td></tr>';
+                return;
+            }
+
+            const totalPages = Math.max(1, Math.ceil(total / TABLE_PAGE_SIZE));
+            if (autoFollowPage) currentPage = totalPages - 1;
+            else currentPage = Math.min(Math.max(0, currentPage), totalPages - 1);
+
+            const start = currentPage * TABLE_PAGE_SIZE;
+            const end = Math.min(total, start + TABLE_PAGE_SIZE);
+
+            const frag = document.createDocumentFragment();
+            for (let i = start; i < end; i++) {
+                frag.appendChild(createRowElement(allLayerRows[i]));
+            }
+            tableBody.innerHTML = '';
+            tableBody.appendChild(frag);
+
+            if (total > TABLE_PAGE_SIZE) {
+                pager.classList?.add('is-visible');
+                document.getElementById('pagerInfo').textContent = `L${start + 1}-${end} / ${total}`;
+                document.getElementById('pagerFirstBtn').disabled = (currentPage === 0);
+                document.getElementById('pagerPrevBtn').disabled = (currentPage === 0);
+                document.getElementById('pagerNextBtn').disabled = (currentPage >= totalPages - 1);
+                document.getElementById('pagerLastBtn').disabled = (currentPage >= totalPages - 1);
+            } else {
+                pager.classList?.remove('is-visible');
+            }
+        }
+
+        function flushLogs() {
+            if (pendingLogs.length === 0) return;
+            const consoleBox = document.getElementById('consoleLogs');
+            // 1フレームに大量到着した場合は末尾 MAX_LOG_NODES 件だけを描画
+            const sliceStart = Math.max(0, pendingLogs.length - MAX_LOG_NODES);
+            const frag = document.createDocumentFragment();
+            for (let i = sliceStart; i < pendingLogs.length; i++) {
+                const item = pendingLogs[i];
+                const line = document.createElement('div');
+                line.className = 'console-line';
+                const tagEl = document.createElement('span');
+                tagEl.className = 'console-tag' + (item.level === 'err' ? ' err' : item.level === 'ok' ? ' ok' : '');
+                tagEl.textContent = `[${item.tag}]`;
+                const msgEl = document.createElement('span');
+                msgEl.textContent = item.message;
+                line.appendChild(tagEl);
+                line.appendChild(msgEl);
+                frag.appendChild(line);
+            }
+            pendingLogs.length = 0;
+            consoleBox.appendChild(frag);
+            while (consoleBox.children.length > MAX_LOG_NODES) {
+                consoleBox.firstElementChild.remove();
+            }
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
+
+        function flushUiFrame() {
+            uiRafId = 0;
+            if (pendingLatestProgress) {
+                const d = pendingLatestProgress;
+                pendingLatestProgress = null;
+                const pct = Math.floor((d.layer / d.totalLayers) * 100);
+                document.getElementById('progressState').textContent = `Layer ${d.layer} / ${d.totalLayers} 処理中`;
+                document.getElementById('progressPercent').textContent = `${pct}%`;
+                document.getElementById('progressBar').style.width = `${pct}%`;
+            }
+            if (tableDirty) {
+                tableDirty = false;
+                renderTablePage();
+            }
+            flushLogs();
+        }
+
+        function scheduleUiFlush() {
+            if (uiRafId) return;
+            if (typeof requestAnimationFrame === 'function') {
+                uiRafId = requestAnimationFrame(flushUiFrame);
+            } else {
+                flushUiFrame();
+            }
         }
 
         function addLog(tag, message, level = "info") {
-            const consoleBox = document.getElementById('consoleLogs');
-            const line = document.createElement('div');
-            line.className = 'console-line';
-
-            const tagEl = document.createElement('span');
-            tagEl.className = 'console-tag' + (level === 'err' ? ' err' : level === 'ok' ? ' ok' : '');
-            tagEl.textContent = `[${tag}]`;
-
-            const msgEl = document.createElement('span');
-            msgEl.textContent = message;
-
-            line.appendChild(tagEl);
-            line.appendChild(msgEl);
-            consoleBox.appendChild(line);
-            consoleBox.scrollTop = consoleBox.scrollHeight;
+            pendingLogs.push({ tag, message, level });
+            scheduleUiFlush();
         }
 
         function triggerFastUpdate() {
             document.getElementById('predictValue').textContent = "-- B";
         }
+
+        document.getElementById('pagerFirstBtn').addEventListener('click', () => { autoFollowPage = false; currentPage = 0; renderTablePage(); });
+        document.getElementById('pagerPrevBtn').addEventListener('click', () => { autoFollowPage = false; currentPage = Math.max(0, currentPage - 1); renderTablePage(); });
+        document.getElementById('pagerNextBtn').addEventListener('click', () => { autoFollowPage = false; currentPage++; renderTablePage(); });
+        document.getElementById('pagerLastBtn').addEventListener('click', () => { autoFollowPage = true; renderTablePage(); });
 
         let worker = null;
         let currentAction = null;
@@ -2184,42 +2566,11 @@
         }
 
         function clearStatsTable() {
-            document.getElementById('statsTableBody').innerHTML = '';
-        }
-
-        function appendLayerRow(data) {
-            const tableBody = document.getElementById('statsTableBody');
-            const emptyRow = tableBody.querySelector?.('.empty-row');
-            if (emptyRow) emptyRow.remove();
-
-            const tr = document.createElement('tr');
-            const rawUncompressed = BigInt(data.uncompressed);
-            const rawCompressed = BigInt(data.compressed);
-
-            const cells = [
-                { label: "階層", text: `L${data.layer}`, cls: "mono", style: "font-weight: 600;" },
-                { label: "入力サイズ（仮想）", text: formatBytes(rawUncompressed), cls: "mono" },
-                { label: "出力サイズ", text: formatBytes(rawCompressed), cls: "mono" },
-                { label: "削減率", badge: formatRatioPercent(rawCompressed, rawUncompressed) },
-                { label: "CRC32（前層）", text: data.crc, cls: "mono", style: "color: var(--text-sub); font-size: 0.8rem;" }
-            ];
-
-            for (const c of cells) {
-                const td = document.createElement('td');
-                td.setAttribute('data-label', c.label);
-                if (c.cls) td.className = c.cls;
-                if (c.style) td.setAttribute('style', c.style);
-                if (c.badge) {
-                    const span = document.createElement('span');
-                    span.className = 'ratio-badge';
-                    span.textContent = c.badge;
-                    td.appendChild(span);
-                } else {
-                    td.textContent = c.text;
-                }
-                tr.appendChild(td);
-            }
-            tableBody.appendChild(tr);
+            allLayerRows = [];
+            currentPage = 0;
+            autoFollowPage = true;
+            tableDirty = false;
+            renderTablePage();
         }
 
         function initWorker() {
@@ -2231,27 +2582,34 @@
             URL.revokeObjectURL(workerUrl);
 
             worker.onmessage = function(e) {
-                const { type, data, finalSize, buffer, message } = e.data;
+                const { type, data, finalSizeStr, buffer, message } = e.data;
 
                 if (type === 'layer_progress') {
-                    appendLayerRow(data);
-                    const pct = Math.floor((data.layer / data.totalLayers) * 100);
-                    document.getElementById('progressState').textContent = `Layer ${data.layer} / ${data.totalLayers} 処理中`;
-                    document.getElementById('progressPercent').textContent = `${pct}%`;
-                    document.getElementById('progressBar').style.width = `${pct}%`;
-                    addLog(
-                        currentAction === 'generate' ? "Gen" : "Progress",
-                        `L${data.layer} 完了: ${formatBytes(BigInt(data.uncompressed))} -> ${formatBytes(BigInt(data.compressed))}`
-                    );
+                    allLayerRows.push(data);
+                    pendingLatestProgress = data;
+                    tableDirty = true;
+                    // 大量層実行時はログを適度な間引き（先頭5層・末尾付近・250層毎）にしつつ進捗は即反映
+                    if (data.totalLayers <= 200 || data.layer <= 5 || data.layer === data.totalLayers || data.layer % 250 === 0) {
+                        pendingLogs.push({
+                            tag: currentAction === 'generate' ? "Gen" : "Progress",
+                            message: `L${data.layer} 完了: ${data.uncompressedStr} -> ${data.compressedStr}`,
+                            level: "info"
+                        });
+                    }
+                    scheduleUiFlush();
                 } else if (type === 'prediction_complete') {
-                    document.getElementById('predictValue').textContent = formatBytes(BigInt(finalSize));
+                    tableDirty = true;
+                    flushUiFrame();
+                    document.getElementById('predictValue').textContent = finalSizeStr;
                     document.getElementById('progressState').textContent = "予測完了";
                     document.getElementById('progressPercent').textContent = "100%";
                     document.getElementById('progressBar').style.width = "100%";
                     setBusyState(false);
-                    addLog("Success", `計算完了。最終サイズ予測: ${formatBytes(BigInt(finalSize))}`, "ok");
+                    addLog("Success", `計算完了。最終サイズ予測: ${finalSizeStr}`, "ok");
                 } else if (type === 'generation_complete') {
-                    document.getElementById('predictValue').textContent = formatBytes(BigInt(finalSize));
+                    tableDirty = true;
+                    flushUiFrame();
+                    document.getElementById('predictValue').textContent = finalSizeStr;
                     document.getElementById('progressState').textContent = "生成完了";
                     document.getElementById('progressPercent').textContent = "100%";
                     document.getElementById('progressBar').style.width = "100%";
@@ -2276,8 +2634,9 @@
                     URL.revokeObjectURL(url);
 
                     setBusyState(false);
-                    addLog("Success", `ファイル「${downloadFilename}」(${formatBytes(BigInt(finalSize))}) の書き出し完了。`, "ok");
+                    addLog("Success", `ファイル「${downloadFilename}」(${finalSizeStr}) の書き出し完了。`, "ok");
                 } else if (type === 'worker_error') {
+                    flushUiFrame();
                     document.getElementById('progressState').textContent = "中断しました";
                     setBusyState(false);
                     addLog("Error", message || "不明なエラーが発生しました。", "err");
@@ -2285,6 +2644,7 @@
             };
 
             worker.onerror = function(err) {
+                flushUiFrame();
                 document.getElementById('progressState').textContent = "エラーで停止";
                 setBusyState(false);
                 if (worker) {
