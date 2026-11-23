@@ -3,55 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>5.5-Octave Authentic Celesta Physical Model (C3 - F8)</title>
+  <title>5.5-Octave Authentic Schiedmayer Celesta — Plate Residual &amp; Hall Acoustics Engine</title>
   <style>
     /* =========================================================================
-       Tinted Glass UI Philosophy: Strict Design Tokens
+       Tinted Glass UI Philosophy: Design Tokens & Patent Implementations
        ========================================================================= */
+    @property --drop           { syntax: "*"; inherits: false; }
+    @property --highlight-self { syntax: "*"; inherits: false; }
+    @property --hl             { syntax: "<number>"; inherits: true; initial-value: 0.14; }
+
     :root {
-      /* 色: サックスブルー (HSV 215°, 50%, 100%) と サックスホワイト (HSV 210°, 10%, 100%) */
-      --glass-tint: 136 187 255;          /* #88BBFF サックスブルー */
-      --glass-alpha: 0.38;                /* 枠のガラス */
-      --glass-alpha-active: 0.50;         /* 操作中の枠 */
-      --glass-alpha-inactive: 0.30;       /* 非操作の枠 */
-      
-      --content-tint: 234 245 255;        /* #EAF5FF サックスホワイト */
-      --content-alpha: 0.45;              /* 本体 */
-      
-      /* 文字色: 深いネイビー (コントラスト比4.5:1以上、主要テキストは7:1以上を死守) */
-      --text: #0F172A;                    /* ディープネイビー */
-      --text-muted: #334155;              /* 読みやすい濃いめのスレートネイビー */
-      --text-sub: #475569;
+      --glass-tint: 136 187 255;          /* #88BBFF HSV(215°, 50%, 100%) */
+      --glass-alpha: 0.38;
+      --glass-alpha-active: 0.48;
+      --glass-alpha-inactive: 0.32;
 
-      /* 光と影: 光源は左上に1つ。ギラつかない上端ハイライトと右下への落ち影 */
-      --edge: rgb(100 116 139 / 0.25);    /* スモーキーな淡い縁取り */
-      --highlight: inset 0 1px 0 rgb(255 255 255 / 0.70);
-      --halo: 0 0 8px rgb(255 255 255 / 0.90), 0 1px 2px rgb(255 255 255 / 0.65);
-
-      /* 高さの階層影 */
-      --shadow-1: 2px 4px 10px rgb(15 40 80 / 0.08);
-      --shadow-2: 4px 8px 20px rgb(15 40 80 / 0.10);
-      --shadow-3: 6px 12px 30px rgb(15 40 80 / 0.14);
-
-      --radius: 4px;                      /* 固定px。拡縮しても曲率は変えない */
-      --glass-blur: 4px;                  /* 既定4px */
+      --content-tint: 234 245 255;        /* #EAF5FF HSV(210°, 10%, 100%) */
+      --content-alpha: 0.42;
       --surface-base: 234 245 255;
 
-      /* 屈折フィルター */
+      --text: #0F172A;                    /* ディープネイビー */
+      --text-muted: #334155;
+      --accent-strong: #2563EB;           /* 白文字と5.17:1 */
+      --accent-text: #1E40AF;             /* ガラス上で5.5:1以上 */
+      --accent-rose: #E11D48;             /* 差し色(+120°系統を極少量) */
+
+      --edge: rgb(100 116 139 / 0.25);
+      --highlight: inset 0 1px 0 rgb(255 255 255 / 0.60);
+      --highlight-drawer: inset 1px 1px 0 rgb(255 255 255 / 0.70);
+      --halo: 0 0 8px rgb(255 255 255 / 0.88), 0 1px 2px rgb(255 255 255 / 0.62);
+
+      --mat-ambient: 1.03;
+      --mat-specular: 1;
+      --mat-reflect: 0.60;
+      --hl-angle: 115deg;
+      --hl-active: 0.24;
+      --hl-inactive: 0.11;
+      --hl-period: 320px;
+      --hl-shift: 0px;
+
+      --sh-x: 3px;
+      --sh-k: 3px;
+      --sh-blur: 7px;
+      --sh-rgb: 15 40 80;
+
+      --glass-blur: 4px;
+      --radius: 4px;
       --refract-filter: url(#glass-refract);
 
-      /* 霜の微粒子 (不透明度0.05以下) */
       --frost-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.045'/></svg>");
 
-      /* 反射ハイライト (画面基準の光の層) */
-      --hl-angle: 115deg;
-      --hl-stripes: repeating-linear-gradient(var(--hl-angle),
-        transparent 0px,
-        transparent 90px,
-        rgb(255 255 255 / 0.18) 130px,
-        rgb(255 255 255 / 0.18) 170px,
-        transparent 210px,
-        transparent 320px);
+      --white-w: 44px;
+      --black-w: 26px;
     }
 
     * {
@@ -59,6 +62,7 @@
       margin: 0;
       padding: 0;
       -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
       user-select: none;
     }
 
@@ -66,152 +70,306 @@
       height: 100%;
       width: 100%;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: radial-gradient(circle at 18% 18%, #FFFFFF 0%, #E8F2FC 45%, #D6E7F8 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
       color: var(--text);
+      background:
+        radial-gradient(circle at 16% 14%, rgb(255 255 255 / 0.95) 0%, transparent 45%),
+        radial-gradient(circle at 84% 78%, rgb(186 220 255 / 0.55) 0%, transparent 50%),
+        repeating-radial-gradient(circle at 22% 28%, transparent 0 42px, rgb(148 197 255 / 0.14) 42px 44px),
+        linear-gradient(155deg, #F6FAFF 0%, #E6F2FE 55%, #D5E8FA 100%);
     }
 
-    /* 画面全体を1枚のOSアプリケーションウィンドウとして設計 */
     .celesta-app {
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr);
+      grid-template-columns: 348px minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr);
       height: 100%;
+      height: 100dvh;
       width: 100%;
       position: relative;
     }
 
-    /* ガラス上の短いキャプション文字だけにグローを敷く */
-    .on-glass-title {
+    [data-elev="0"] { --elev: 0; }
+    [data-elev="1"] { --elev: 1; }
+    [data-elev="2"] { --elev: 2; }
+    .surface { --below: var(--elev, 0); }
+
+    .is-raised {
+      --dz: max(0, calc(var(--elev, 0) - var(--below, 0)));
+      --drop:
+        calc(var(--sh-x) * min(1, var(--dz)))
+        calc(var(--sh-k) * var(--dz))
+        calc(var(--sh-blur) * var(--dz))
+        rgb(var(--sh-rgb) / calc(0.05 + 0.03 * var(--dz)));
+    }
+
+    .glass {
+      --hl: var(--hl-inactive);
+      --hl-stripes: repeating-linear-gradient(var(--hl-angle),
+        transparent calc(var(--hl-shift) + 0px),
+        transparent calc(var(--hl-shift) + 90px),
+        rgb(255 255 255 / calc(var(--hl) * var(--mat-specular))) calc(var(--hl-shift) + 130px),
+        rgb(255 255 255 / calc(var(--hl) * var(--mat-specular))) calc(var(--hl-shift) + 170px),
+        transparent calc(var(--hl-shift) + 210px),
+        transparent calc(var(--hl-shift) + var(--hl-period)));
+      background-color: rgb(var(--glass-tint) / var(--glass-alpha-inactive));
+      background-image: var(--hl-stripes);
+      background-attachment: fixed;
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%) brightness(var(--mat-ambient));
+      backdrop-filter: blur(var(--glass-blur)) saturate(130%) brightness(var(--mat-ambient));
+      box-shadow:
+        var(--highlight-self, var(--highlight)),
+        0 0 0 1px var(--edge),
+        var(--drop, 0 0 0 0 transparent);
+      color: var(--text);
+      transition: background-color 0.2s ease, --hl 0.2s ease;
+    }
+
+    .glass.has-grain {
+      background-image: var(--hl-stripes), var(--frost-grain);
+      background-attachment: fixed, scroll;
+    }
+
+    .glass.is-active,
+    .glass:hover,
+    .glass:focus-within {
+      --hl: var(--hl-active);
+      background-color: rgb(var(--glass-tint) / var(--glass-alpha-active));
+    }
+
+    .glass.is-reflective:hover {
+      background-image:
+        radial-gradient(180px circle at var(--px, 50%) var(--py, 0%),
+          rgb(255 255 255 / calc(0.22 * var(--mat-reflect))), transparent 70%),
+        var(--hl-stripes);
+      background-attachment: scroll, fixed;
+    }
+
+    .glass.has-grain.is-reflective:hover {
+      background-image:
+        radial-gradient(180px circle at var(--px, 50%) var(--py, 0%),
+          rgb(255 255 255 / calc(0.22 * var(--mat-reflect))), transparent 70%),
+        var(--hl-stripes),
+        var(--frost-grain);
+      background-attachment: scroll, fixed, scroll;
+    }
+
+    .can-refract .glass.is-refractive {
+      backdrop-filter: var(--refract-filter) blur(var(--glass-blur)) saturate(130%) brightness(var(--mat-ambient));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%) brightness(var(--mat-ambient));
+    }
+
+    .on-glass-text {
       text-shadow: var(--halo);
-      font-weight: 600;
-      letter-spacing: 0.02em;
       color: var(--text);
     }
 
     /* =========================================================================
-       左サイドバー: サックスブルー色付きガラス ＆ 完全ドッキング
+       左サイドバー
        ========================================================================= */
     .sidebar {
+      grid-column: 1;
       grid-row: 1 / -1;
       display: flex;
       flex-direction: column;
       gap: 16px;
-      padding: 16px 18px 24px 18px;
+      padding: 16px 18px calc(24px + env(safe-area-inset-bottom)) 18px;
       overflow-y: auto;
       overflow-x: hidden;
-      max-height: 100vh;
+      min-height: 0;
       z-index: 30;
-      background-color: rgb(var(--glass-tint) / var(--glass-alpha));
-      background-image: var(--hl-stripes), var(--frost-grain);
-      background-attachment: fixed, scroll;
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-      backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-      border-right: 1px solid var(--edge);
-      box-shadow: var(--highlight), 4px 0 16px rgb(15 40 80 / 0.10); /* 線ではなく垂直の落ち影 */
-      transition: background-color 0.2s ease;
     }
 
-    .sidebar.is-active {
-      background-color: rgb(var(--glass-tint) / var(--glass-alpha-active));
-    }
-
-    /* 屈折対応 (Blink) */
-    .can-refract .sidebar {
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-      backdrop-filter: var(--refract-filter) blur(var(--glass-blur)) saturate(130%);
+    .sidebar > * {
+      flex-shrink: 0;
     }
 
     .brand-section {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 6px;
+      gap: 10px;
+      padding-bottom: 4px;
     }
 
     .brand-title-wrap {
       display: flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
     }
 
     .brand-icon {
-      width: 26px;
-      height: 26px;
+      width: 28px;
+      height: 28px;
       stroke: var(--text);
-      stroke-width: 1.8;
+      stroke-width: 1.6;
       fill: none;
       flex-shrink: 0;
     }
 
+    .brand-title {
+      font-size: 1.04rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 1.25;
+    }
+
+    .brand-sub {
+      font-size: 0.74rem;
+      color: var(--text);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
     .sidebar-close-btn {
       display: none;
-      min-width: 32px;
-      min-height: 32px;
-      background: rgb(255 255 255 / 0.70);
-      border: 1px solid var(--edge);
+      min-width: 44px;
+      min-height: 44px;
+      background: rgb(255 255 255 / 0.78);
+      border: none;
+      box-shadow: var(--highlight), 0 0 0 1px var(--edge);
       border-radius: var(--radius);
       cursor: pointer;
       align-items: center;
       justify-content: center;
-      box-shadow: var(--highlight);
       color: var(--text);
+      flex-shrink: 0;
     }
 
-    .section-title {
-      font-size: 0.74rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text);
-      font-weight: 700;
-      margin-bottom: 8px;
-      text-shadow: var(--halo);
-      display: flex;
-      align-items: center;
+    .pill-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 6px;
     }
 
-    /* 文脈でまとめる行 (視認性を死守するサックスホワイトの落ち着いた面) */
-    .param-group {
+    .pill-btn {
+      min-height: 42px;
+      padding: 6px 8px;
+      border: none;
+      border-radius: var(--radius);
+      background: rgb(255 255 255 / 0.56);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 0 0 1px var(--edge);
+      color: var(--text);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      line-height: 1.25;
+      transition: background-color 0.14s ease;
+    }
+
+    .pill-btn:hover {
+      background: rgb(255 255 255 / 0.84);
+    }
+
+    .pill-btn.is-selected {
+      background: var(--accent-strong);
+      color: #FFFFFF;
+      box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.22), 0 0 0 1px #1D4ED8;
+    }
+
+    .pill-sub {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 400;
+      opacity: 0.85;
+      margin-top: 1px;
+    }
+
+    .section-block {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      background: rgb(245 250 255 / 0.85); /* 文字を際立たせる高コントラスト面 */
-      padding: 12px 14px;
-      border-radius: var(--radius);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.90), 0 1px 4px rgb(15 40 80 / 0.04), 0 0 0 1px var(--edge);
+      gap: 6px;
+      transition: opacity 0.2s ease;
+    }
+
+    .section-block.is-disabled-block {
+      opacity: 0.48;
+    }
+
+    .section-block.is-disabled-block .param-list {
+      pointer-events: none;
+    }
+
+    .section-title {
+      font-size: 0.80rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 2px 4px;
+    }
+
+    .disabled-hint {
+      font-size: 0.73rem;
+      color: var(--accent-text);
+      font-weight: 600;
+      padding: 0 6px 2px 6px;
+      display: none;
+    }
+
+    .section-block.is-disabled-block .disabled-hint {
+      display: block;
+    }
+
+    .param-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
     .param-row {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 3px;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      background: rgb(255 255 255 / 0.16);
+      transition: background-color 0.15s ease;
+    }
+
+    .param-row:hover,
+    .param-row:focus-within {
+      background: rgb(255 255 255 / 0.36);
     }
 
     .param-meta {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      font-size: 0.82rem;
+      gap: 8px;
+      font-size: 0.80rem;
       font-weight: 600;
       color: var(--text);
     }
 
+    .param-meta label {
+      cursor: pointer;
+    }
+
     .param-value {
       font-weight: 700;
-      color: #1D4ED8;
+      color: var(--accent-text);
       font-variant-numeric: tabular-nums;
-      font-size: 0.84rem;
+      font-size: 0.81rem;
+      flex-shrink: 0;
     }
 
     .param-note {
-      font-size: 0.71rem;
+      font-size: 0.74rem;
       color: var(--text-muted);
-      line-height: 1.4;
+      line-height: 1.38;
       font-weight: 400;
     }
 
-    /* スライダー: 手前を塗り分けで明示 */
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      min-height: 30px;
+    }
+
     input[type="range"] {
       -webkit-appearance: none;
       appearance: none;
@@ -219,264 +377,351 @@
       height: 6px;
       border-radius: 3px;
       background: #CBD5E1;
-      outline: none;
-      margin: 4px 0;
+      cursor: pointer;
+    }
+
+    input[type="range"]:focus-visible {
+      outline: 2px solid var(--accent-strong);
+      outline-offset: 4px;
     }
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: #FFFFFF;
-      box-shadow: 0 1px 4px rgb(15 40 80 / 0.30), 0 0 0 1px var(--edge);
+      box-shadow: 0 1px 4px rgb(15 40 80 / 0.32), 0 0 0 1px rgb(100 116 139 / 0.40);
       cursor: pointer;
       transition: transform 0.1s ease;
     }
 
     input[type="range"]:active::-webkit-slider-thumb {
-      transform: scale(1.18);
+      transform: scale(1.15);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border: none;
+      border-radius: 50%;
+      background: #FFFFFF;
+      box-shadow: 0 1px 4px rgb(15 40 80 / 0.32), 0 0 0 1px rgb(100 116 139 / 0.40);
+      cursor: pointer;
     }
 
     /* =========================================================================
-       ヘッダー (色付きガラス枠 ＆ メリハリのあるクリスタルボタン)
+       ヘッダー枠
        ========================================================================= */
     .header-bar {
+      grid-column: 2;
+      grid-row: 1;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 18px;
-      z-index: 10;
-      background-color: rgb(var(--glass-tint) / var(--glass-alpha));
-      background-image: var(--hl-stripes);
-      background-attachment: fixed;
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-      backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-      border-bottom: 1px solid var(--edge);
-      box-shadow: var(--highlight), 0 2px 8px rgb(15 40 80 / 0.05);
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 16px;
+      z-index: 20;
     }
 
     .header-controls {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
     }
 
     .octave-navigator-bar {
       display: flex;
       align-items: center;
       gap: 4px;
-      background: rgb(245 250 255 / 0.85);
-      padding: 3px 6px;
+      padding: 2px;
       border-radius: var(--radius);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.90), 0 0 0 1px var(--edge);
+      background: rgb(255 255 255 / 0.45);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 0 0 1px var(--edge);
     }
 
     .octave-display-label {
       font-size: 0.82rem;
       font-weight: 700;
       color: var(--text);
-      min-width: 68px;
+      min-width: 72px;
       text-align: center;
-      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+      padding: 0 4px;
     }
 
-    /* コントロールボタン: 白無地クリスタル基調でメリハリを確保 */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      min-height: 36px;
+      min-height: 44px;
+      min-width: 44px;
       padding: 0 13px;
       border-radius: var(--radius);
-      border: 1px solid var(--edge);
-      background: rgb(255 255 255 / 0.80);
+      border: none;
+      background: rgb(255 255 255 / 0.78);
       color: var(--text);
-      font-size: 0.80rem;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: var(--highlight), 0 2px 5px rgb(15 40 80 / 0.06);
-      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.70), 0 0 0 1px var(--edge);
+      transition: background-color 0.14s ease, transform 0.08s ease;
+    }
+
+    .btn.btn-compact {
+      min-height: 40px;
+      padding: 0 10px;
+      background: rgb(255 255 255 / 0.70);
+      box-shadow: none;
     }
 
     .btn:hover {
-      background: rgb(255 255 255 / 0.95);
-      box-shadow: var(--highlight), 0 3px 8px rgb(15 40 80 / 0.10);
+      background: rgb(255 255 255 / 0.94);
     }
 
     .btn:active {
       transform: translateY(1px);
     }
 
-    /* アクティブ時のみ鮮やかなサックスブルーでパッと応える */
-    .btn.pedal-btn.is-down {
-      background: #3B82F6;
-      color: #FFFFFF;
-      border-color: #2563EB;
-      box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.25);
+    .btn:focus-visible,
+    .pill-btn:focus-visible,
+    .sidebar-close-btn:focus-visible,
+    .view-tab:focus-visible {
+      outline: 2px solid var(--accent-strong);
+      outline-offset: 2px;
     }
 
-    .btn.is-toggle-active {
-      background: #3B82F6;
+    .btn.is-active-state {
+      background: var(--accent-strong);
       color: #FFFFFF;
-      border-color: #2563EB;
-      box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.25);
+      box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.25), 0 0 0 1px #1D4ED8;
+    }
+
+    .btn.is-active-state:hover {
+      background: #1D4ED8;
+    }
+
+    #settingsToggleBtn {
+      display: none;
     }
 
     /* =========================================================================
-       メイン作業領域 (本体: サックスホワイト面)
+       メイン作業領域 (本体)
        ========================================================================= */
     .main-stage {
+      grid-column: 2;
+      grid-row: 2;
       display: flex;
       flex-direction: column;
-      height: 100%;
       min-width: 0;
+      min-height: 0;
       overflow: hidden;
       position: relative;
     }
 
-    .acoustic-canvas-wrap {
-      flex: 1;
-      min-height: 130px;
-      position: relative;
-      margin: 12px 18px 6px 18px;
-      border-radius: var(--radius);
-      background: rgb(var(--content-tint) / var(--content-alpha));
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-      backdrop-filter: blur(var(--glass-blur)) saturate(130%);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 0 0 1px var(--edge);
-      overflow: hidden;
-    }
-
-    canvas#resonanceCanvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    .canvas-hud {
-      position: absolute;
-      top: 10px;
-      left: 12px;
-      display: flex;
-      gap: 16px;
-      font-size: 0.76rem;
-      color: var(--text-muted);
-      pointer-events: none;
-    }
-
-    .hud-stat span {
-      font-weight: 700;
+    .content {
+      background-color: rgb(var(--content-tint) / var(--content-alpha));
       color: var(--text);
     }
 
-    /* =========================================================================
-       5.5オクターブ レンジスライダー
-       ========================================================================= */
-    .range-navigator-wrap {
-      padding: 0 18px 6px 18px;
+    .acoustic-canvas-wrap {
+      flex: 1 1 0;
+      min-height: 110px;
+      position: relative;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      overflow: hidden;
+    }
+
+    .stage-status-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px 14px;
+      padding: 8px 18px 4px 18px;
+      font-size: 0.77rem;
+      color: var(--text-muted);
+      z-index: 2;
+    }
+
+    .hud-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 16px;
+      min-width: 0;
+    }
+
+    .hud-stat strong {
+      color: var(--text);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hud-notes-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border-radius: var(--radius);
+      background: rgb(255 255 255 / 0.62);
+      color: var(--text);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .view-switcher {
+      display: inline-flex;
+      border-radius: var(--radius);
+      background: rgb(255 255 255 / 0.45);
+      box-shadow: 0 0 0 1px var(--edge);
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .view-tab {
+      min-height: 36px;
+      padding: 0 11px;
+      border: none;
+      border-radius: 3px;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.14s ease;
+    }
+
+    .view-tab:hover {
+      background: rgb(255 255 255 / 0.65);
+    }
+
+    .view-tab.is-selected {
+      background: var(--accent-strong);
+      color: #FFFFFF;
+    }
+
+    canvas#resonanceCanvas {
+      flex: 1 1 0;
+      width: 100%;
+      min-height: 0;
+      display: block;
+    }
+
+    /* =========================================================================
+       5.5オクターブ 比例レンジナビゲータ
+       ========================================================================= */
+    .range-navigator-wrap {
+      padding: 6px 18px 4px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex-shrink: 0;
     }
 
     .range-meta-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.70rem;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.73rem;
       color: var(--text-muted);
       font-weight: 600;
     }
 
     .range-track-container {
       position: relative;
-      height: 22px;
-      background: rgb(245 250 255 / 0.85);
+      height: 36px;
+      background: rgb(255 255 255 / 0.52);
       border-radius: var(--radius);
-      box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.06), 0 0 0 1px var(--edge);
+      box-shadow: inset 0 1px 2px rgb(15 40 80 / 0.08), 0 0 0 1px var(--edge);
       cursor: pointer;
-      display: flex;
-      align-items: center;
+      touch-action: none;
     }
 
     .range-ticks-layer {
       position: absolute;
       inset: 0;
-      display: flex;
       pointer-events: none;
     }
 
-    .range-tick {
-      flex: 1;
-      border-right: 1px dashed rgb(100 116 139 / 0.30);
+    .range-tick-mark {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-left: 1px dashed rgb(100 116 139 / 0.35);
+      padding-left: 4px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 0.65rem;
+      font-size: 0.70rem;
       color: var(--text);
       font-weight: 700;
     }
-    .range-tick:last-child {
-      border-right: none;
+
+    .range-tick-mark.is-end {
+      border-left: none;
+      border-right: 1px dashed rgb(100 116 139 / 0.35);
+      padding-left: 0;
+      padding-right: 4px;
+      transform: translateX(-100%);
     }
 
     .range-slider-thumb {
       position: absolute;
-      top: 2px;
-      bottom: 2px;
-      background: rgb(96 165 250 / 0.45);
-      border: 1.5px solid #2563EB;
+      top: 3px;
+      bottom: 3px;
+      background: rgb(136 187 255 / 0.48);
+      border: 2px solid var(--accent-strong);
       border-radius: 3px;
-      box-shadow: 0 1px 4px rgb(15 40 80 / 0.18);
       cursor: grab;
       touch-action: none;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.1s ease;
+      transition: background-color 0.1s ease;
     }
 
     .range-slider-thumb:active {
       cursor: grabbing;
-      background: rgb(96 165 250 / 0.65);
+      background: rgb(136 187 255 / 0.72);
     }
 
     .range-thumb-grip {
-      width: 12px;
+      width: 14px;
       height: 4px;
-      background: #1D4ED8;
+      background: var(--accent-text);
       border-radius: 2px;
-      opacity: 0.90;
       pointer-events: none;
     }
 
     /* =========================================================================
-       鍵盤コンテナ
+       鍵盤エリア
        ========================================================================= */
     .keyboard-container {
-      position: relative;
-      padding: 2px 18px 18px 18px;
-      min-height: 220px;
+      padding: 4px 18px calc(14px + env(safe-area-inset-bottom)) 18px;
+      flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      justify-content: flex-end;
     }
 
     .keyboard-case {
       position: relative;
-      height: 184px;
+      height: clamp(138px, 25dvh, 192px);
       background: linear-gradient(180deg, #334155 0%, #1E293B 100%);
       border-radius: var(--radius);
-      padding: 8px 4px 4px 4px;
-      box-shadow: 0 6px 20px rgb(15 40 80 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.2);
+      padding: 9px 6px 5px 6px;
+      box-shadow: 0 6px 18px rgb(15 40 80 / 0.14), inset 0 1px 0 rgb(255 255 255 / 0.18);
       display: flex;
-      overflow-x: scroll;
+      overflow-x: auto;
       overflow-y: hidden;
-      -webkit-overflow-scrolling: touch;
-      touch-action: pan-x;
+      touch-action: none;
       scrollbar-width: none;
     }
 
@@ -484,82 +729,113 @@
       display: none;
     }
 
-    .felt-rail {
-      position: absolute;
-      top: 5px;
-      left: 5px;
-      right: 5px;
-      height: 4px;
-      background: #881337;
-      border-radius: 2px;
-      box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.4);
-      z-index: 5;
-      pointer-events: none;
-    }
-
     .keys-bed {
       display: flex;
       position: relative;
       height: 100%;
-      margin: 0;
+      width: calc(39 * var(--white-w));
+      flex-shrink: 0;
+    }
+
+    .felt-rail {
+      position: absolute;
+      top: -4px;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: #9F1239;
+      border-radius: 2px;
+      box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.45);
+      z-index: 4;
+      pointer-events: none;
     }
 
     .key-white {
       position: relative;
-      width: 42px;
+      width: var(--white-w);
       height: 100%;
       background: linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 90%, #CBD5E1 100%);
       border: 1px solid #94A3B8;
       border-top: none;
       border-radius: 0 0 4px 4px;
-      box-shadow: 0 4px 6px rgb(0 0 0 / 0.15), inset 0 -3px 0 rgb(255 255 255 / 0.8);
+      box-shadow: 0 3px 5px rgb(0 0 0 / 0.16), inset 0 -3px 0 rgb(255 255 255 / 0.80);
       cursor: pointer;
       flex-shrink: 0;
       z-index: 1;
       display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding-bottom: 8px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 2px;
+      padding-bottom: 7px;
       font-size: 0.72rem;
       font-weight: 700;
       color: #334155;
-      transition: background 0.08s ease, transform 0.05s ease;
+      transition: background 0.06s ease, transform 0.05s ease;
     }
 
     .key-white.is-pressed {
-      background: linear-gradient(180deg, #E2E8F0 0%, #BFDBFE 100%);
+      background: linear-gradient(180deg, #DCEAFE 0%, #93C5FD 100%);
       transform: translateY(3px);
-      box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), inset 0 2px 4px rgb(59 130 246 / 0.3);
-      color: #1E3A8A;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.20), inset 0 2px 4px rgb(37 99 235 / 0.30);
+      color: #0F172A;
     }
 
     .key-black {
       position: absolute;
-      width: 25px;
+      top: 0;
+      left: calc(var(--prev-white) * var(--white-w) - var(--black-w) / 2);
+      width: var(--black-w);
       height: 60%;
       background: linear-gradient(180deg, #334155 0%, #0F172A 100%);
       border-radius: 0 0 3px 3px;
       border: 1px solid #020617;
-      box-shadow: 0 3px 6px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.3);
+      box-shadow: 0 3px 6px rgb(0 0 0 / 0.42), inset 0 1px 0 rgb(255 255 255 / 0.25);
       cursor: pointer;
       z-index: 2;
-      transition: background 0.08s ease, transform 0.05s ease;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 5px;
+      transition: background 0.06s ease, transform 0.05s ease;
     }
 
     .key-black.is-pressed {
-      background: linear-gradient(180deg, #1E3A8A 0%, #172554 100%);
+      background: linear-gradient(180deg, #1D4ED8 0%, #1E3A8A 100%);
       transform: translateY(2px);
-      box-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.50);
     }
 
-    /* モバイル用半透明バックドロップ */
+    .key-white:focus-visible,
+    .key-black:focus-visible {
+      outline: 2px solid var(--accent-strong);
+      outline-offset: -2px;
+      z-index: 5;
+    }
+
+    .pc-cap {
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgb(136 187 255 / 0.38);
+      color: var(--text);
+      line-height: 1.2;
+      pointer-events: none;
+    }
+
+    .key-black .pc-cap {
+      background: rgb(255 255 255 / 0.20);
+      color: #F8FAFC;
+      font-size: 0.58rem;
+      padding: 1px 3px;
+    }
+
     .mobile-backdrop {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgb(15 23 42 / 0.30);
-      -webkit-backdrop-filter: blur(3px);
-      backdrop-filter: blur(3px);
+      background: rgb(15 40 80 / 0.26);
       z-index: 25;
       opacity: 0;
       transition: opacity 0.2s ease;
@@ -570,357 +846,1109 @@
       opacity: 1;
     }
 
-    /* =========================================================================
-       レスポンシブ (<= 860px): モバイル設定ドロワー
-       ========================================================================= */
+    @media (min-width: 861px) {
+      #settingsToggleBtn,
+      .mobile-backdrop {
+        display: none !important;
+      }
+    }
+
     @media (max-width: 860px) {
+      :root {
+        --white-w: 38px;
+        --black-w: 23px;
+      }
+
       .celesta-app {
         grid-template-columns: minmax(0, 1fr);
+      }
+
+      .header-bar,
+      .main-stage {
+        grid-column: 1;
+      }
+
+      #settingsToggleBtn {
+        display: inline-flex;
       }
 
       .sidebar {
         position: fixed;
         inset: 0 0 0 auto;
-        width: min(330px, 88vw);
-        background-color: rgb(var(--glass-tint) / 0.55);
-        background-image: var(--hl-stripes), var(--frost-grain);
-        background-attachment: fixed, scroll;
-        -webkit-backdrop-filter: blur(6px) saturate(140%);
-        backdrop-filter: blur(6px) saturate(140%);
+        width: min(348px, 88vw);
+        height: 100%;
+        height: 100dvh;
         transform: translateX(100%);
         transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
-        box-shadow: -6px 0 28px rgb(15 40 80 / 0.20);
-      }
-
-      .can-refract .sidebar {
-        -webkit-backdrop-filter: blur(6px) saturate(140%);
-        backdrop-filter: var(--refract-filter) blur(6px) saturate(140%);
+        --highlight-self: var(--highlight-drawer);
+        --elev: 2;
       }
 
       .sidebar.is-open {
-        transform: translateX(0);
+        transform: none;
       }
 
       .sidebar-close-btn {
         display: inline-flex;
       }
 
-      .key-white {
-        width: 36px;
+      .header-bar {
+        padding: 6px 12px;
       }
 
-      .key-black {
-        width: 22px;
-      }
-
-      .acoustic-canvas-wrap {
-        margin: 8px 12px 4px 12px;
+      .stage-status-bar {
+        padding: 8px 12px 2px 12px;
       }
 
       .range-navigator-wrap {
-        padding: 0 12px 4px 12px;
+        padding: 4px 12px 2px 12px;
       }
 
       .keyboard-container {
-        padding: 2px 12px 14px 12px;
+        padding: 4px 12px calc(10px + env(safe-area-inset-bottom)) 12px;
       }
     }
 
-    /* =========================================================================
-       SKILL MUST: 厳密な等価不透明色縮退 (color-mix)
-       ========================================================================= */
+    @media (max-width: 560px) {
+      .tick-c8 {
+        display: none;
+      }
+    }
+
+    @media (max-height: 520px) {
+      .acoustic-canvas-wrap {
+        min-height: 56px;
+      }
+      .keyboard-case {
+        height: clamp(114px, 34dvh, 152px);
+      }
+    }
+
     @supports not (backdrop-filter: blur(1px)) {
-      .sidebar, .header-bar, .param-group, .btn {
+      .glass, .glass.is-active, .glass:hover, .glass:focus-within,
+      .can-refract .glass.is-refractive, .content {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
       }
-      .sidebar {
-        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
+      .glass {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-inactive) * 100%), rgb(var(--surface-base)));
       }
-      .sidebar.is-active {
-        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-active) * 100%), rgb(var(--surface-base))) !important;
+      .glass.is-active, .glass:hover, .glass:focus-within {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-active) * 100%), rgb(var(--surface-base)));
       }
-      .header-bar {
-        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
-      }
-      .acoustic-canvas-wrap {
-        background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base))) !important;
+      .content {
+        background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base)));
       }
     }
 
     @media (prefers-reduced-transparency: reduce) {
-      .sidebar, .header-bar, .param-group, .btn {
+      .glass, .glass.is-active, .glass:hover, .glass:focus-within,
+      .can-refract .glass.is-refractive, .content {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
       }
-      .sidebar {
-        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
+      .glass {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-inactive) * 100%), rgb(var(--surface-base)));
       }
-      .header-bar {
-        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha) * 100%), rgb(var(--surface-base))) !important;
+      .glass.is-active, .glass:hover, .glass:focus-within {
+        background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-active) * 100%), rgb(var(--surface-base)));
       }
-      .acoustic-canvas-wrap {
-        background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base))) !important;
+      .content {
+        background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base)));
       }
+    }
+
+    html.no-glass .glass,
+    html.no-glass .glass.is-active,
+    html.no-glass .glass:hover,
+    html.no-glass .glass:focus-within,
+    html.no-glass.can-refract .glass.is-refractive,
+    html.no-glass .content {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    html.no-glass .glass {
+      background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-inactive) * 100%), rgb(var(--surface-base)));
+    }
+    html.no-glass .glass.is-active,
+    html.no-glass .glass:hover,
+    html.no-glass .glass:focus-within {
+      background-color: color-mix(in srgb, rgb(var(--glass-tint)) calc(var(--glass-alpha-active) * 100%), rgb(var(--surface-base)));
+    }
+    html.no-glass .content {
+      background-color: color-mix(in srgb, rgb(var(--content-tint)) calc(var(--content-alpha) * 100%), rgb(var(--surface-base)));
     }
   </style>
 </head>
 <body>
 
-  <!-- 特許由来: 屈折(背後像の変位)用SVGフィルター (Blink基準) -->
+  <!-- Blink基準の微小屈折フィルター -->
   <svg width="0" height="0" style="position:absolute; pointer-events:none;" aria-hidden="true" focusable="false">
-    <filter id="glass-refract" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-      <feOffset in="SourceGraphic" dx="2" dy="2" result="shifted"/>
-      <feTurbulence type="fractalNoise" baseFrequency="0.015 0.02" numOctaves="2" seed="5" result="noise"/>
-      <feDisplacementMap in="shifted" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    <filter id="glass-refract" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.016" numOctaves="2" seed="5" result="noise"/>
+      <feGaussianBlur in="noise" stdDeviation="4" result="smoothNoise"/>
+      <feDisplacementMap in="SourceGraphic" in2="smoothNoise" scale="2.5" xChannelSelector="R" yChannelSelector="G"/>
     </filter>
   </svg>
 
-  <div class="celesta-app">
-
-    <!-- モバイル用半透明バックドロップ -->
+  <div class="celesta-app surface" data-elev="0">
     <div class="mobile-backdrop" id="mobileBackdrop"></div>
 
-    <!-- サイドバー: 高コントラスト＆完全ドッキング -->
-    <aside class="sidebar" id="sidebar">
+    <!-- 左サイドバー (色付き半透明ガラス枠) -->
+    <aside class="sidebar glass has-grain is-reflective is-raised" id="sidebar" data-elev="1" aria-label="Celesta &amp; Space Physical Controls">
       <div class="brand-section">
         <div class="brand-title-wrap">
-          <svg class="brand-icon" viewBox="0 0 24 24">
-            <circle cx="12" cy="7" r="4"/>
-            <path d="M12 11v10M7 21h10M4 14h16"/>
+          <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <path d="M7 9v6M10 9v6M13 9v6M16 9v6M3 16h18"/>
           </svg>
           <div>
-            <h1 class="on-glass-title" style="font-size: 1.02rem;">Acoustic Celesta</h1>
-            <p style="font-size: 0.68rem; color: var(--text-muted); font-weight: 500;">Schiedmayer 5.5-Oct (C3 - F8) Model</p>
+            <h1 class="brand-title on-glass-text">Acoustic Celesta</h1>
+            <p class="brand-sub on-glass-text">Schiedmayer 5.5-Oct · Plate &amp; Hall Physics</p>
           </div>
         </div>
-        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Settings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <button type="button" class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <!-- 1. マレット剛体力学 (Mallet Mechanics) -->
-      <div>
-        <div class="section-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8 12 8-8"/></svg>
-          <span>Mallet Dynamics (剛体打撃)</span>
+      <!-- 1. 空間環境選択 (無響室 vs 各ホール建築設計) -->
+      <div class="section-block">
+        <div class="section-title on-glass-text">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10z"/></svg>
+          <span>Acoustic Space (空間環境)</span>
         </div>
-        <div class="param-group">
+        <div class="pill-grid" id="spacePresetStrip" role="radiogroup" aria-label="Acoustic Space">
+          <button type="button" class="pill-btn" data-space="anechoic" role="radio" aria-checked="false">
+            Anechoic Chamber
+            <span class="pill-sub">無響室 · 板の残留振動のみ</span>
+          </button>
+          <button type="button" class="pill-btn" data-space="studio" role="radio" aria-checked="false">
+            Chamber Studio
+            <span class="pill-sub">14×10×6.5m 親密空間</span>
+          </button>
+          <button type="button" class="pill-btn is-selected" data-space="shoebox" role="radio" aria-checked="true">
+            Shoebox Hall
+            <span class="pill-sub">44×21×18m 側壁・包まれ感</span>
+          </button>
+          <button type="button" class="pill-btn" data-space="vineyard" role="radio" aria-checked="false">
+            Vineyard Hall
+            <span class="pill-sub">48×34×22m 開放・明瞭</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. 録音場所・マイク配列・位相 -->
+      <div class="section-block">
+        <div class="section-title on-glass-text">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
+          <span>Mic Position &amp; Phase (録音位置・位相)</span>
+        </div>
+
+        <div class="pill-grid" id="micArrayStrip" role="radiogroup" aria-label="Microphone Array">
+          <button type="button" class="pill-btn is-selected" data-mic="ortf" role="radio" aria-checked="true">
+            ORTF (±55° 17cm)
+            <span class="pill-sub">自然位相差・単一指向性</span>
+          </button>
+          <button type="button" class="pill-btn" data-mic="binaural" role="radio" aria-checked="false">
+            Binaural (18cm)
+            <span class="pill-sub">両耳ITD・頭部影フィルタ</span>
+          </button>
+          <button type="button" class="pill-btn" data-mic="ab" role="radio" aria-checked="false">
+            Spaced A-B (50cm)
+            <span class="pill-sub">無指向ペア・広大空間位相</span>
+          </button>
+          <button type="button" class="pill-btn" data-mic="bench" role="radio" aria-checked="false">
+            Player Bench (32cm)
+            <span class="pill-sub">奏者視点・鍵盤近接ステレオ</span>
+          </button>
+        </div>
+
+        <div class="param-list">
           <div class="param-row">
             <div class="param-meta">
-              <span>Mallet Mass <i>m</i><sub>h</sub></span>
+              <label for="pMicDist">Listening / Mic Distance</label>
+              <span class="param-value" id="valMicDist">6.5 m</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pMicDist" min="0.5" max="28.0" step="0.5" value="6.5">
+            </div>
+            <div class="param-note">距離に応じた臨界距離DRR・鏡像到達時間差・ISO空気高域吸収が連動</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pMicOffset">Lateral Seat / Mic Offset</label>
+              <span class="param-value" id="valMicOffset">0.0 m</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pMicOffset" min="-5.0" max="5.0" step="0.5" value="0.0">
+            </div>
+            <div class="param-note">左右位置の偏りによる直接音ITDと左右側壁反射の時間差・位相ずれ</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. ホールの設計・位相分散 (無響室では自動的に無効) -->
+      <div class="section-block" id="hallDesignGroup">
+        <div class="section-title on-glass-text">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 10h18M9 5v14M15 5v14"/></svg>
+          <span>Hall Design &amp; Phase (ホール建築設計)</span>
+        </div>
+        <div class="disabled-hint">無響室モードでは壁反射・ホール残響は無効です</div>
+        <div class="param-list">
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pHallScale">Hall Volume Scale</label>
+              <span class="param-value" id="valHallScale">1.00×</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pHallScale" min="0.70" max="1.40" step="0.05" value="1.00">
+            </div>
+            <div class="param-note">L×W×H倍率（容積V・ITDG・Eyring残響時間T<sub>60</sub>と臨界距離が変化）</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pWallAbsorb">Wall Absorption &alpha;</label>
+              <span class="param-value" id="valWallAbsorb">0.22</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pWallAbsorb" min="0.08" max="0.38" step="0.01" value="0.22">
+            </div>
+            <div class="param-note">壁材の吸音率（石膏・硬木・吸音客席の反射強度と境界位相シフト）</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pPhaseDiff">Phase Diffusion (All-Pass)</label>
+              <span class="param-value" id="valPhaseDiff">80%</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pPhaseDiff" min="0" max="100" step="5" value="80">
+            </div>
+            <div class="param-note">Schroeder多段オールパス位相分散と左右ステレオ位相非相関量</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 板の残った振動 (無響室で特に露わになる実体振動) -->
+      <div class="section-block">
+        <div class="section-title on-glass-text">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0"/></svg>
+          <span>Residual Plate Vibration (板の残った振動)</span>
+        </div>
+        <div class="param-list">
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pResidualTail">Two-Stage Residual Tail</label>
+              <span class="param-value" id="valResidualTail">70%</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pResidualTail" min="0" max="100" step="5" value="70">
+            </div>
+            <div class="param-note">初期放射後に鋼板内部の熱弾性損失だけで長く残る第2段階の微細余韻</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pModalBeating">Modal Splitting / Beating</label>
+              <span class="param-value" id="valModalBeating">55%</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pModalBeating" min="0" max="100" step="5" value="55">
+            </div>
+            <div class="param-note">音板・フェルト支持の微小非対称性による直交モード分裂と緩やかなうなり</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pPostDamperRes">Post-Damper Plate Ring</label>
+              <span class="param-value" id="valPostDamperRes">60%</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pPostDamperRes" min="0" max="100" step="5" value="60">
+            </div>
+            <div class="param-note">離鍵ダンパー接触後も節近傍(2次モード)や板端に残留する微かな鳴り</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pSympathetic">Frame Sympathetic Coupling</label>
+              <span class="param-value" id="valSympathetic">50%</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pSympathetic" min="0" max="100" step="5" value="50">
+            </div>
+            <div class="param-note">空間ではなく共有フェルトレール・木製フレーム伝播による音板間共鳴</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. 調律とマレット機構 -->
+      <div class="section-block">
+        <div class="section-title on-glass-text">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m8 16 8-8"/></svg>
+          <span>Tuning &amp; Mallet Mechanics (調律・打鍵)</span>
+        </div>
+        <div class="param-list">
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pRefPitch">Reference Pitch A4</label>
+              <span class="param-value" id="valRefPitch">442 Hz</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pRefPitch" min="440" max="444" step="1" value="442">
+            </div>
+            <div class="param-note">Schiedmayer工場標準のオーケストラ基準ピッチ（標準 442 Hz）</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pActionNoise">Action &amp; Felt Noise</label>
+              <span class="param-value" id="valActionNoise">40%</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pActionNoise" min="0" max="100" step="5" value="40">
+            </div>
+            <div class="param-note">樺材シャンク・フェルト打撃および離鍵ダンパーの機械的接触ノイズ</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pMalletMass">Mallet Mass m<sub>h</sub></label>
               <span class="param-value" id="valMalletMass">3.6 g</span>
             </div>
-            <input type="range" id="pMalletMass" min="1.5" max="6.0" step="0.1" value="3.6">
-            <div class="param-note">マレット慣性質量。低音ほど重く、高音ほど軽小に遷移</div>
+            <div class="slider-wrap">
+              <input type="range" id="pMalletMass" min="1.5" max="6.0" step="0.1" value="3.6">
+            </div>
+            <div class="param-note">重いほどヘルツ接触時間 &tau;<sub>c</sub> が延び、高次倍音が抑えられ丸くなる</div>
           </div>
 
           <div class="param-row">
             <div class="param-meta">
-              <span>Hertz Stiffness <i>K</i><sub>H</sub></span>
+              <label for="pHertzK">Hertz Stiffness K<sub>H</sub></label>
               <span class="param-value" id="valHertzK">Medium</span>
             </div>
-            <input type="range" id="pHertzK" min="2.0" max="15.0" step="0.5" value="8.0">
-            <div class="param-note">フェルト〜芯のヘルツ非線形接触剛性 <i>F</i> = <i>K</i><sub>H</sub> &delta;<sup>1.5</sup></div>
+            <div class="slider-wrap">
+              <input type="range" id="pHertzK" min="2.0" max="15.0" step="0.5" value="8.0">
+            </div>
+            <div class="param-note">フェルト圧縮剛性 F = K<sub>H</sub>&delta;<sup>1.5</sup>。硬いほど強打時の倍音が立つ</div>
           </div>
 
           <div class="param-row">
             <div class="param-meta">
-              <span>Crystal Sparkle (高域接触感)</span>
+              <label for="pSparkle">Crystal Sparkle</label>
               <span class="param-value" id="valSparkle">80%</span>
             </div>
-            <input type="range" id="pSparkle" min="20" max="100" step="5" value="80">
-            <div class="param-note">高音域（C6〜F8）特有の微小打撃接触インパルスの輝き</div>
+            <div class="slider-wrap">
+              <input type="range" id="pSparkle" min="20" max="100" step="5" value="80">
+            </div>
+            <div class="param-note">高音域（C6〜F8）鋼板の微小接触アタック成分</div>
           </div>
         </div>
       </div>
 
-      <!-- 2. 音板連続体調律 (Steel Bar Acoustics) -->
-      <div>
-        <div class="section-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 18h16M8 6v12M16 6v12"/></svg>
-          <span>Steel Plate Tuning (音板調律)</span>
+      <!-- 6. 音板・共鳴箱・LSP筐体 -->
+      <div class="section-block">
+        <div class="section-title on-glass-text">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 8h4M10 12h4M10 16h4"/></svg>
+          <span>Plates, Boxes &amp; 50th LSP Cabinet</span>
         </div>
-        <div class="param-group">
+        <div class="param-list">
           <div class="param-row">
             <div class="param-meta">
-              <span>Undercut <i>f</i><sub>2</sub>/<i>f</i><sub>1</sub> (中央削り比)</span>
-              <span class="param-value" id="valUndercut">3.00×</span>
+              <label for="pUndercut">Bar Overtones f<sub>2</sub>/f<sub>1</sub></label>
+              <span class="param-value" id="valUndercut">2.756×</span>
             </div>
-            <input type="range" id="pUndercut" min="2.60" max="3.40" step="0.01" value="3.00">
-            <div class="param-note">音板中央切削による完全12度（オクターブ＋5度）調律比</div>
+            <div class="slider-wrap">
+              <input type="range" id="pUndercut" min="2.70" max="3.40" step="0.004" value="2.756">
+            </div>
+            <div class="param-note">均一鋼板の自由端曲げ比 2.756× 〜 12度切削 3.00×</div>
           </div>
 
           <div class="param-row">
             <div class="param-meta">
-              <span>Metallic Attack (金属倍音強度)</span>
+              <label for="pMetallic">Metallic Attack</label>
               <span class="param-value" id="valMetallic">75%</span>
             </div>
-            <input type="range" id="pMetallic" min="20" max="100" step="2" value="75">
-            <div class="param-note">打鍵瞬間に立ち上がる第2〜第4モード（鋼板の澄んだ輝き）</div>
-          </div>
-
-          <div class="param-row">
-            <div class="param-meta">
-              <span>Plate Damper Speed</span>
-              <span class="param-value" id="valDamperSpeed">40 ms</span>
+            <div class="slider-wrap">
+              <input type="range" id="pMetallic" min="15" max="100" step="5" value="75">
             </div>
-            <input type="range" id="pDamperSpeed" min="0.02" max="0.10" step="0.005" value="0.04">
-            <div class="param-note">離鍵時にフェルトが音板の金属振動を止める制動速度</div>
+            <div class="param-note">第2〜第5・ねじれ曲げモードの直接音板放射量</div>
           </div>
-        </div>
-      </div>
 
-      <!-- 3. 基音優先の共鳴管残響 (Pipe Cavity Acoustics) -->
-      <div>
-        <div class="section-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 8h4M10 12h4M10 16h4"/></svg>
-          <span>Pipe Cavity (共鳴管基音残響)</span>
-        </div>
-        <div class="param-group">
           <div class="param-row">
             <div class="param-meta">
-              <span>Fundamental Ringing &tau;<sub>f1</sub></span>
-              <span class="param-value" id="valF1Decay">1.50 s</span>
+              <label for="pDamperSpeed">Plate Damper Speed</label>
+              <span class="param-value" id="valDamperSpeed">45 ms</span>
             </div>
-            <input type="range" id="pF1Decay" min="0.5" max="2.8" step="0.05" value="1.50">
-            <div class="param-note">音板制動後も共鳴管内の空気が自律放射する基音の余韻</div>
-          </div>
-
-          <div class="param-row">
-            <div class="param-meta">
-              <span>Cavity Resonance <i>Q</i> (選択度)</span>
-              <span class="param-value" id="valResQ">24.0</span>
+            <div class="slider-wrap">
+              <input type="range" id="pDamperSpeed" min="0.02" max="0.12" step="0.005" value="0.045">
             </div>
-            <input type="range" id="pResQ" min="10" max="40" step="1" value="24">
-            <div class="param-note">共鳴管の同調鋭度（高いほど倍音が遮断され基音のみ残存）</div>
+            <div class="param-note">離鍵フェルト制動速度（C7以上の高音域は構造上ほぼ非制動）</div>
           </div>
 
           <div class="param-row">
             <div class="param-meta">
-              <span>Radiation Ratio (共鳴管比率)</span>
-              <span class="param-value" id="valRadRatio">85%</span>
+              <label for="pF1Decay">Box Ringing &tau;<sub>f1</sub></label>
+              <span class="param-value" id="valF1Decay">1.35 s</span>
             </div>
-            <input type="range" id="pRadRatio" min="50" max="95" step="5" value="85">
-            <div class="param-note">音板直接音に対する木製ヘルムホルツ共鳴箱の音圧放射割合</div>
+            <div class="slider-wrap">
+              <input type="range" id="pF1Decay" min="0.4" max="2.6" step="0.05" value="1.35">
+            </div>
+            <div class="param-note">木製共鳴箱（Helmholtz/気柱）が放射する基音余韻</div>
           </div>
-        </div>
-      </div>
 
-      <!-- 4. 50次 LSP キャビネット全体共鳴胴 (Cabinet System) -->
-      <div>
-        <div class="section-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-          <span>50th-Order LSP Cabinet (共鳴胴)</span>
-        </div>
-        <div class="param-group">
           <div class="param-row">
             <div class="param-meta">
-              <span>LSP Cabinet Coupling</span>
+              <label for="pResQ">Cavity Resonance Q</label>
+              <span class="param-value" id="valResQ">22.0</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" id="pResQ" min="10" max="38" step="1" value="22">
+            </div>
+            <div class="param-note">共鳴箱の同調鋭度（基音強調と自然な立ち上がり膨らみ）</div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-meta">
+              <label for="pLspCouple">LSP Cabinet Coupling</label>
               <span class="param-value" id="valLspCouple">75%</span>
             </div>
-            <input type="range" id="pLspCouple" min="0" max="100" step="2" value="75">
-            <div class="param-note">チェレスタ木製ケース全体の25組(50次)共振対の結合度</div>
+            <div class="slider-wrap">
+              <input type="range" id="pLspCouple" min="0" max="100" step="5" value="75">
+            </div>
+            <div class="param-note">50次(25共振対)オーク材木製キャビネットの躯体放射割合</div>
           </div>
 
           <div class="param-row">
             <div class="param-meta">
-              <span>Cabinet Viscous Loss &gamma;</span>
+              <label for="pViscous">Wood Viscous Loss &gamma;</label>
               <span class="param-value" id="valViscous">0.993</span>
             </div>
-            <input type="range" id="pViscous" min="0.980" max="0.998" step="0.001" value="0.993">
-            <div class="param-note">木材内部の音響粘性散逸係数（極の単位円引き込み度）</div>
+            <div class="slider-wrap">
+              <input type="range" id="pViscous" min="0.982" max="0.997" step="0.001" value="0.993">
+            </div>
+            <div class="param-note">筐体木材の内部粘性損失係数</div>
           </div>
         </div>
       </div>
     </aside>
 
-    <!-- メイン領域 -->
-    <main class="main-stage">
-      
-      <!-- ヘッダー (クリスタルホワイトボタンによる清潔なコントラスト) -->
-      <header class="header-bar">
-        <div class="header-controls">
-          <div class="octave-navigator-bar">
-            <button class="btn" id="octPrevBtn" style="min-height:30px; padding:0 8px;" title="Previous Octave">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
-            </button>
-            <span class="octave-display-label" id="octDisplay">C5 - C6</span>
-            <button class="btn" id="octNextBtn" style="min-height:30px; padding:0 8px;" title="Next Octave">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="header-controls">
-          <button class="btn pedal-btn" id="sustainPedalBtn" title="Space key or Tap">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="12" height="16" rx="2"/></svg>
-            <span>Pedal</span>
+    <!-- ヘッダー枠 -->
+    <header class="header-bar glass is-reflective">
+      <div class="header-controls">
+        <div class="octave-navigator-bar" role="group" aria-label="Keyboard Range Navigation">
+          <button type="button" class="btn btn-compact" id="octPrevBtn" title="Shift view &amp; PC keys down ([)" aria-label="Previous Octave">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
           </button>
-
-          <button class="btn" id="settingsToggleBtn" title="Toggle Physical Settings">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-            <span>Settings</span>
+          <span class="octave-display-label" id="octDisplay">C4 – C6</span>
+          <button type="button" class="btn btn-compact" id="octNextBtn" title="Shift view &amp; PC keys up (])" aria-label="Next Octave">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
           </button>
         </div>
-      </header>
 
-      <!-- リアルタイム物理音響可視化 -->
+        <button type="button" class="btn" id="demoBtn" title="Play comparison phrase (sustain + staccato residual)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+          <span id="demoBtnText">Preview</span>
+        </button>
+      </div>
+
+      <div class="header-controls">
+        <button type="button" class="btn" id="sustainPedalBtn" aria-pressed="false" title="Toggle Sustain Pedal (or hold Space)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 12h6"/></svg>
+          <span>Pedal</span>
+        </button>
+
+        <button type="button" class="btn" id="glassToggleBtn" aria-pressed="true" title="Toggle Transparent Glass Effect">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l10-10M10 20l10-10"/></svg>
+          <span id="glassToggleText">Glass</span>
+        </button>
+
+        <button type="button" class="btn" id="settingsToggleBtn" aria-expanded="false" aria-controls="sidebar" title="Open Physical Parameters">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- メイン作業領域 -->
+    <main class="main-stage content">
       <div class="acoustic-canvas-wrap">
-        <div class="canvas-hud">
-          <div class="hud-stat">Fundamental &tau;<sub>f1</sub>: <span id="hudF1">1.50s</span></div>
-          <div class="hud-stat">Metal Decay: <span id="hudMetal">40ms</span></div>
-          <div class="hud-stat">Compass: <span id="hudCompass">66 Keys (C3 - F8)</span></div>
+        <div class="stage-status-bar">
+          <div class="hud-group">
+            <div class="hud-stat">Space: <strong id="hudSpace">Shoebox 44×21×18m (T60 2.24s · dc 4.9m)</strong></div>
+            <div class="hud-stat">Mic: <strong id="hudMic">ORTF 6.5m · DRR -2.4 dB · ITD +0.00ms</strong></div>
+            <div class="hud-notes-badge" id="hudNotes">Ready — Tap keys or press Z–M / Q–I</div>
+          </div>
+          <div class="view-switcher" role="tablist" aria-label="Visualizer Mode">
+            <button type="button" class="view-tab is-selected" id="viewSpectrumBtn" role="tab" aria-selected="true">Spectrum</button>
+            <button type="button" class="view-tab" id="viewSpaceBtn" role="tab" aria-selected="false">Space &amp; Phase IR</button>
+          </div>
         </div>
         <canvas id="resonanceCanvas"></canvas>
       </div>
 
-      <!-- 5.5オクターブ レンジスライダー -->
       <div class="range-navigator-wrap">
         <div class="range-meta-bar">
-          <span>Compass C3 (130Hz) - F8 (5587Hz)</span>
-          <span>Slide thumb or tap track to jump</span>
+          <span>Compass C3–F8 (66 Keys) · Drag keys: Glissando · Lower edge: Louder · Space: Pedal</span>
+          <span id="pcRangeLabel">PC Keys: C4 – C6 ([ / ])</span>
         </div>
-        <div class="range-track-container" id="rangeTrack">
-          <div class="range-ticks-layer">
-            <div class="range-tick">C3</div>
-            <div class="range-tick">C4</div>
-            <div class="range-tick">C5</div>
-            <div class="range-tick">C6</div>
-            <div class="range-tick">C7</div>
-            <div class="range-tick">F8</div>
+        <div class="range-track-container" id="rangeTrack" role="slider" aria-label="Keyboard Horizontal Viewport" tabindex="0">
+          <div class="range-ticks-layer" aria-hidden="true">
+            <div class="range-tick-mark" style="left: 0%;">C3</div>
+            <div class="range-tick-mark" style="left: 17.95%;">C4</div>
+            <div class="range-tick-mark" style="left: 35.90%;">C5</div>
+            <div class="range-tick-mark" style="left: 53.85%;">C6</div>
+            <div class="range-tick-mark" style="left: 71.79%;">C7</div>
+            <div class="range-tick-mark tick-c8" style="left: 89.74%;">C8</div>
+            <div class="range-tick-mark is-end" style="left: 100%;">F8</div>
           </div>
-          <div class="range-slider-thumb" id="rangeThumb" title="Drag to scroll keyboard">
+          <div class="range-slider-thumb" id="rangeThumb">
             <div class="range-thumb-grip"></div>
           </div>
         </div>
       </div>
 
-      <!-- 鍵盤エリア -->
       <div class="keyboard-container">
         <div class="keyboard-case" id="keyboardCase">
-          <div class="felt-rail"></div>
           <div class="keys-bed" id="keysBed">
-            <!-- 66鍵動的生成 -->
+            <div class="felt-rail"></div>
           </div>
         </div>
       </div>
-
     </main>
-
   </div>
 
   <script>
     /* =========================================================================
-       Chromium / Blink 屈折 (Refraction) エンジン検出
+       1. Blink基準の屈折判定 & ポインタ反射 & 時刻シフト
        ========================================================================= */
-    const isChromium = !!(navigator.userAgentData?.brands?.some(b => b.brand === 'Chromium') || /Chrome|Chromium|Edg/.test(navigator.userAgent));
-    if (isChromium) {
+    if (navigator.userAgentData?.brands?.some(b => b.brand === 'Chromium')) {
       document.documentElement.classList.add('can-refract');
     }
 
+    let rafReflect = 0;
+    document.addEventListener('pointermove', (e) => {
+      const g = e.target.closest?.('.is-reflective');
+      if (!g || rafReflect) return;
+      rafReflect = requestAnimationFrame(() => {
+        const r = g.getBoundingClientRect();
+        g.style.setProperty('--px', (e.clientX - r.left) + 'px');
+        g.style.setProperty('--py', (e.clientY - r.top) + 'px');
+        rafReflect = 0;
+      });
+    }, { passive: true });
+
+    const setHlShift = () => {
+      const root = document.documentElement;
+      const period = parseFloat(getComputedStyle(root).getPropertyValue('--hl-period')) || 320;
+      const d = new Date();
+      const t = (d.getHours() * 60 + d.getMinutes()) / 1440;
+      root.style.setProperty('--hl-shift', (t * period).toFixed(1) + 'px');
+    };
+    setHlShift();
+    setInterval(setHlShift, 60000);
+
     /* =========================================================================
-       5.5-Octave Authentic Celesta Modal & 50th-Order LSP Engine
+       2. ホール空間物理モデル (3D鏡像法 + ITD位相 + 境界位相 + Eyring残響 + オールパス位相分散)
+       ========================================================================= */
+    const HALL_SPECS = {
+      anechoic: { label: 'Anechoic Chamber', L: 10, W: 10, H: 8, canopyH: 8, srcY: 3.0, defaultDist: 0.8, defaultAbsorb: 0.99 },
+      studio:   { label: 'Chamber Studio',   L: 14, W: 10, H: 6.5, canopyH: 6.5, srcY: 2.2, defaultDist: 3.2, defaultAbsorb: 0.24 },
+      shoebox:  { label: 'Shoebox Hall',     L: 44, W: 21, H: 18, canopyH: 11, srcY: 3.2, defaultDist: 6.5, defaultAbsorb: 0.22 },
+      vineyard: { label: 'Vineyard Hall',    L: 48, W: 34, H: 22, canopyH: 13.5, srcY: 4.0, defaultDist: 10.0, defaultAbsorb: 0.26 }
+    };
+
+    const MIC_ARRAYS = {
+      ortf:     { label: 'ORTF', spacing: 0.17, angleDeg: 55, cardioid: true, binaural: false },
+      binaural: { label: 'Binaural', spacing: 0.18, angleDeg: 90, cardioid: false, binaural: true },
+      ab:       { label: 'Spaced A-B', spacing: 0.50, angleDeg: 0, cardioid: false, binaural: false },
+      bench:    { label: 'Player Bench', spacing: 0.32, angleDeg: 25, cardioid: false, binaural: false }
+    };
+
+    const SPEED_OF_SOUND = 343.0;
+
+    function computeRoomPhysics(p) {
+      const spec = HALL_SPECS[p.spaceType] || HALL_SPECS.shoebox;
+      const micSpec = MIC_ARRAYS[p.micArray] || MIC_ARRAYS.ortf;
+      const isAnechoic = p.spaceType === 'anechoic';
+
+      const scale = isAnechoic ? 1.0 : p.hallScale;
+      const L = spec.L * scale;
+      const W = spec.W * scale;
+      const H = spec.H * scale;
+      const canopyH = spec.canopyH * scale;
+
+      // チェレスタ音源座標 (ステージ中央奥寄り、地上0.95m)
+      const xs = 0.0;
+      const ys = Math.min(L * 0.25, spec.srcY * scale);
+      const zs = 0.95;
+
+      // 録音・聴取マイク座標 (距離 d によってクランプ、後方席ではわずかに客席/バルコニー高へ)
+      const maxDist = isAnechoic ? 4.0 : Math.max(2.0, L - ys - 1.5);
+      const dist = Math.min(maxDist, p.micDist);
+      const xm = Math.max(-W * 0.42, Math.min(W * 0.42, p.micOffset));
+      const ym = ys + dist;
+      const zm = isAnechoic ? 1.25 : (1.35 + Math.max(0, (dist - L * 0.45) * 0.22));
+
+      const halfB = micSpec.spacing * 0.5;
+      const mL = [xm - halfB, ym, zm];
+      const mR = [xm + halfB, ym, zm];
+      const vecDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+      const d0L = vecDist([xs, ys, zs], mL);
+      const d0R = vecDist([xs, ys, zs], mR);
+      const d0Min = Math.min(d0L, d0R);
+      const d0Avg = (d0L + d0R) * 0.5;
+
+      // 直接音の左右時間差 (ITD: 秒)
+      const directTauL = (d0L - d0Min) / SPEED_OF_SOUND;
+      const directTauR = (d0R - d0Min) / SPEED_OF_SOUND;
+      const directItdMs = ((d0L - d0R) / SPEED_OF_SOUND) * 1000;
+
+      // ISO 9613-1 近似の空気高域吸収カットオフ (無響室は開放 20kHz)
+      const airCutoffHz = isAnechoic || d0Avg <= 1.2
+        ? 20000
+        : Math.max(3600, 20000 / (1 + 0.095 * (d0Avg - 1.2)));
+
+      // 音源見かけステレオ幅の距離減衰 (近接ほど66鍵の幅を感じ、遠方ほど点音源化)
+      const sourceStereoWidth = 1.0 / Math.sqrt(1 + Math.pow(d0Avg / 2.8, 2));
+
+      // 無響室では壁反射=0、残響=0
+      if (isAnechoic) {
+        return {
+          isAnechoic: true, L, W, H, canopyH, src: [xs, ys, zs], mic: [xm, ym, zm],
+          d0Avg, directTauL, directTauR, directItdMs, airCutoffHz, sourceStereoWidth,
+          t60: 0, dc: Infinity, drrDb: Infinity, gDirect: 1.0, gReverb: 0.0,
+          reflections: []
+        };
+      }
+
+      // Eyringの残響時間 T60 と臨界距離 dc
+      const V = L * W * H;
+      const S = 2 * (L * W + W * H + L * H);
+      const alpha = Math.max(0.05, Math.min(0.45, p.wallAbsorb));
+      const mAir = 0.0022; // ~2kHz空気吸音係数
+      const eyringDenom = -S * Math.log(1 - alpha) + 4 * mAir * V;
+      const t60 = Math.max(0.35, Math.min(5.0, (0.161 * V) / eyringDenom));
+      const dc = 0.057 * Math.sqrt(V / t60);
+
+      // 臨界距離基準の DRR (Direct-to-Reverberant Ratio)
+      const drrRatio = d0Avg / dc;
+      const norm = Math.sqrt(1 + drrRatio * drrRatio);
+      const gDirect = 1.0 / norm;
+      const gReverb = drrRatio / norm;
+      const drrDb = 20 * Math.log10(Math.max(1e-4, gDirect) / Math.max(1e-4, gReverb));
+
+      // 1次鏡像法による6壁面反射
+      const imageDefs = [
+        { id: 'floor',   label: 'Floor',      pos: [xs, ys, -zs],             wallAlpha: alpha * 0.75, boundaryHz: 750,  lpfBase: 9200 },
+        { id: 'stage',   label: 'Stage Back', pos: [xs, -ys, zs],             wallAlpha: alpha * 0.85, boundaryHz: 540,  lpfBase: 7600 },
+        { id: 'left',    label: 'Left Wall',  pos: [-W - xs, ys, zs],         wallAlpha: alpha,        boundaryHz: 620,  lpfBase: 6400 },
+        { id: 'right',   label: 'Right Wall', pos: [W - xs, ys, zs],          wallAlpha: alpha,        boundaryHz: 620,  lpfBase: 6400 },
+        { id: 'ceiling', label: 'Canopy',     pos: [xs, ys, 2 * canopyH - zs],wallAlpha: alpha * 0.90, boundaryHz: 860,  lpfBase: 5800 },
+        { id: 'rear',    label: 'Rear Wall',  pos: [xs, 2 * L - ys, zs],      wallAlpha: alpha * 1.15, boundaryHz: 420,  lpfBase: 4400 }
+      ];
+
+      const reflections = imageDefs.map(def => {
+        const dL = vecDist(def.pos, mL);
+        const dR = vecDist(def.pos, mR);
+        const dAvg = (dL + dR) * 0.5;
+        const tauL = Math.max(0.0002, (dL - d0Min) / SPEED_OF_SOUND);
+        const tauR = Math.max(0.0002, (dR - d0Min) / SPEED_OF_SOUND);
+
+        // 到来方位角 (正面ステージ方向が 0 rad, 左 -π/2, 右 +π/2, 後方 ±π)
+        const dx = def.pos[0] - xm;
+        const dy = def.pos[1] - ym;
+        const az = Math.atan2(dx, -dy);
+
+        // マイク指向性 / 両耳シャドウ
+        let dirGainL = 1.0, dirGainR = 1.0;
+        let lpfL = def.lpfBase * (1.22 - alpha * 0.75);
+        let lpfR = lpfL;
+
+        if (micSpec.cardioid) {
+          const ang = (micSpec.angleDeg * Math.PI) / 180;
+          dirGainL = Math.max(0.14, 0.52 + 0.48 * Math.cos(az + ang));
+          dirGainR = Math.max(0.14, 0.52 + 0.48 * Math.cos(az - ang));
+        } else if (micSpec.binaural) {
+          // 反対側耳の頭部影による高域減衰とわずかなレベル差
+          const sinAz = Math.sin(az);
+          if (sinAz > 0.15) {
+            dirGainL *= 1 - 0.28 * sinAz;
+            lpfL *= (1 - 0.45 * sinAz);
+          } else if (sinAz < -0.15) {
+            dirGainR *= 1 + 0.28 * sinAz;
+            lpfR *= (1 + 0.45 * sinAz);
+          }
+          if (Math.abs(az) > Math.PI * 0.55) {
+            lpfL *= 0.72;
+            lpfR *= 0.72;
+          }
+        }
+
+        // 距離減衰と空気吸収の追加ロールオフ
+        const geomAmp = Math.sqrt(Math.max(0.1, 1 - def.wallAlpha)) * Math.min(0.95, d0Avg / dAvg);
+        const airReflScale = 1 / (1 + 0.03 * Math.max(0, dAvg - d0Avg));
+        // 床反射はステージ材による反転傾向＋位相シフト
+        const polarity = def.id === 'floor' ? -0.78 : 1.0;
+
+        return {
+          id: def.id,
+          label: def.label,
+          pos: def.pos,
+          tauL,
+          tauR,
+          itdMs: (tauL - tauR) * 1000,
+          gainL: polarity * geomAmp * dirGainL,
+          gainR: polarity * geomAmp * dirGainR,
+          lpfL: Math.max(1600, lpfL * airReflScale),
+          lpfR: Math.max(1600, lpfR * airReflScale),
+          boundaryHz: def.boundaryHz,
+          azDeg: (az * 180) / Math.PI
+        };
+      });
+
+      return {
+        isAnechoic: false, L, W, H, canopyH, src: [xs, ys, zs], mic: [xm, ym, zm],
+        d0Avg, directTauL, directTauR, directItdMs, airCutoffHz, sourceStereoWidth,
+        t60, dc, drrDb, gDirect, gReverb, reflections
+      };
+    }
+
+    class SpatialHallAcoustics {
+      constructor(ctx, initialParams) {
+        this.ctx = ctx;
+        this.input = ctx.createGain();
+        this.output = ctx.createGain();
+        this.lastPhysics = null;
+        this.lastIrKey = '';
+        this.irTimer = 0;
+
+        this.splitter = ctx.createChannelSplitter(2);
+        this.merger = ctx.createChannelMerger(2);
+        this.input.connect(this.splitter);
+        this.merger.connect(this.output);
+
+        // 1. 直接音パス (完全フィードフォワード: L/R ITDディレイ + ISO空気吸収LPF + DRRゲイン)
+        this.dirDelayL = ctx.createDelay(0.1);
+        this.dirDelayR = ctx.createDelay(0.1);
+        this.dirAirL = ctx.createBiquadFilter();
+        this.dirAirR = ctx.createBiquadFilter();
+        this.dirAirL.type = 'lowpass';
+        this.dirAirR.type = 'lowpass';
+        this.dirAirL.Q.setValueAtTime(-3.0103, ctx.currentTime);
+        this.dirAirR.Q.setValueAtTime(-3.0103, ctx.currentTime);
+        this.dirGainL = ctx.createGain();
+        this.dirGainR = ctx.createGain();
+
+        this.splitter.connect(this.dirDelayL, 0);
+        this.splitter.connect(this.dirDelayR, 1);
+        this.dirDelayL.connect(this.dirAirL);
+        this.dirDelayR.connect(this.dirAirR);
+        this.dirAirL.connect(this.dirGainL);
+        this.dirAirR.connect(this.dirGainR);
+        this.dirGainL.connect(this.merger, 0, 0);
+        this.dirGainR.connect(this.merger, 0, 1);
+
+        // 2. 6壁面の3D鏡像反射 (完全フィードフォワード: L/R ITD遅延 + 境界位相オールパス + 壁/空気吸音LPF)
+        this.erBus = ctx.createGain();
+        this.erBus.gain.setValueAtTime(0.0, ctx.currentTime);
+        this.input.connect(this.erBus);
+
+        this.reflNodes = [];
+        for (let i = 0; i < 6; i++) {
+          const delL = ctx.createDelay(0.8);
+          const delR = ctx.createDelay(0.8);
+          const phaseL = ctx.createBiquadFilter();
+          const phaseR = ctx.createBiquadFilter();
+          phaseL.type = 'allpass';
+          phaseR.type = 'allpass';
+          phaseL.Q.setValueAtTime(0.75, ctx.currentTime);
+          phaseR.Q.setValueAtTime(0.75, ctx.currentTime);
+
+          const lpfL = ctx.createBiquadFilter();
+          const lpfR = ctx.createBiquadFilter();
+          lpfL.type = 'lowpass';
+          lpfR.type = 'lowpass';
+          lpfL.Q.setValueAtTime(-3.0103, ctx.currentTime);
+          lpfR.Q.setValueAtTime(-3.0103, ctx.currentTime);
+
+          const gL = ctx.createGain();
+          const gR = ctx.createGain();
+          gL.gain.setValueAtTime(0.0, ctx.currentTime);
+          gR.gain.setValueAtTime(0.0, ctx.currentTime);
+
+          this.erBus.connect(delL);
+          this.erBus.connect(delR);
+          delL.connect(phaseL);
+          delR.connect(phaseR);
+          phaseL.connect(lpfL);
+          phaseR.connect(lpfR);
+          lpfL.connect(gL);
+          lpfR.connect(gR);
+          gL.connect(this.merger, 0, 0);
+          gR.connect(this.merger, 0, 1);
+
+          this.reflNodes.push({ delL, delR, phaseL, phaseR, lpfL, lpfR, gL, gR });
+        }
+
+        // 3. 後期拡散残響 (FIR ConvolverNode × 2クロスフェード: フィードバックループ完全ゼロのため物理的に発振不可能)
+        // 入力をモノラルへ統合してからステレオ非相関IRへ畳み込むため、左端の低音鍵でも空間全体に広がる
+        this.lateBus = ctx.createGain();
+        this.lateBus.channelCount = 1;
+        this.lateBus.channelCountMode = 'explicit';
+        this.lateBus.gain.setValueAtTime(0.0, ctx.currentTime);
+        this.input.connect(this.lateBus);
+
+        this.convA = ctx.createConvolver();
+        this.convB = ctx.createConvolver();
+        this.convA.normalize = false;
+        this.convB.normalize = false;
+
+        this.convGainA = ctx.createGain();
+        this.convGainB = ctx.createGain();
+        this.convGainA.gain.setValueAtTime(1.0, ctx.currentTime);
+        this.convGainB.gain.setValueAtTime(0.0, ctx.currentTime);
+        this.activeConv = 'A';
+
+        this.lateBus.connect(this.convA);
+        this.lateBus.connect(this.convB);
+        this.convA.connect(this.convGainA);
+        this.convB.connect(this.convGainB);
+        this.convGainA.connect(this.output);
+        this.convGainB.connect(this.output);
+
+        this.updateFromParams(initialParams, true);
+      }
+
+      // オフライン8ch直交ハウスホルダーFDN + Schroederオールパス位相拡散によるステレオIR生成
+      generateHallIrBuffer(phys, params) {
+        const sr = this.ctx.sampleRate;
+        const dur = Math.min(5.2, Math.max(0.6, phys.t60 * 1.32));
+        const N = Math.floor(sr * dur);
+        const buf = this.ctx.createBuffer(2, N, sr);
+        const irL = buf.getChannelData(0);
+        const irR = buf.getChannelData(1);
+
+        const sizeScale = Math.pow(params.hallScale, 0.33);
+        const baseMs = [29.1, 35.3, 41.6, 48.8, 56.5, 65.0, 73.8, 83.9];
+        const d0 = Math.max(64, Math.round((baseMs[0] * sizeScale / 1000) * sr));
+        const d1 = Math.max(64, Math.round((baseMs[1] * sizeScale / 1000) * sr));
+        const d2 = Math.max(64, Math.round((baseMs[2] * sizeScale / 1000) * sr));
+        const d3 = Math.max(64, Math.round((baseMs[3] * sizeScale / 1000) * sr));
+        const d4 = Math.max(64, Math.round((baseMs[4] * sizeScale / 1000) * sr));
+        const d5 = Math.max(64, Math.round((baseMs[5] * sizeScale / 1000) * sr));
+        const d6 = Math.max(64, Math.round((baseMs[6] * sizeScale / 1000) * sr));
+        const d7 = Math.max(64, Math.round((baseMs[7] * sizeScale / 1000) * sr));
+
+        const r0 = new Float32Array(d0), r1 = new Float32Array(d1), r2 = new Float32Array(d2), r3 = new Float32Array(d3);
+        const r4 = new Float32Array(d4), r5 = new Float32Array(d5), r6 = new Float32Array(d6), r7 = new Float32Array(d7);
+        let p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0, p7 = 0;
+
+        const g0 = Math.pow(10, (-3 * d0) / (sr * phys.t60));
+        const g1 = Math.pow(10, (-3 * d1) / (sr * phys.t60));
+        const g2 = Math.pow(10, (-3 * d2) / (sr * phys.t60));
+        const g3 = Math.pow(10, (-3 * d3) / (sr * phys.t60));
+        const g4 = Math.pow(10, (-3 * d4) / (sr * phys.t60));
+        const g5 = Math.pow(10, (-3 * d5) / (sr * phys.t60));
+        const g6 = Math.pow(10, (-3 * d6) / (sr * phys.t60));
+        const g7 = Math.pow(10, (-3 * d7) / (sr * phys.t60));
+
+        // 1次空気・壁吸音ローパス (|H| <= 1.0 厳密受動)
+        const aDamp = Math.min(0.55, 0.12 + params.wallAbsorb * 0.85);
+        const bDamp = 1.0 - aDamp;
+        let lp0 = 0, lp1 = 0, lp2 = 0, lp3 = 0, lp4 = 0, lp5 = 0, lp6 = 0, lp7 = 0;
+
+        // 初期反射の直後から滑らかに立ち上がる拡散クラウド
+        const itdgSamp = Math.min(Math.floor(N * 0.25), Math.round(0.022 * sizeScale * sr));
+        const excLen = Math.round(0.028 * sr);
+        let seed = 1234567;
+
+        const tmpL = new Float32Array(N);
+        const tmpR = new Float32Array(N);
+
+        for (let n = itdgSamp; n < N; n++) {
+          let exc = 0.0;
+          const rel = n - itdgSamp;
+          if (rel < excLen) {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            const rnd = (seed / 2147483648.0) - 1.0;
+            const win = 0.5 * (1.0 - Math.cos((2.0 * Math.PI * rel) / excLen));
+            exc = rnd * win * 0.35;
+          }
+
+          lp0 = bDamp * r0[p0] + aDamp * lp0; const v0 = lp0 * g0;
+          lp1 = bDamp * r1[p1] + aDamp * lp1; const v1 = lp1 * g1;
+          lp2 = bDamp * r2[p2] + aDamp * lp2; const v2 = lp2 * g2;
+          lp3 = bDamp * r3[p3] + aDamp * lp3; const v3 = lp3 * g3;
+          lp4 = bDamp * r4[p4] + aDamp * lp4; const v4 = lp4 * g4;
+          lp5 = bDamp * r5[p5] + aDamp * lp5; const v5 = lp5 * g5;
+          lp6 = bDamp * r6[p6] + aDamp * lp6; const v6 = lp6 * g6;
+          lp7 = bDamp * r7[p7] + aDamp * lp7; const v7 = lp7 * g7;
+
+          const hShift = 0.25 * (v0 + v1 + v2 + v3 + v4 + v5 + v6 + v7);
+
+          r0[p0] = (v0 - hShift) + exc;  if (++p0 >= d0) p0 = 0;
+          r1[p1] = (v1 - hShift) - exc;  if (++p1 >= d1) p1 = 0;
+          r2[p2] = (v2 - hShift) + exc;  if (++p2 >= d2) p2 = 0;
+          r3[p3] = (v3 - hShift) - exc;  if (++p3 >= d3) p3 = 0;
+          r4[p4] = (v4 - hShift) + exc;  if (++p4 >= d4) p4 = 0;
+          r5[p5] = (v5 - hShift) - exc;  if (++p5 >= d5) p5 = 0;
+          r6[p6] = (v6 - hShift) + exc;  if (++p6 >= d6) p6 = 0;
+          r7[p7] = (v7 - hShift) - exc;  if (++p7 >= d7) p7 = 0;
+
+          tmpL[n] = v0 - v1 + v2 - v3 + v4 - v5 + v6 - v7;
+          tmpR[n] = v0 + v1 - v2 - v3 + v4 + v5 - v6 - v7;
+        }
+
+        // 2段Schroederオールパス位相拡散 (左右独立の素数遅延)
+        if (params.phaseDiffusion > 0.02) {
+          const apPass = (arr, apLen, coeff) => {
+            const apBuf = new Float32Array(apLen);
+            let idx = 0;
+            for (let n = 0; n < N; n++) {
+              const x = arr[n];
+              const dv = apBuf[idx];
+              const y = -coeff * x + dv;
+              apBuf[idx] = x + coeff * y;
+              if (++idx >= apLen) idx = 0;
+              arr[n] = y;
+            }
+          };
+          const c1 = 0.56 * params.phaseDiffusion;
+          const c2 = 0.46 * params.phaseDiffusion;
+          apPass(tmpL, 131, c1); apPass(tmpL, 317, c2);
+          apPass(tmpR, 157, c1); apPass(tmpR, 373, c2);
+        }
+
+        // 末尾120msを完全なゼロへ滑らかに窓掛け
+        const fadeLen = Math.min(Math.floor(N * 0.25), Math.round(0.12 * sr));
+        const fadeStart = N - fadeLen;
+        for (let k = 0; k < fadeLen; k++) {
+          const w = 0.5 * (1.0 + Math.cos((Math.PI * k) / fadeLen));
+          tmpL[fadeStart + k] *= w;
+          tmpR[fadeStart + k] *= w;
+        }
+
+        // 物理的拡散エネルギー正規化 (normalize=false と組み合わせて DRR を厳密に保つ)
+        let energy = 0.0;
+        for (let n = 0; n < N; n++) {
+          energy += tmpL[n] * tmpL[n] + tmpR[n] * tmpR[n];
+        }
+        energy *= 0.5;
+        const targetEnergy = 0.30 * phys.t60;
+        const scaleNorm = Math.sqrt(targetEnergy / Math.max(1e-12, energy));
+
+        for (let n = 0; n < N; n++) {
+          irL[n] = tmpL[n] * scaleNorm;
+          irR[n] = tmpR[n] * scaleNorm;
+        }
+
+        return buf;
+      }
+
+      swapConvolverBuffer(phys, params, immediate) {
+        const key = `${params.spaceType}|${params.hallScale.toFixed(2)}|${params.wallAbsorb.toFixed(2)}|${params.phaseDiffusion.toFixed(2)}`;
+        if (key === this.lastIrKey) return;
+        this.lastIrKey = key;
+
+        const irBuf = this.generateHallIrBuffer(phys, params);
+        const now = this.ctx.currentTime;
+        const fadeT = immediate ? 0.0 : 0.02;
+
+        if (this.activeConv === 'A') {
+          this.convB.buffer = irBuf;
+          if (immediate) {
+            this.convGainB.gain.setValueAtTime(1.0, now);
+            this.convGainA.gain.setValueAtTime(0.0, now);
+          } else {
+            this.convGainB.gain.setTargetAtTime(1.0, now, fadeT);
+            this.convGainA.gain.setTargetAtTime(0.0, now, fadeT);
+          }
+          this.activeConv = 'B';
+        } else {
+          this.convA.buffer = irBuf;
+          if (immediate) {
+            this.convGainA.gain.setValueAtTime(1.0, now);
+            this.convGainB.gain.setValueAtTime(0.0, now);
+          } else {
+            this.convGainA.gain.setTargetAtTime(1.0, now, fadeT);
+            this.convGainB.gain.setTargetAtTime(0.0, now, fadeT);
+          }
+          this.activeConv = 'A';
+        }
+      }
+
+      updateFromParams(params, immediate = false) {
+        const phys = computeRoomPhysics(params);
+        this.lastPhysics = phys;
+        const now = this.ctx.currentTime;
+        const setParam = (param, val) => {
+          if (immediate) param.setValueAtTime(val, now);
+          else param.setTargetAtTime(val, now, 0.02);
+        };
+
+        // 直接音ITDと空気高域吸収
+        setParam(this.dirDelayL.delayTime, phys.directTauL);
+        setParam(this.dirDelayR.delayTime, phys.directTauR);
+        setParam(this.dirAirL.frequency, phys.airCutoffHz);
+        setParam(this.dirAirR.frequency, phys.airCutoffHz);
+
+        if (phys.isAnechoic) {
+          setParam(this.dirGainL.gain, 1.0);
+          setParam(this.dirGainR.gain, 1.0);
+          setParam(this.erBus.gain, 0.0);
+          setParam(this.lateBus.gain, 0.0);
+          this.reflNodes.forEach(n => {
+            setParam(n.gL.gain, 0.0);
+            setParam(n.gR.gain, 0.0);
+          });
+          return phys;
+        }
+
+        setParam(this.dirGainL.gain, phys.gDirect);
+        setParam(this.dirGainR.gain, phys.gDirect);
+
+        // 初期反射ゲイン (完全フィードフォワード)
+        const erScale = 0.65 * Math.max(0.22, phys.gReverb);
+        setParam(this.erBus.gain, erScale);
+
+        phys.reflections.forEach((ref, idx) => {
+          const n = this.reflNodes[idx];
+          if (!n) return;
+          setParam(n.delL.delayTime, ref.tauL);
+          setParam(n.delR.delayTime, ref.tauR);
+          setParam(n.phaseL.frequency, ref.boundaryHz);
+          setParam(n.phaseR.frequency, ref.boundaryHz * 1.04);
+          setParam(n.lpfL.frequency, ref.lpfL);
+          setParam(n.lpfR.frequency, ref.lpfR);
+          setParam(n.gL.gain, ref.gainL);
+          setParam(n.gR.gain, ref.gainR);
+        });
+
+        // 後期Convolver残響レベル (DRR比に連動)
+        setParam(this.lateBus.gain, phys.gReverb * 0.85);
+
+        if (immediate) {
+          this.swapConvolverBuffer(phys, params, true);
+        } else {
+          clearTimeout(this.irTimer);
+          this.irTimer = setTimeout(() => {
+            if (this.ctx && this.lastPhysics && !this.lastPhysics.isAnechoic) {
+              this.swapConvolverBuffer(this.lastPhysics, params, false);
+            }
+          }, 120);
+        }
+
+        return phys;
+      }
+    }
+
+    /* =========================================================================
+       3. Schiedmayer 5.5-Octave Authentic Celesta + 板の残留振動エンジン
        ========================================================================= */
     class CelestaGrandEngine {
       constructor() {
@@ -928,28 +1956,59 @@
         this.masterGain = null;
         this.compressor = null;
         this.analyser = null;
+        this.hall = null;
+        this.lspBus = null;
+        this.lspSum = null;
+        this.lspFilters = [];
+        this.sympBus = null;
+        this.thumpBuffer = null;
+        this.releaseBuffer = null;
+
         this.pedalDown = false;
         this.activeVoices = new Map();
+        this.soundingNotes = new Set();
+        this.lastOnsetTime = 0;
+        this.limiter = null;
+        this.preLimitGain = null;
 
         this.params = {
+          spaceType: 'shoebox',
+          micArray: 'ortf',
+          micDist: 6.5,
+          micOffset: 0.0,
+          hallScale: 1.0,
+          wallAbsorb: 0.22,
+          phaseDiffusion: 0.80,
+
+          // 板の残った振動
+          residualTail: 0.70,
+          modalBeating: 0.55,
+          postDamperResidual: 0.60,
+          sympatheticLevel: 0.50,
+
+          // 調律・マレット・音板・共鳴箱・LSP筐体
+          refA4: 442,
+          actionNoise: 0.40,
           malletMass: 0.0036,
           hertzK: 8.0e7,
           sparkleLevel: 0.80,
-          undercutFactor: 3.00,
+          undercutFactor: 2.756,
           metallicLevel: 0.75,
-          damperPlateDecay: 0.04,
-          f1Decay: 1.50,
-          resQ: 24.0,
-          radRatio: 0.85,
+          damperPlateDecay: 0.045,
+          f1Decay: 1.35,
+          resQ: 22.0,
           lspCoupling: 0.75,
           viscousGamma: 0.993
         };
 
-        this.lspCenters = [
-          85, 140, 210, 320, 440,
-          523, 659, 784, 880, 1046, 1200, 1390, 1580, 1760, 1970, 2093, 2300, 2500, 2750,
-          3100, 3600, 4200, 5000, 6200, 7800
+        this.lspModes = [
+          { fc: 85, q: 10 }, { fc: 140, q: 12 }, { fc: 210, q: 14 }, { fc: 310, q: 16 }, { fc: 430, q: 18 },
+          { fc: 523, q: 20 }, { fc: 659, q: 20 }, { fc: 784, q: 21 }, { fc: 880, q: 21 }, { fc: 1046, q: 22 },
+          { fc: 1210, q: 22 }, { fc: 1390, q: 21 }, { fc: 1580, q: 20 }, { fc: 1760, q: 20 }, { fc: 1970, q: 19 },
+          { fc: 2120, q: 18 }, { fc: 2340, q: 17 }, { fc: 2560, q: 16 }, { fc: 2800, q: 15 },
+          { fc: 3150, q: 12 }, { fc: 3650, q: 10 }, { fc: 4250, q: 9 }, { fc: 5050, q: 8 }, { fc: 6200, q: 7 }, { fc: 7800, q: 6 }
         ];
+        this.lspCenters = this.lspModes.map(m => m.fc);
       }
 
       init() {
@@ -958,50 +2017,145 @@
         this.ctx = new AudioContext({ latencyHint: 'interactive' });
 
         this.analyser = this.ctx.createAnalyser();
-        this.analyser.fftSize = 1024;
-        this.analyser.smoothingTimeConstant = 0.8;
+        this.analyser.fftSize = 4096;
+        this.analyser.smoothingTimeConstant = 0.78;
 
         this.masterGain = this.ctx.createGain();
         this.masterGain.gain.setValueAtTime(0.36, this.ctx.currentTime);
 
         this.compressor = this.ctx.createDynamicsCompressor();
-        this.compressor.threshold.setValueAtTime(-1.0, this.ctx.currentTime);
-        this.compressor.knee.setValueAtTime(3.0, this.ctx.currentTime);
-        this.compressor.ratio.setValueAtTime(20.0, this.ctx.currentTime);
+        this.compressor.threshold.setValueAtTime(-2.0, this.ctx.currentTime);
+        this.compressor.knee.setValueAtTime(4.0, this.ctx.currentTime);
+        this.compressor.ratio.setValueAtTime(16.0, this.ctx.currentTime);
         this.compressor.attack.setValueAtTime(0.001, this.ctx.currentTime);
-        this.compressor.release.setValueAtTime(0.05, this.ctx.currentTime);
+        this.compressor.release.setValueAtTime(0.08, this.ctx.currentTime);
 
+        // 絶対安全なソフトリミッタ (|x|<=0.65は1:1完全線形無歪、過渡スパイクも必ず0.92未満に丸める)
+        this.preLimitGain = this.ctx.createGain();
+        this.preLimitGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+        this.limiter = this.ctx.createWaveShaper();
+        const curveN = 16385;
+        const curve = new Float32Array(curveN);
+        const thresh = 0.65, ceil = 0.92, rangeMax = 4.0;
+        for (let i = 0; i < curveN; i++) {
+          const s = (i * 2.0) / (curveN - 1) - 1.0;
+          const x = s * rangeMax;
+          const ax = Math.abs(x);
+          if (ax <= thresh) curve[i] = x;
+          else curve[i] = Math.sign(x) * (thresh + (ceil - thresh) * Math.tanh((ax - thresh) / (ceil - thresh)));
+        }
+        this.limiter.curve = curve;
+        this.limiter.oversample = '2x';
+
+        this.buildActionBuffers();
+        this.hall = new SpatialHallAcoustics(this.ctx, this.params);
+
+        // 50次 LSP 木製キャビネット並列共鳴
         this.lspBus = this.ctx.createGain();
-        this.lspBus.gain.setValueAtTime(this.params.lspCoupling, this.ctx.currentTime);
+        this.lspSum = this.ctx.createGain();
+        this.lspFilters = [];
 
-        const lspSum = this.ctx.createGain();
-        lspSum.gain.setValueAtTime(0.16, this.ctx.currentTime);
-
-        for (let i = 0; i < 25; i++) {
-          const fc = this.lspCenters[i];
+        for (let i = 0; i < this.lspModes.length; i++) {
+          const { fc, q } = this.lspModes[i];
           const filter = this.ctx.createBiquadFilter();
           filter.type = 'bandpass';
           filter.frequency.setValueAtTime(fc, this.ctx.currentTime);
-          filter.Q.setValueAtTime(i < 5 ? 12.0 : (i < 19 ? 22.0 : 8.0), this.ctx.currentTime);
 
           const gain = this.ctx.createGain();
-          const logDiff = Math.log(fc) - Math.log(1200);
-          const weight = Math.exp(-(logDiff * logDiff) / (2 * 0.85 * 0.85));
-          gain.gain.setValueAtTime(weight * 0.40, this.ctx.currentTime);
+          const logDiff = Math.log(fc) - Math.log(1150);
+          const weight = Math.exp(-(logDiff * logDiff) / (2 * 0.92 * 0.92));
+          gain.gain.setValueAtTime(weight * 0.42, this.ctx.currentTime);
 
           this.lspBus.connect(filter);
           filter.connect(gain);
-          gain.connect(lspSum);
+          gain.connect(this.lspSum);
+          this.lspFilters.push({ filter, baseQ: q });
         }
 
-        lspSum.connect(this.masterGain);
+        // フレーム共有フェルトレール上の構造伝導共鳴バンク (無響室でも機能する楽器内部結合)
+        this.sympBus = this.ctx.createGain();
+        this.sympSum = this.ctx.createGain();
+        const railModes = [196, 293.7, 392, 587.3, 880, 1318.5];
+        railModes.forEach(fc => {
+          const rf = this.ctx.createBiquadFilter();
+          rf.type = 'bandpass';
+          rf.frequency.setValueAtTime(fc, this.ctx.currentTime);
+          rf.Q.setValueAtTime(28, this.ctx.currentTime);
+          this.sympBus.connect(rf);
+          rf.connect(this.sympSum);
+        });
+
+        this.updateCabinetParams();
+
+        this.lspSum.connect(this.hall.input);
+        this.sympSum.connect(this.hall.input);
+        this.hall.output.connect(this.masterGain);
         this.masterGain.connect(this.compressor);
-        this.compressor.connect(this.analyser);
+        this.compressor.connect(this.preLimitGain);
+        this.preLimitGain.connect(this.limiter);
+        this.limiter.connect(this.analyser);
         this.analyser.connect(this.ctx.destination);
       }
 
+      buildActionBuffers() {
+        const sr = this.ctx.sampleRate;
+
+        const len1 = Math.floor(sr * 0.040);
+        this.thumpBuffer = this.ctx.createBuffer(1, len1, sr);
+        const d1 = this.thumpBuffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < len1; i++) {
+          const w = Math.random() * 2 - 1;
+          b0 = 0.997 * b0 + w * 0.099;
+          b1 = 0.985 * b1 + w * 0.095;
+          b2 = 0.950 * b2 + w * 0.075;
+          const env = Math.exp(-i / (sr * 0.0055));
+          d1[i] = (b0 + b1 + b2 + w * 0.18) * env * 0.65;
+        }
+
+        const len2 = Math.floor(sr * 0.026);
+        this.releaseBuffer = this.ctx.createBuffer(1, len2, sr);
+        const d2 = this.releaseBuffer.getChannelData(0);
+        let lp = 0;
+        for (let i = 0; i < len2; i++) {
+          const w = Math.random() * 2 - 1;
+          lp = lp * 0.85 + w * 0.15;
+          const env = Math.sin(Math.PI * Math.min(1, i / (sr * 0.004))) * Math.exp(-i / (sr * 0.006));
+          d2[i] = lp * env * 1.4;
+        }
+      }
+
+      updateRoom() {
+        const phys = this.hall ? this.hall.updateFromParams(this.params) : computeRoomPhysics(this.params);
+        return phys;
+      }
+
+      updateCabinetParams() {
+        if (!this.ctx || !this.lspBus) return;
+        const now = this.ctx.currentTime;
+        const gamma = this.params.viscousGamma;
+        const pedalBoost = this.pedalDown ? 1.12 : 1.0;
+
+        const qScale = ((1 - 0.993) / Math.max(0.0018, 1 - gamma)) * pedalBoost;
+        this.lspFilters.forEach(({ filter, baseQ }) => {
+          const targetQ = Math.max(3.5, Math.min(48, baseQ * qScale));
+          filter.Q.setTargetAtTime(targetQ, now, 0.02);
+        });
+
+        this.lspBus.gain.setTargetAtTime(this.params.lspCoupling, now, 0.02);
+        const compGain = 0.16 / Math.sqrt(Math.max(0.5, qScale));
+        this.lspSum.gain.setTargetAtTime(compGain, now, 0.02);
+
+        if (this.sympBus && this.sympSum) {
+          this.sympBus.gain.setTargetAtTime(this.params.sympatheticLevel * 0.08, now, 0.02);
+          this.sympSum.gain.setTargetAtTime(this.pedalDown ? 0.45 : 0.22, now, 0.02);
+        }
+      }
+
       midiToFreq(midi) {
-        return 440 * Math.pow(2, (midi - 69) / 12);
+        const seed = Math.sin(midi * 12.9898) * 43758.5453;
+        const microCents = ((seed - Math.floor(seed)) - 0.5) * 0.70;
+        return this.params.refA4 * Math.pow(2, (midi - 69 + microCents / 100) / 12);
       }
 
       noteOn(midi, velocity = 0.85) {
@@ -1011,138 +2165,378 @@
         if (this.activeVoices.has(midi)) {
           this.noteOff(midi, true);
         }
+        if (this.activeVoices.size >= 32) {
+          const oldestKey = this.activeVoices.keys().next().value;
+          if (oldestKey !== undefined) this.noteOff(oldestKey, true);
+        }
 
-        const now = this.ctx.currentTime;
+        const rawNow = this.ctx.currentTime;
+        // 処理落ち時の同一サンプル位相重なり・過去時刻ジャンプを防ぐ4ms先読み＋1.5msマイクロ分散
+        const t0 = Math.min(rawNow + 0.025, Math.max(rawNow + 0.004, this.lastOnsetTime + 0.0015));
+        this.lastOnsetTime = t0;
+
+        const nyquistLimit = this.ctx.sampleRate * 0.45;
         const f0 = this.midiToFreq(midi);
+        const fNorm = Math.max(0.0, Math.min(1.0, (Math.log2(f0) - Math.log2(131.4)) / 5.417));
+        const vSafe = Math.max(0.15, Math.min(1.0, velocity));
+        // 同時発音数に応じた自然なヘッドルーム制御
+        const polyScale = 1.0 / Math.sqrt(1 + this.activeVoices.size * 0.18);
+        const dynGain = (0.26 + 0.74 * Math.pow(vSafe, 1.35)) * polyScale;
 
-        const fNorm = Math.max(0.0, Math.min(1.0, (Math.log2(f0) - Math.log2(130.81)) / 5.42));
+        const roomPhys = this.hall?.lastPhysics || computeRoomPhysics(this.params);
+        const panValue = (fNorm - 0.5) * 0.88 * roomPhys.sourceStereoWidth;
+        const voicePanner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+        if (voicePanner) voicePanner.pan.setValueAtTime(panValue, t0);
 
-        const f1 = f0;
-        const f2 = f0 * this.params.undercutFactor;
-        const f3 = f0 * 5.404;
-        const f4 = f0 * 8.933;
+        // 1. ヘルツ非線形接触力学
+        const mRatio = (this.params.malletMass / 0.0036) * (1.25 - 0.55 * fNorm);
+        const kRatio = (this.params.hertzK / 8.0e7) * (0.80 + 0.80 * fNorm);
+        const tauC = 0.0025 * Math.pow(0.14, fNorm) * Math.pow(mRatio / kRatio, 0.40) * Math.pow(vSafe, -0.20);
+        const fMallet = 1.6 / tauC;
+        const tAtt = Math.max(0.0020, 0.45 * tauC);
+        const malletWeight = (freq) => 1.0 / (1.0 + Math.pow(freq / fMallet, 2.0));
+
+        // 2. 鋼板連続体振動モード
+        const r2 = this.params.undercutFactor;
+        const r3 = 5.404 + (r2 - 2.756) * 1.9;
+        const r4 = 8.933 + (r2 - 2.756) * 3.1;
+        const r5 = 13.344 + (r2 - 2.756) * 4.2;
+        const rTors = 2.04;
 
         const mLevel = this.params.metallicLevel;
         const sparkle = this.params.sparkleLevel;
-        const a1 = 1.0;
-        const a2 = (0.75 - fNorm * 0.35) * mLevel * sparkle;
-        const a3 = (0.35 - fNorm * 0.20) * mLevel * sparkle;
-        const a4 = (0.18 - fNorm * 0.12) * mLevel * sparkle;
-
-        const tau1 = 3.6 - fNorm * 2.0;
-        const tau2 = 0.35 - fNorm * 0.25;
-        const tau3 = 0.10 - fNorm * 0.07;
-        const tau4 = 0.04 - fNorm * 0.02;
 
         const oscList = [];
-        const metalGains = [];
+        const fastPlateGains = [];
+        const slowPlateGains = [];
+        const allEnvGains = [];
 
-        const metalConfigs = [
-          { freq: f2, amp: a2, tau: tau2 },
-          { freq: f3, amp: a3, tau: tau3 },
-          { freq: f4, amp: a4, tau: tau4 }
+        const voicePlateBus = this.ctx.createGain();
+        voicePlateBus.gain.value = dynGain;
+        voicePlateBus.gain.setValueAtTime(dynGain, t0);
+
+        const highModes = [
+          { freq: f0 * r2,    amp: (0.72 - fNorm * 0.25) * mLevel * malletWeight(f0 * r2) * (0.7 + 0.3 * sparkle),   tauFast: Math.max(0.06, 0.36 - fNorm * 0.27), isMode2: true },
+          { freq: f0 * rTors, amp: (0.09 * (1 - fNorm * 0.75)) * mLevel * malletWeight(f0 * rTors),                     tauFast: Math.max(0.04, 0.20 - fNorm * 0.14), isMode2: false },
+          { freq: f0 * r3,    amp: (0.36 - fNorm * 0.18) * mLevel * malletWeight(f0 * r3) * (0.65 + 0.35 * sparkle),  tauFast: Math.max(0.025, 0.11 - fNorm * 0.08), isMode2: false },
+          { freq: f0 * r4,    amp: (0.18 - fNorm * 0.10) * mLevel * malletWeight(f0 * r4) * (0.6 + 0.4 * sparkle),    tauFast: Math.max(0.015, 0.045 - fNorm * 0.03), isMode2: false },
+          { freq: f0 * r5,    amp: (0.09 - fNorm * 0.06) * mLevel * malletWeight(f0 * r5) * sparkle,                  tauFast: Math.max(0.010, 0.025 - fNorm * 0.015), isMode2: false }
         ];
 
-        const voiceMetalBus = this.ctx.createGain();
-        voiceMetalBus.gain.setValueAtTime(velocity, now);
-
-        metalConfigs.forEach(cfg => {
-          if (cfg.freq > 19500) return;
+        highModes.forEach(cfg => {
+          if (cfg.freq > nyquistLimit || cfg.amp < 0.002) return;
           const osc = this.ctx.createOscillator();
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(cfg.freq, now);
+          osc.frequency.setValueAtTime(cfg.freq, t0);
 
           const g = this.ctx.createGain();
-          g.gain.setValueAtTime(0.00001, now);
-          g.gain.linearRampToValueAtTime(cfg.amp, now + 0.0015);
-          g.gain.setTargetAtTime(0.00001, now + 0.0015, cfg.tau);
+          g.gain.value = 0.00001; // 重要: cancelScheduledValues時に1.0へ戻るバグを防ぐ
+          g.gain.setValueAtTime(0.00001, t0);
+          g.gain.linearRampToValueAtTime(cfg.amp, t0 + tAtt);
+          g.gain.setTargetAtTime(0.00001, t0 + tAtt, cfg.tauFast);
 
           osc.connect(g);
-          g.connect(voiceMetalBus);
-          osc.start(now);
+          g.connect(voicePlateBus);
+          osc.start(t0);
           oscList.push(osc);
-          metalGains.push(g);
+          allEnvGains.push(g);
+
+          if (cfg.isMode2) {
+            slowPlateGains.push({ gainNode: g, amp: cfg.amp });
+
+            if (this.params.modalBeating > 0.02) {
+              const splitOsc2 = this.ctx.createOscillator();
+              splitOsc2.type = 'sine';
+              splitOsc2.frequency.setValueAtTime(cfg.freq + (0.32 + 0.48 * fNorm) * this.params.modalBeating, t0);
+              const sg2 = this.ctx.createGain();
+              const sAmp2 = cfg.amp * 0.24 * this.params.modalBeating;
+              sg2.gain.value = 0.00001;
+              sg2.gain.setValueAtTime(0.00001, t0);
+              sg2.gain.linearRampToValueAtTime(sAmp2, t0 + tAtt);
+              sg2.gain.setTargetAtTime(0.00001, t0 + tAtt, cfg.tauFast * 1.45);
+              splitOsc2.connect(sg2);
+              sg2.connect(voicePlateBus);
+              splitOsc2.start(t0);
+              oscList.push(splitOsc2);
+              allEnvGains.push(sg2);
+              slowPlateGains.push({ gainNode: sg2, amp: sAmp2 });
+            }
+          } else {
+            fastPlateGains.push(g);
+          }
         });
 
-        if (fNorm > 0.35) {
+        // 高音域鋼板接触クリック (ステップ跳躍を避け0.6msで立ち上げ)
+        if (fNorm > 0.30 && sparkle > 0.15) {
           const clickOsc = this.ctx.createOscillator();
           clickOsc.type = 'sine';
-          clickOsc.frequency.setValueAtTime(Math.min(7500, f0 * 1.5), now);
-
+          clickOsc.frequency.setValueAtTime(Math.min(nyquistLimit, Math.min(8200, f0 * 1.48)), t0);
           const clickGain = this.ctx.createGain();
-          const clickLevel = (fNorm * 0.22) * sparkle * velocity;
-          clickGain.gain.setValueAtTime(clickLevel, now);
-          clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.008);
-
+          const clickLevel = Math.max(0.0002, (fNorm * 0.18) * sparkle * dynGain * (0.7 + 0.3 * (this.params.hertzK / 15e7)));
+          clickGain.gain.value = 0.00001;
+          clickGain.gain.setValueAtTime(0.00001, t0);
+          clickGain.gain.linearRampToValueAtTime(clickLevel, t0 + 0.0006);
+          clickGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.0085);
           clickOsc.connect(clickGain);
-          clickGain.connect(this.masterGain);
-          clickOsc.start(now);
-          clickOsc.stop(now + 0.012);
+          clickGain.connect(voicePlateBus);
+          clickOsc.start(t0);
+          clickOsc.stop(t0 + 0.013);
           oscList.push(clickOsc);
+          allEnvGains.push(clickGain);
         }
 
-        const radRatio = this.params.radRatio;
-        const directRatio = 1.0 - radRatio;
+        // 打鍵機構ノイズ
+        let actionSource = null;
+        if (this.params.actionNoise > 0.01 && this.thumpBuffer) {
+          actionSource = this.ctx.createBufferSource();
+          actionSource.buffer = this.thumpBuffer;
+          const actionBp = this.ctx.createBiquadFilter();
+          actionBp.type = 'bandpass';
+          actionBp.frequency.setValueAtTime(260 + fNorm * 580, t0);
+          actionBp.Q.setValueAtTime(1.4, t0);
+          const actionGain = this.ctx.createGain();
+          const aLevel = this.params.actionNoise * (0.14 + 0.12 * vSafe);
+          actionGain.gain.value = aLevel;
+          actionGain.gain.setValueAtTime(aLevel, t0);
+          actionSource.connect(actionBp);
+          actionBp.connect(actionGain);
+          actionGain.connect(voicePlateBus);
+          actionSource.start(t0);
+        }
 
+        // 3. 基音 f1
         const osc1 = this.ctx.createOscillator();
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(f1, now);
+        if (fNorm < 0.45 && vSafe > 0.55) {
+          osc1.frequency.setValueAtTime(f0 * (1 + 0.0009 * vSafe * (1 - fNorm)), t0);
+          osc1.frequency.exponentialRampToValueAtTime(f0, t0 + 0.025);
+        } else {
+          osc1.frequency.setValueAtTime(f0, t0);
+        }
 
-        const gPlate = this.ctx.createGain();
-        gPlate.gain.setValueAtTime(0.00001, now);
-        gPlate.gain.linearRampToValueAtTime(a1 * directRatio * velocity, now + 0.002);
-        gPlate.gain.setTargetAtTime(0.00001, now + 0.002, tau1);
+        const tau1Fast = Math.max(0.28, 2.15 - fNorm * 1.70);
+        const tau1Slow = Math.max(0.60, (4.8 - fNorm * 3.6) * (0.5 + 0.8 * this.params.residualTail));
+
+        const gPlateFast = this.ctx.createGain();
+        gPlateFast.gain.value = 0.00001;
+        gPlateFast.gain.setValueAtTime(0.00001, t0);
+        gPlateFast.gain.linearRampToValueAtTime(0.22 * dynGain, t0 + tAtt);
+        gPlateFast.gain.setTargetAtTime(0.00001, t0 + tAtt, tau1Fast);
+        osc1.connect(gPlateFast);
+        fastPlateGains.push(gPlateFast);
+        allEnvGains.push(gPlateFast);
+
+        const resAmp = (0.04 + 0.14 * this.params.residualTail) * dynGain;
+        const gPlateResidual = this.ctx.createGain();
+        gPlateResidual.gain.value = 0.00001;
+        gPlateResidual.gain.setValueAtTime(0.00001, t0);
+        gPlateResidual.gain.linearRampToValueAtTime(resAmp, t0 + tAtt);
+        gPlateResidual.gain.setTargetAtTime(0.00001, t0 + tAtt, tau1Slow);
+        osc1.connect(gPlateResidual);
+        slowPlateGains.push({ gainNode: gPlateResidual, amp: resAmp });
+        allEnvGains.push(gPlateResidual);
+
+        if (this.params.modalBeating > 0.02) {
+          const osc1Split = this.ctx.createOscillator();
+          osc1Split.type = 'sine';
+          const beatHz = (0.16 + 0.42 * fNorm) * this.params.modalBeating;
+          osc1Split.frequency.setValueAtTime(f0 + beatHz, t0);
+          const gSplit1 = this.ctx.createGain();
+          const sAmp1 = 0.08 * this.params.modalBeating * dynGain;
+          gSplit1.gain.value = 0.00001;
+          gSplit1.gain.setValueAtTime(0.00001, t0);
+          gSplit1.gain.linearRampToValueAtTime(sAmp1, t0 + tAtt);
+          gSplit1.gain.setTargetAtTime(0.00001, t0 + tAtt, tau1Slow * 0.9);
+          osc1Split.connect(gSplit1);
+          gSplit1.connect(voicePlateBus);
+          osc1Split.start(t0);
+          oscList.push(osc1Split);
+          allEnvGains.push(gSplit1);
+          slowPlateGains.push({ gainNode: gSplit1, amp: sAmp1 });
+        }
+
+        const qBox = Math.max(5.0, this.params.resQ * (0.40 + 0.60 * fNorm));
+        const resonatorFilter = this.ctx.createBiquadFilter();
+        resonatorFilter.type = 'bandpass';
+        resonatorFilter.frequency.setValueAtTime(f0, t0);
+        resonatorFilter.Q.setValueAtTime(qBox, t0);
 
         const gPipe = this.ctx.createGain();
-        gPipe.gain.setValueAtTime(0.00001, now);
-        gPipe.gain.linearRampToValueAtTime(a1 * radRatio * velocity, now + 0.0025);
-        gPipe.gain.setTargetAtTime(0.00001, now + 0.0025, tau1);
+        gPipe.gain.value = 0.00001;
+        gPipe.gain.setValueAtTime(0.00001, t0);
+        gPipe.gain.linearRampToValueAtTime(0.74 * dynGain, t0 + tAtt * 1.15);
+        gPipe.gain.setTargetAtTime(0.00001, t0 + tAtt * 1.15, tau1Fast * 1.25);
+        allEnvGains.push(gPipe);
 
-        osc1.connect(gPlate);
-        osc1.connect(gPipe);
-        osc1.start(now);
+        osc1.connect(resonatorFilter);
+        if (actionSource) {
+          const boxExcite = this.ctx.createGain();
+          boxExcite.gain.value = 0.10 * this.params.actionNoise * dynGain;
+          actionSource.connect(boxExcite);
+          boxExcite.connect(resonatorFilter);
+        }
+        resonatorFilter.connect(gPipe);
+
+        const sympGain = this.ctx.createGain();
+        sympGain.gain.value = 0.0;
+        sympGain.gain.setValueAtTime(0.0, t0);
+        resonatorFilter.connect(sympGain);
+
+        osc1.start(t0);
         oscList.push(osc1);
 
-        voiceMetalBus.connect(this.masterGain);
-        voiceMetalBus.connect(this.lspBus);
+        const voiceMix = this.ctx.createGain();
+        voicePlateBus.connect(voiceMix);
+        gPlateFast.connect(voiceMix);
+        gPlateResidual.connect(voiceMix);
+        gPipe.connect(voiceMix);
+        sympGain.connect(voiceMix);
 
-        gPlate.connect(this.masterGain);
-        gPipe.connect(this.masterGain);
-        gPipe.connect(this.lspBus);
+        if (voicePanner) {
+          voiceMix.connect(voicePanner);
+          voicePanner.connect(this.hall.input);
+          voicePanner.connect(this.lspBus);
+          voicePanner.connect(this.sympBus);
+        } else {
+          voiceMix.connect(this.hall.input);
+          voiceMix.connect(this.lspBus);
+          voiceMix.connect(this.sympBus);
+        }
+
+        if (this.params.sympatheticLevel > 0.02) {
+          this.activeVoices.forEach((otherVoice, otherMidi) => {
+            if (otherMidi === midi || otherVoice.isStopping || otherVoice.cleaned) return;
+            const interval = Math.abs(otherMidi - midi);
+            let coupling = 0;
+            if (interval === 12 || interval === 24) coupling = 0.020;
+            else if (interval === 7 || interval === 19) coupling = 0.012;
+            else if (interval <= 2) coupling = 0.007;
+            if (coupling > 0 && otherVoice.sympGain) {
+              const targetS = coupling * this.params.sympatheticLevel * vSafe;
+              otherVoice.sympGain.gain.setTargetAtTime(targetS, t0, 0.03);
+              otherVoice.sympGain.gain.setTargetAtTime(0.0, t0 + 0.15, 0.55);
+            }
+          });
+        }
+
+        this.soundingNotes.add(midi);
+        updateNotesHud();
+        wakeVisualizer();
+
+        const freezeParam = (param, time) => {
+          if (typeof param.cancelAndHoldAtTime === 'function') {
+            param.cancelAndHoldAtTime(time);
+          } else {
+            param.cancelScheduledValues(time);
+          }
+        };
 
         const voice = {
           midi,
           oscList,
-          metalGains,
-          gPlate,
-          gPipe,
+          sympGain,
+          resonatorFilter,
+          voiceMix,
+          voicePanner,
           isDamped: false,
+          isStopping: false,
+          cleaned: false,
           stop: (quick = false) => {
-            const stopTime = this.ctx.currentTime;
-            
-            const plateRel = quick ? 0.02 : this.params.damperPlateDecay;
-            metalGains.forEach(g => {
-              g.gain.cancelScheduledValues(stopTime);
+            if (voice.cleaned || voice.isStopping) return;
+            voice.isStopping = true;
+            const nowStop = this.ctx.currentTime;
+
+            // もしt0(発音開始時刻)より前に停止命令が来た場合は無音のまま即時キャンセルして破棄
+            if (nowStop <= t0) {
+              allEnvGains.forEach(gn => {
+                gn.gain.cancelScheduledValues(0);
+                gn.gain.setValueAtTime(0.0, nowStop);
+              });
+              sympGain.gain.cancelScheduledValues(0);
+              sympGain.gain.setValueAtTime(0.0, nowStop);
+              voice.cleaned = true;
+              this.soundingNotes.delete(midi);
+              updateNotesHud();
+              oscList.forEach(o => { try { o.stop(); o.disconnect(); } catch (e) {} });
+              try {
+                voicePlateBus.disconnect();
+                allEnvGains.forEach(gn => gn.disconnect());
+                sympGain.disconnect();
+                resonatorFilter.disconnect();
+                voiceMix.disconnect();
+                if (voicePanner) voicePanner.disconnect();
+              } catch (e) {}
+              return;
+            }
+
+            // cancelScheduledValuesがt0+tAttのアタックランプを消して1.0へ戻る事故を確実に防ぐ
+            const stopTime = Math.max(nowStop, t0 + tAtt + 0.001);
+
+            sympGain.gain.cancelScheduledValues(stopTime);
+            sympGain.gain.setTargetAtTime(0.0, stopTime, 0.02);
+
+            if (!quick && midi < 98 && this.params.actionNoise > 0.02 && this.releaseBuffer) {
+              const relSrc = this.ctx.createBufferSource();
+              relSrc.buffer = this.releaseBuffer;
+              const relG = this.ctx.createGain();
+              relG.gain.value = 0.06 * this.params.actionNoise;
+              relSrc.connect(relG);
+              relG.connect(voiceMix);
+              relSrc.start(stopTime);
+            }
+
+            const isUndampedTreble = midi >= 98;
+            const plateRel = quick ? 0.015 : (isUndampedTreble ? Math.min(0.45, tau1Fast * 0.6) : this.params.damperPlateDecay * (1.15 - fNorm * 0.35));
+
+            fastPlateGains.forEach(g => {
+              freezeParam(g.gain, stopTime);
               g.gain.setTargetAtTime(0.00001, stopTime, plateRel);
             });
-            gPlate.gain.cancelScheduledValues(stopTime);
-            gPlate.gain.setTargetAtTime(0.00001, stopTime, plateRel);
 
-            const basePipeDecay = this.params.f1Decay * (1.1 - fNorm * 0.35);
-            const pipeRel = quick ? 0.04 : basePipeDecay;
+            const postResFactor = quick ? 0 : this.params.postDamperResidual;
+            const residualTau = quick
+              ? 0.018
+              : (isUndampedTreble ? Math.min(0.60, tau1Slow * 0.45) : (0.14 + 0.55 * postResFactor) * (1.1 - fNorm * 0.35));
 
-            gPipe.gain.cancelScheduledValues(stopTime);
-            gPipe.gain.setTargetAtTime(0.00001, stopTime, pipeRel);
+            slowPlateGains.forEach(({ gainNode }) => {
+              freezeParam(gainNode.gain, stopTime);
+              if (quick || postResFactor < 0.03) {
+                gainNode.gain.setTargetAtTime(0.00001, stopTime, plateRel);
+              } else {
+                gainNode.gain.setTargetAtTime(0.00001, stopTime, residualTau);
+              }
+            });
 
-            const cleanupDelay = (pipeRel * 5.0) * 1000;
+            const pipeTau = quick
+              ? 0.025
+              : (isUndampedTreble ? Math.min(0.65, this.params.f1Decay / 2.2) : (this.params.f1Decay / 3.4) * (1.12 - fNorm * 0.38));
+
+            freezeParam(gPipe.gain, stopTime);
+            gPipe.gain.setTargetAtTime(0.00001, stopTime, pipeTau);
+
+            const maxTau = Math.max(plateRel, residualTau, pipeTau);
+            const fadeEnd = stopTime + maxTau * 6.0;
+            gPipe.gain.setTargetAtTime(0.0, fadeEnd, 0.008);
+            gPlateFast.gain.setTargetAtTime(0.0, fadeEnd, 0.008);
+            gPlateResidual.gain.setTargetAtTime(0.0, fadeEnd, 0.008);
+
+            const cleanupMs = (Math.max(0, stopTime - this.ctx.currentTime) + maxTau * 6.0 + 0.08) * 1000;
             setTimeout(() => {
+              voice.cleaned = true;
+              this.soundingNotes.delete(midi);
+              updateNotesHud();
               oscList.forEach(o => {
                 try { o.stop(); o.disconnect(); } catch (e) {}
               });
-              voiceMetalBus.disconnect();
-              gPlate.disconnect();
-              gPipe.disconnect();
-            }, cleanupDelay);
+              try {
+                voicePlateBus.disconnect();
+                allEnvGains.forEach(gn => gn.disconnect());
+                sympGain.disconnect();
+                resonatorFilter.disconnect();
+                voiceMix.disconnect();
+                if (voicePanner) voicePanner.disconnect();
+              } catch (e) {}
+            }, cleanupMs);
           }
         };
 
@@ -1158,12 +2552,13 @@
           return;
         }
 
-        voice.stop(false);
+        voice.stop(force);
         this.activeVoices.delete(midi);
       }
 
       setPedal(down) {
         this.pedalDown = down;
+        this.updateCabinetParams();
         if (!down) {
           this.activeVoices.forEach((voice, midi) => {
             if (voice.isDamped) {
@@ -1176,62 +2571,100 @@
     }
 
     /* =========================================================================
-       UI & 5.5-Octave Range Navigation
+       4. 66鍵キーボード・PCキー・レンジスライダー・空間プリセット
        ========================================================================= */
     const engine = new CelestaGrandEngine();
-
     const START_MIDI = 48; // C3
     const END_MIDI = 113;  // F8
+    const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     const keyData = [];
-    const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const keyByMidi = new Map();
+
+    const PC_KEY_MAP = {
+      'KeyZ': { offset: 0, cap: 'Z' },   'KeyS': { offset: 1, cap: 'S' },
+      'KeyX': { offset: 2, cap: 'X' },   'KeyD': { offset: 3, cap: 'D' },
+      'KeyC': { offset: 4, cap: 'C' },   'KeyV': { offset: 5, cap: 'V' },
+      'KeyG': { offset: 6, cap: 'G' },   'KeyB': { offset: 7, cap: 'B' },
+      'KeyH': { offset: 8, cap: 'H' },   'KeyN': { offset: 9, cap: 'N' },
+      'KeyJ': { offset: 10, cap: 'J' },  'KeyM': { offset: 11, cap: 'M' },
+      'Comma': { offset: 12, cap: ',' },
+      'KeyQ': { offset: 12, cap: 'Q' },  'Digit2': { offset: 13, cap: '2' },
+      'KeyW': { offset: 14, cap: 'W' },  'Digit3': { offset: 15, cap: '3' },
+      'KeyE': { offset: 16, cap: 'E' },  'KeyR': { offset: 17, cap: 'R' },
+      'Digit5': { offset: 18, cap: '5' },'KeyT': { offset: 19, cap: 'T' },
+      'Digit6': { offset: 20, cap: '6' },'KeyY': { offset: 21, cap: 'Y' },
+      'Digit7': { offset: 22, cap: '7' },'KeyU': { offset: 23, cap: 'U' },
+      'KeyI': { offset: 24, cap: 'I' }
+    };
+    let pcBaseMidi = 60;
+    let currentViewMode = 'spectrum';
+
+    function midiToName(midi) {
+      return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
+    }
 
     function buildFullCompassKeyboard() {
       const keysBed = document.getElementById('keysBed');
+      const feltRail = keysBed.querySelector('.felt-rail');
       keysBed.innerHTML = '';
+      if (feltRail) keysBed.appendChild(feltRail);
       keyData.length = 0;
+      keyByMidi.clear();
 
       let whiteCount = 0;
-
       for (let midi = START_MIDI; midi <= END_MIDI; midi++) {
         const noteInOct = midi % 12;
         const isBlack = [1, 3, 6, 8, 10].includes(noteInOct);
-        const octNum = Math.floor(midi / 12) - 1;
+        const label = midiToName(midi);
 
-        const keyObj = { midi, isBlack, element: null, whiteIndex: whiteCount };
+        const el = document.createElement('div');
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('aria-label', label);
+        el.dataset.midi = midi;
 
         if (!isBlack) {
-          const el = document.createElement('div');
           el.className = 'key-white';
-          el.dataset.midi = midi;
           if (noteInOct === 0) {
-            el.innerHTML = `<span>C${octNum}</span>`;
+            const noteSpan = document.createElement('span');
+            noteSpan.textContent = label;
+            el.appendChild(noteSpan);
           }
-          keysBed.appendChild(el);
-          keyObj.element = el;
           whiteCount++;
+        } else {
+          el.className = 'key-black';
+          el.style.setProperty('--prev-white', whiteCount);
         }
-        keyData.push(keyObj);
+
+        keysBed.appendChild(el);
+        const obj = { midi, isBlack, element: el, label };
+        keyData.push(obj);
+        keyByMidi.set(midi, obj);
       }
 
-      const whiteWidth = window.innerWidth <= 860 ? 36 : 42;
-      const blackWidth = window.innerWidth <= 860 ? 22 : 25;
+      renderPcKeyHints();
+      updateSliderThumb();
+    }
 
+    function renderPcKeyHints() {
       keyData.forEach(k => {
-        if (k.isBlack) {
-          const el = document.createElement('div');
-          el.className = 'key-black';
-          el.dataset.midi = k.midi;
+        const old = k.element.querySelector('.pc-cap');
+        if (old) old.remove();
+      });
 
-          const prevWhite = keyData.slice(0, keyData.indexOf(k)).filter(item => !item.isBlack).length;
-          const leftPos = prevWhite * whiteWidth - (blackWidth / 2);
-          el.style.left = `${leftPos}px`;
-
-          keysBed.appendChild(el);
-          k.element = el;
+      Object.values(PC_KEY_MAP).forEach(({ offset, cap }) => {
+        if (cap === ',') return;
+        const kObj = keyByMidi.get(pcBaseMidi + offset);
+        if (kObj) {
+          const badge = document.createElement('span');
+          badge.className = 'pc-cap';
+          badge.textContent = cap;
+          kObj.element.prepend(badge);
         }
       });
 
-      updateSliderThumb();
+      const endName = midiToName(Math.min(END_MIDI, pcBaseMidi + 24));
+      document.getElementById('pcRangeLabel').textContent = `PC Keys: ${midiToName(pcBaseMidi)} – ${endName} ([ / ])`;
     }
 
     const keyboardCase = document.getElementById('keyboardCase');
@@ -1247,28 +2680,22 @@
       if (scrollWidth <= clientWidth) {
         rangeThumb.style.width = '100%';
         rangeThumb.style.left = '0%';
-        return;
+      } else {
+        const trackWidth = rangeTrack.clientWidth;
+        const viewRatio = clientWidth / scrollWidth;
+        const thumbWidth = Math.max(32, trackWidth * viewRatio);
+        const maxScroll = scrollWidth - clientWidth;
+        const scrollRatio = Math.max(0, Math.min(1, scrollLeft / maxScroll));
+        rangeThumb.style.width = `${thumbWidth}px`;
+        rangeThumb.style.left = `${(trackWidth - thumbWidth) * scrollRatio}px`;
       }
 
-      const trackWidth = rangeTrack.clientWidth;
-      const viewRatio = clientWidth / scrollWidth;
-      const thumbWidth = Math.max(28, trackWidth * viewRatio);
-      const maxScroll = scrollWidth - clientWidth;
-      const scrollRatio = Math.max(0, Math.min(1, scrollLeft / maxScroll));
-      const thumbLeft = (trackWidth - thumbWidth) * scrollRatio;
-
-      rangeThumb.style.width = `${thumbWidth}px`;
-      rangeThumb.style.left = `${thumbLeft}px`;
-
-      const centerScroll = scrollLeft + clientWidth * 0.45;
-      const whiteWidth = window.innerWidth <= 860 ? 36 : 42;
-      const centerWhiteIdx = Math.floor(centerScroll / whiteWidth);
-      const currentWhiteKey = keyData.filter(k => !k.isBlack)[centerWhiteIdx];
-      if (currentWhiteKey) {
-        const centerMidi = currentWhiteKey.midi;
-        const octNum = Math.floor(centerMidi / 12) - 1;
-        octDisplay.textContent = `C${octNum} - C${Math.min(8, octNum + 2)}`;
-      }
+      const whiteKeys = keyData.filter(k => !k.isBlack);
+      if (whiteKeys.length === 0) return;
+      const ww = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--white-w')) || 44;
+      const firstIdx = Math.max(0, Math.min(whiteKeys.length - 1, Math.floor(scrollLeft / ww)));
+      const lastIdx = Math.max(firstIdx, Math.min(whiteKeys.length - 1, Math.floor((scrollLeft + clientWidth - 10) / ww)));
+      octDisplay.textContent = `${whiteKeys[firstIdx].label} – ${whiteKeys[lastIdx].label}`;
     }
 
     keyboardCase.addEventListener('scroll', updateSliderThumb, { passive: true });
@@ -1288,17 +2715,10 @@
     rangeThumb.addEventListener('pointermove', (e) => {
       if (!isDraggingThumb) return;
       const deltaX = e.clientX - dragStartX;
-      const trackWidth = rangeTrack.clientWidth;
-      const thumbWidth = rangeThumb.clientWidth;
-      const maxThumbMove = trackWidth - thumbWidth;
+      const maxThumbMove = rangeTrack.clientWidth - rangeThumb.clientWidth;
       if (maxThumbMove <= 0) return;
-
-      const scrollWidth = keyboardCase.scrollWidth;
-      const clientWidth = keyboardCase.clientWidth;
-      const maxScroll = scrollWidth - clientWidth;
-
-      const scrollDelta = (deltaX / maxThumbMove) * maxScroll;
-      keyboardCase.scrollLeft = dragStartScroll + scrollDelta;
+      const maxScroll = keyboardCase.scrollWidth - keyboardCase.clientWidth;
+      keyboardCase.scrollLeft = dragStartScroll + (deltaX / maxThumbMove) * maxScroll;
     });
 
     const stopThumbDrag = (e) => {
@@ -1311,80 +2731,85 @@
     rangeThumb.addEventListener('pointercancel', stopThumbDrag);
 
     rangeTrack.addEventListener('pointerdown', (e) => {
-      if (isDraggingThumb) return;
+      if (isDraggingThumb || e.target === rangeThumb) return;
       const rect = rangeTrack.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
-      const trackWidth = rect.width;
       const thumbWidth = rangeThumb.clientWidth;
-
-      const targetRatio = Math.max(0, Math.min(1, (clickX - thumbWidth / 2) / (trackWidth - thumbWidth)));
-      const maxScroll = keyboardCase.scrollWidth - keyboardCase.clientWidth;
-      keyboardCase.scrollTo({ left: maxScroll * targetRatio, behavior: 'smooth' });
+      const targetRatio = Math.max(0, Math.min(1, (clickX - thumbWidth / 2) / Math.max(1, rect.width - thumbWidth)));
+      keyboardCase.scrollTo({ left: (keyboardCase.scrollWidth - keyboardCase.clientWidth) * targetRatio, behavior: 'smooth' });
     });
 
-    const whiteKeyWidth = () => (window.innerWidth <= 860 ? 36 : 42);
+    function shiftOctave(deltaOct) {
+      const ww = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--white-w')) || 44;
+      keyboardCase.scrollBy({ left: deltaOct * ww * 7, behavior: 'smooth' });
+      pcBaseMidi = Math.max(48, Math.min(84, pcBaseMidi + deltaOct * 12));
+      renderPcKeyHints();
+    }
 
-    document.getElementById('octPrevBtn').addEventListener('click', () => {
-      const scrollStep = whiteKeyWidth() * 7;
-      keyboardCase.scrollBy({ left: -scrollStep, behavior: 'smooth' });
-    });
+    document.getElementById('octPrevBtn').addEventListener('click', () => shiftOctave(-1));
+    document.getElementById('octNextBtn').addEventListener('click', () => shiftOctave(1));
 
-    document.getElementById('octNextBtn').addEventListener('click', () => {
-      const scrollStep = whiteKeyWidth() * 7;
-      keyboardCase.scrollBy({ left: scrollStep, behavior: 'smooth' });
-    });
-
-    // 鍵盤ポインター演奏 (グリッサンド対応)
+    // =========================================================================
+    // 5. 演奏イベント
+    // =========================================================================
     const pressedPointers = new Map();
 
+    function triggerNoteOn(midi, velocity = 0.85) {
+      if (!midi || midi < START_MIDI || midi > END_MIDI) return;
+      engine.noteOn(midi, velocity);
+      const obj = keyByMidi.get(midi);
+      if (obj) obj.element.classList.add('is-pressed');
+    }
+
+    function triggerNoteOff(midi) {
+      if (!midi) return;
+      engine.noteOff(midi);
+      const obj = keyByMidi.get(midi);
+      if (obj) obj.element.classList.remove('is-pressed');
+    }
+
+    function computeVelocityFromPointer(keyEl, clientY) {
+      const rect = keyEl.getBoundingClientRect();
+      const relY = Math.max(0, Math.min(1, (clientY - rect.top) / Math.max(1, rect.height)));
+      return 0.45 + 0.52 * relY;
+    }
+
     function bindKeyboardEvents() {
-      const triggerNoteOn = (midi, el) => {
-        if (!midi) return;
-        engine.noteOn(midi, 0.85);
-        if (el) el.classList.add('is-pressed');
-      };
-
-      const triggerNoteOff = (midi, el) => {
-        if (!midi) return;
-        engine.noteOff(midi);
-        if (el) el.classList.remove('is-pressed');
-      };
-
       const getKeyElementFromPoint = (x, y) => {
         const el = document.elementFromPoint(x, y);
-        if (!el) return null;
-        return el.closest('.key-white, .key-black');
+        return el ? el.closest('.key-white, .key-black') : null;
       };
 
       keyboardCase.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
         const keyEl = getKeyElementFromPoint(e.clientX, e.clientY);
-        if (keyEl) {
-          const midi = parseInt(keyEl.dataset.midi, 10);
-          pressedPointers.set(e.pointerId, { midi, element: keyEl });
-          triggerNoteOn(midi, keyEl);
-        }
+        if (!keyEl) return;
+        e.preventDefault();
+        const midi = parseInt(keyEl.dataset.midi, 10);
+        pressedPointers.set(e.pointerId, { midi });
+        triggerNoteOn(midi, computeVelocityFromPointer(keyEl, e.clientY));
       });
 
       window.addEventListener('pointermove', (e) => {
         if (!pressedPointers.has(e.pointerId)) return;
         const current = pressedPointers.get(e.pointerId);
         const keyEl = getKeyElementFromPoint(e.clientX, e.clientY);
-
         if (keyEl) {
           const newMidi = parseInt(keyEl.dataset.midi, 10);
           if (newMidi !== current.midi) {
-            triggerNoteOff(current.midi, current.element);
-            triggerNoteOn(newMidi, keyEl);
-            pressedPointers.set(e.pointerId, { midi: newMidi, element: keyEl });
+            if (current.midi !== null) triggerNoteOff(current.midi);
+            triggerNoteOn(newMidi, computeVelocityFromPointer(keyEl, e.clientY));
+            pressedPointers.set(e.pointerId, { midi: newMidi });
           }
+        } else if (current.midi !== null) {
+          triggerNoteOff(current.midi);
+          pressedPointers.set(e.pointerId, { midi: null });
         }
       });
 
       const handlePointerUp = (e) => {
         if (pressedPointers.has(e.pointerId)) {
           const current = pressedPointers.get(e.pointerId);
-          triggerNoteOff(current.midi, current.element);
+          if (current.midi !== null) triggerNoteOff(current.midi);
           pressedPointers.delete(e.pointerId);
         }
       };
@@ -1392,238 +2817,694 @@
       window.addEventListener('pointerup', handlePointerUp);
       window.addEventListener('pointercancel', handlePointerUp);
 
-      // PCキーボード
-      const pcKeyMap = {
-        'KeyZ': 0, 'KeyS': 1, 'KeyX': 2, 'KeyD': 3, 'KeyC': 4, 'KeyV': 5, 'KeyG': 6,
-        'KeyB': 7, 'KeyH': 8, 'KeyN': 9, 'KeyJ': 10, 'KeyM': 11, 'Comma': 12,
-        'KeyQ': 12, 'Digit2': 13, 'KeyW': 14, 'Digit3': 15, 'KeyE': 16, 'KeyR': 17,
-        'Digit5': 18, 'KeyT': 19, 'Digit6': 20, 'KeyY': 21, 'Digit7': 22, 'KeyU': 23, 'KeyI': 24
-      };
+      keyboardCase.addEventListener('keydown', (e) => {
+        const keyEl = e.target.closest('.key-white, .key-black');
+        if (!keyEl || e.repeat) return;
+        if (e.code === 'Enter' || e.code === 'Space') {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerNoteOn(parseInt(keyEl.dataset.midi, 10), 0.85);
+        }
+      });
+      keyboardCase.addEventListener('keyup', (e) => {
+        const keyEl = e.target.closest('.key-white, .key-black');
+        if (!keyEl) return;
+        if (e.code === 'Enter' || e.code === 'Space') {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerNoteOff(parseInt(keyEl.dataset.midi, 10));
+        }
+      });
 
+      const activePcNotes = new Map();
       window.addEventListener('keydown', (e) => {
-        if (e.repeat) return;
-        if (e.code === 'Space') {
+        if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        const tag = e.target?.tagName;
+        const isFormControl = tag === 'INPUT' || tag === 'BUTTON' || e.target?.closest('.key-white, .key-black');
+
+        if (e.code === 'Space' && !isFormControl) {
           e.preventDefault();
           setPedalState(true);
           return;
         }
-        if (pcKeyMap[e.code] !== undefined) {
+        if (e.code === 'BracketLeft') { shiftOctave(-1); return; }
+        if (e.code === 'BracketRight') { shiftOctave(1); return; }
+        if (PC_KEY_MAP[e.code] !== undefined && tag !== 'INPUT') {
           e.preventDefault();
-          const currentBase = 72; // C5
-          const midi = currentBase + pcKeyMap[e.code];
-          const kObj = keyData.find(k => k.midi === midi);
-          triggerNoteOn(midi, kObj ? kObj.element : null);
+          const midi = pcBaseMidi + PC_KEY_MAP[e.code].offset;
+          activePcNotes.set(e.code, midi);
+          triggerNoteOn(midi, 0.85);
         }
       });
 
       window.addEventListener('keyup', (e) => {
-        if (e.code === 'Space') {
-          e.preventDefault();
+        if (e.code === 'Space' && e.target?.tagName !== 'BUTTON') {
           setPedalState(false);
           return;
         }
-        if (pcKeyMap[e.code] !== undefined) {
-          const currentBase = 72;
-          const midi = currentBase + pcKeyMap[e.code];
-          const kObj = keyData.find(k => k.midi === midi);
-          triggerNoteOff(midi, kObj ? kObj.element : null);
+        if (activePcNotes.has(e.code)) {
+          const midi = activePcNotes.get(e.code);
+          activePcNotes.delete(e.code);
+          triggerNoteOff(midi);
         }
+      });
+
+      window.addEventListener('blur', () => {
+        activePcNotes.forEach(midi => triggerNoteOff(midi));
+        activePcNotes.clear();
+        if (engine.pedalDown) setPedalState(false);
       });
     }
 
-    // サステインペダル
     const pedalBtn = document.getElementById('sustainPedalBtn');
     function setPedalState(isDown) {
       engine.setPedal(isDown);
-      if (isDown) {
-        pedalBtn.classList.add('is-down');
+      pedalBtn.classList.toggle('is-active-state', isDown);
+      pedalBtn.setAttribute('aria-pressed', String(isDown));
+    }
+    pedalBtn.addEventListener('click', () => setPedalState(!engine.pedalDown));
+
+    const glassToggleBtn = document.getElementById('glassToggleBtn');
+    glassToggleBtn.addEventListener('click', () => {
+      const noGlass = document.documentElement.classList.toggle('no-glass');
+      glassToggleBtn.setAttribute('aria-pressed', String(!noGlass));
+      glassToggleBtn.classList.toggle('is-active-state', noGlass);
+      document.getElementById('glassToggleText').textContent = noGlass ? 'Glass: Off' : 'Glass';
+    });
+
+    // =========================================================================
+    // 6. ビジュアライザ状態・パラメータ連動・空間HUD同期・空間切替・プリビュー
+    // =========================================================================
+    const canvas = document.getElementById('resonanceCanvas');
+    const ctx2d = canvas.getContext('2d');
+    let freqBuf = null;
+    let cachedGrad = null;
+    let visRafId = 0;
+    let silentFrames = 0;
+    let visReady = false;
+    const VIS_STEPS = 160;
+    const visPtsX = new Float32Array(VIS_STEPS + 1);
+    const visPtsY = new Float32Array(VIS_STEPS + 1);
+
+    function wakeVisualizer() {
+      silentFrames = 0;
+      if (visReady && !visRafId) {
+        visRafId = requestAnimationFrame(drawVisualizer);
+      }
+    }
+    let latestRoomPhysics = computeRoomPhysics(engine.params);
+
+    function syncSpaceAndHud() {
+      latestRoomPhysics = engine.updateRoom();
+      wakeVisualizer();
+      const spec = HALL_SPECS[engine.params.spaceType];
+      const micSpec = MIC_ARRAYS[engine.params.micArray];
+      const isAnechoic = latestRoomPhysics.isAnechoic;
+
+      const hallGroup = document.getElementById('hallDesignGroup');
+      hallGroup.classList.toggle('is-disabled-block', isAnechoic);
+      hallGroup.querySelectorAll('input').forEach(inp => { inp.disabled = isAnechoic; });
+
+      const hudSpace = document.getElementById('hudSpace');
+      const hudMic = document.getElementById('hudMic');
+
+      if (isAnechoic) {
+        hudSpace.textContent = 'Anechoic Chamber (Zero Reverb · Residual Plate Only)';
+        hudMic.textContent = `${micSpec.label} ${latestRoomPhysics.d0Avg.toFixed(1)}m · Direct Only · ITD ${latestRoomPhysics.directItdMs >= 0 ? '+' : ''}${latestRoomPhysics.directItdMs.toFixed(2)}ms`;
       } else {
-        pedalBtn.classList.remove('is-down');
+        const L = latestRoomPhysics.L.toFixed(0);
+        const W = latestRoomPhysics.W.toFixed(0);
+        const H = latestRoomPhysics.H.toFixed(0);
+        const t60 = latestRoomPhysics.t60.toFixed(2);
+        const dc = latestRoomPhysics.dc.toFixed(1);
+        const drr = latestRoomPhysics.drrDb.toFixed(1);
+        const itd = `${latestRoomPhysics.directItdMs >= 0 ? '+' : ''}${latestRoomPhysics.directItdMs.toFixed(2)}`;
+        hudSpace.textContent = `${spec.label} ${L}×${W}×${H}m (T60 ${t60}s · dc ${dc}m)`;
+        hudMic.textContent = `${micSpec.label} ${latestRoomPhysics.d0Avg.toFixed(1)}m · DRR ${drr} dB · ITD ${itd}ms`;
       }
     }
 
-    pedalBtn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      setPedalState(!engine.pedalDown);
-    });
+    function updateNotesHud() {
+      const el = document.getElementById('hudNotes');
+      if (engine.soundingNotes.size === 0) {
+        el.textContent = engine.pedalDown ? 'Pedal Held · Ready' : 'Ready — Tap keys or press Z–M / Q–I';
+        return;
+      }
+      const list = Array.from(engine.soundingNotes).sort((a, b) => a - b).map(midiToName);
+      const shown = list.slice(0, 6).join(' · ') + (list.length > 6 ? ` (+${list.length - 6})` : '');
+      el.textContent = `Sounding: ${shown}`;
+    }
 
-    // スライダー塗り分け更新関数
     function updateRangeTrackFill(slider) {
       const min = parseFloat(slider.min);
       const max = parseFloat(slider.max);
       const val = parseFloat(slider.value);
       const pct = ((val - min) / (max - min)) * 100;
-      slider.style.background = `linear-gradient(to right, rgb(var(--glass-tint)) 0%, rgb(var(--glass-tint)) ${pct}%, #CBD5E1 ${pct}%, #CBD5E1 100%)`;
+      slider.style.background = `linear-gradient(to right, #2563EB 0%, #2563EB ${pct}%, #CBD5E1 ${pct}%, #CBD5E1 100%)`;
     }
 
+    const sliderBindings = [];
     function bindRangeControl(sliderId, dispId, onUpdate, formatFn) {
       const slider = document.getElementById(sliderId);
       const disp = document.getElementById(dispId);
-      const handler = () => {
+      const apply = () => {
         const val = parseFloat(slider.value);
         onUpdate(val);
         disp.textContent = formatFn(val);
         updateRangeTrackFill(slider);
+        syncSpaceAndHud();
       };
-      slider.addEventListener('input', handler);
-      handler();
+      slider.addEventListener('input', apply);
+      sliderBindings.push({ slider, apply });
+      apply();
     }
 
-    bindRangeControl('pMalletMass', 'valMalletMass', v => engine.params.malletMass = v * 0.001, v => v.toFixed(1) + ' g');
+    bindRangeControl('pMicDist', 'valMicDist', v => engine.params.micDist = v, v => `${v.toFixed(1)} m`);
+    bindRangeControl('pMicOffset', 'valMicOffset', v => engine.params.micOffset = v, v => v === 0 ? '0.0 m (Center)' : `${v > 0 ? '+' : ''}${v.toFixed(1)} m`);
+    bindRangeControl('pHallScale', 'valHallScale', v => engine.params.hallScale = v, v => `${v.toFixed(2)}×`);
+    bindRangeControl('pWallAbsorb', 'valWallAbsorb', v => engine.params.wallAbsorb = v, v => v.toFixed(2));
+    bindRangeControl('pPhaseDiff', 'valPhaseDiff', v => engine.params.phaseDiffusion = v / 100.0, v => `${v}%`);
+
+    bindRangeControl('pResidualTail', 'valResidualTail', v => engine.params.residualTail = v / 100.0, v => `${v}%`);
+    bindRangeControl('pModalBeating', 'valModalBeating', v => engine.params.modalBeating = v / 100.0, v => `${v}%`);
+    bindRangeControl('pPostDamperRes', 'valPostDamperRes', v => engine.params.postDamperResidual = v / 100.0, v => `${v}%`);
+    bindRangeControl('pSympathetic', 'valSympathetic', v => {
+      engine.params.sympatheticLevel = v / 100.0;
+      engine.updateCabinetParams();
+    }, v => `${v}%`);
+
+    bindRangeControl('pRefPitch', 'valRefPitch', v => engine.params.refA4 = v, v => `${v} Hz`);
+    bindRangeControl('pActionNoise', 'valActionNoise', v => engine.params.actionNoise = v / 100.0, v => `${v}%`);
+    bindRangeControl('pMalletMass', 'valMalletMass', v => engine.params.malletMass = v * 0.001, v => `${v.toFixed(1)} g`);
     bindRangeControl('pHertzK', 'valHertzK', v => engine.params.hertzK = v * 1.0e7, v => {
-      if (v < 4.0) return 'Soft';
-      if (v > 11.0) return 'Hard';
+      if (v < 4.5) return 'Soft Felt';
+      if (v > 11.0) return 'Hard Felt';
       return 'Medium';
     });
-    bindRangeControl('pSparkle', 'valSparkle', v => engine.params.sparkleLevel = v / 100.0, v => v + '%');
-    bindRangeControl('pUndercut', 'valUndercut', v => engine.params.undercutFactor = v, v => v.toFixed(2) + '×');
-    bindRangeControl('pMetallic', 'valMetallic', v => engine.params.metallicLevel = v / 100.0, v => v + '%');
-    bindRangeControl('pDamperSpeed', 'valDamperSpeed', v => {
-      engine.params.damperPlateDecay = v;
-      document.getElementById('hudMetal').textContent = (v * 1000).toFixed(0) + 'ms';
-    }, v => (v * 1000).toFixed(0) + ' ms');
-    bindRangeControl('pF1Decay', 'valF1Decay', v => {
-      engine.params.f1Decay = v;
-      document.getElementById('hudF1').textContent = v.toFixed(2) + 's';
-    }, v => v.toFixed(2) + ' s');
+    bindRangeControl('pSparkle', 'valSparkle', v => engine.params.sparkleLevel = v / 100.0, v => `${v}%`);
+    bindRangeControl('pUndercut', 'valUndercut', v => engine.params.undercutFactor = v, v => `${v.toFixed(3)}×`);
+    bindRangeControl('pMetallic', 'valMetallic', v => engine.params.metallicLevel = v / 100.0, v => `${v}%`);
+    bindRangeControl('pDamperSpeed', 'valDamperSpeed', v => engine.params.damperPlateDecay = v, v => `${Math.round(v * 1000)} ms`);
+    bindRangeControl('pF1Decay', 'valF1Decay', v => engine.params.f1Decay = v, v => `${v.toFixed(2)} s`);
     bindRangeControl('pResQ', 'valResQ', v => engine.params.resQ = v, v => v.toFixed(1));
-    bindRangeControl('pRadRatio', 'valRadRatio', v => engine.params.radRatio = v / 100.0, v => v + '%');
     bindRangeControl('pLspCouple', 'valLspCouple', v => {
       engine.params.lspCoupling = v / 100.0;
-      if (engine.lspBus) engine.lspBus.gain.setValueAtTime(v / 100.0, engine.ctx.currentTime);
-    }, v => v + '%');
-    bindRangeControl('pViscous', 'valViscous', v => engine.params.viscousGamma = v, v => v.toFixed(3));
+      engine.updateCabinetParams();
+    }, v => `${v}%`);
+    bindRangeControl('pViscous', 'valViscous', v => {
+      engine.params.viscousGamma = v;
+      engine.updateCabinetParams();
+    }, v => v.toFixed(3));
 
-    // 設定メニュー開閉
+    // 空間プリセット選択
+    document.getElementById('spacePresetStrip').addEventListener('click', (e) => {
+      const btn = e.target.closest('.pill-btn');
+      if (!btn) return;
+      const spaceKey = btn.dataset.space;
+      const spec = HALL_SPECS[spaceKey];
+      if (!spec) return;
+
+      engine.params.spaceType = spaceKey;
+      document.getElementById('pMicDist').value = spec.defaultDist;
+      if (spaceKey !== 'anechoic') {
+        document.getElementById('pWallAbsorb').value = spec.defaultAbsorb;
+        document.getElementById('pHallScale').value = 1.0;
+      }
+
+      sliderBindings.forEach(b => b.apply());
+      document.querySelectorAll('#spacePresetStrip .pill-btn').forEach(p => {
+        const sel = p === btn;
+        p.classList.toggle('is-selected', sel);
+        p.setAttribute('aria-checked', String(sel));
+      });
+    });
+
+    // マイク配列選択
+    document.getElementById('micArrayStrip').addEventListener('click', (e) => {
+      const btn = e.target.closest('.pill-btn');
+      if (!btn) return;
+      const micKey = btn.dataset.mic;
+      engine.params.micArray = micKey;
+      if (micKey === 'bench') {
+        document.getElementById('pMicDist').value = 0.6;
+        sliderBindings.forEach(b => b.apply());
+      } else {
+        syncSpaceAndHud();
+      }
+      document.querySelectorAll('#micArrayStrip .pill-btn').forEach(p => {
+        const sel = p === btn;
+        p.classList.toggle('is-selected', sel);
+        p.setAttribute('aria-checked', String(sel));
+      });
+    });
+
+    // ビジュアライザ表示切替
+    const viewSpectrumBtn = document.getElementById('viewSpectrumBtn');
+    const viewSpaceBtn = document.getElementById('viewSpaceBtn');
+    viewSpectrumBtn.addEventListener('click', () => {
+      currentViewMode = 'spectrum';
+      viewSpectrumBtn.classList.add('is-selected');
+      viewSpaceBtn.classList.remove('is-selected');
+      viewSpectrumBtn.setAttribute('aria-selected', 'true');
+      viewSpaceBtn.setAttribute('aria-selected', 'false');
+      wakeVisualizer();
+    });
+    viewSpaceBtn.addEventListener('click', () => {
+      currentViewMode = 'space';
+      viewSpaceBtn.classList.add('is-selected');
+      viewSpectrumBtn.classList.remove('is-selected');
+      viewSpaceBtn.setAttribute('aria-selected', 'true');
+      viewSpectrumBtn.setAttribute('aria-selected', 'false');
+      wakeVisualizer();
+    });
+
+    // 試奏プレビュー (スタッカート後の残留振動と、サステイン時の空間残響の両方を聴き比べられる)
+    let demoTimers = [];
+    let demoPlaying = false;
+    const demoBtn = document.getElementById('demoBtn');
+    const demoBtnText = document.getElementById('demoBtnText');
+
+    function stopDemo() {
+      demoTimers.forEach(id => clearTimeout(id));
+      demoTimers = [];
+      demoPlaying = false;
+      demoBtn.classList.remove('is-active-state');
+      demoBtnText.textContent = 'Preview';
+      setPedalState(false);
+      Array.from(engine.activeVoices.keys()).forEach(m => triggerNoteOff(m));
+    }
+
+    demoBtn.addEventListener('click', async () => {
+      if (demoPlaying) { stopDemo(); return; }
+      if (!engine.ctx) engine.init();
+      if (engine.ctx.state === 'suspended') {
+        try { await engine.ctx.resume(); } catch (e) {}
+      }
+      demoPlaying = true;
+      demoBtn.classList.add('is-active-state');
+      demoBtnText.textContent = 'Stop';
+
+      // 前半: ノンペダルでのスタッカート (板の残った振動や無響室の質感比較に最適)
+      // 後半: ペダル踏み込みでの響き
+      const seq = [
+        [0,    60, 0.72, 160], [320,  67, 0.70, 160], [640,  72, 0.78, 160], [1000, 79, 0.82, 220],
+        [1550, 72, 0.65, 220], [1780, 76, 0.72, 220], [2010, 79, 0.78, 220], [2240, 84, 0.85, 260],
+        [2750, 74, 0.70, 220], [2980, 79, 0.76, 220], [3210, 83, 0.80, 220], [3440, 88, 0.86, 520],
+        [4150, 60, 0.62, 1200],[4190, 67, 0.65, 1200],[4230, 72, 0.68, 1200],[4270, 76, 0.72, 1200],[4310, 83, 0.76, 1200]
+      ];
+
+      demoTimers.push(setTimeout(() => { if (demoPlaying) setPedalState(false); }, 0));
+      demoTimers.push(setTimeout(() => { if (demoPlaying) setPedalState(true); }, 1500));
+
+      seq.forEach(([t, midi, vel, dur]) => {
+        demoTimers.push(setTimeout(() => { if (demoPlaying) triggerNoteOn(midi, vel); }, t));
+        demoTimers.push(setTimeout(() => { if (demoPlaying) triggerNoteOff(midi); }, t + dur));
+      });
+
+      demoTimers.push(setTimeout(() => {
+        setPedalState(false);
+        demoPlaying = false;
+        demoBtn.classList.remove('is-active-state');
+        demoBtnText.textContent = 'Preview';
+      }, 5900));
+    });
+
+    // =========================================================================
+    // 7. モバイルドロワー制御
+    // =========================================================================
     const settingsToggleBtn = document.getElementById('settingsToggleBtn');
     const sidebar = document.getElementById('sidebar');
     const mobileBackdrop = document.getElementById('mobileBackdrop');
     const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
 
     function openSidebar() {
-      sidebar.classList.add('is-open');
-      sidebar.classList.add('is-active');
+      sidebar.classList.add('is-open', 'is-active');
       mobileBackdrop.classList.add('is-visible');
-      settingsToggleBtn.classList.add('is-toggle-active');
+      settingsToggleBtn.classList.add('is-active-state');
+      settingsToggleBtn.setAttribute('aria-expanded', 'true');
     }
-
     function closeSidebar() {
-      sidebar.classList.remove('is-open');
-      sidebar.classList.remove('is-active');
+      sidebar.classList.remove('is-open', 'is-active');
       mobileBackdrop.classList.remove('is-visible');
-      settingsToggleBtn.classList.remove('is-toggle-active');
+      settingsToggleBtn.classList.remove('is-active-state');
+      settingsToggleBtn.setAttribute('aria-expanded', 'false');
     }
 
     settingsToggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (sidebar.classList.contains('is-open')) {
-        closeSidebar();
-      } else {
-        openSidebar();
-      }
+      if (sidebar.classList.contains('is-open')) closeSidebar();
+      else openSidebar();
     });
-
     sidebarCloseBtn.addEventListener('click', closeSidebar);
     mobileBackdrop.addEventListener('click', closeSidebar);
 
-    // 音響キャンバス描画
-    const canvas = document.getElementById('resonanceCanvas');
-    const ctx2d = canvas.getContext('2d');
+    /* =========================================================================
+       8. 対数スペクトル / 空間幾何・位相IR・残留板振動キャンバス描画
+       ========================================================================= */
+    /* (ビジュアライザ変数・wakeVisualizerはSection 6前方で宣言済み) */
 
     function resizeCanvas() {
-      canvas.width = canvas.clientWidth * window.devicePixelRatio;
-      canvas.height = canvas.clientHeight * window.devicePixelRatio;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+      cachedGrad = ctx2d.createLinearGradient(0, 0, 0, canvas.height);
+      cachedGrad.addColorStop(0, 'rgba(37, 99, 235, 0.55)');
+      cachedGrad.addColorStop(1, 'rgba(136, 187, 255, 0.06)');
+      wakeVisualizer();
     }
 
     window.addEventListener('resize', () => {
       resizeCanvas();
-      buildFullCompassKeyboard();
+      updateSliderThumb();
     });
 
+    function freqToLogX(freq, width) {
+      const minLog = Math.log10(80);
+      const maxLog = Math.log10(10000);
+      return ((Math.log10(Math.max(80, Math.min(10000, freq))) - minLog) / (maxLog - minLog)) * width;
+    }
+
+    function drawSpaceAndPhaseIr(w, h, dpr) {
+      const phys = latestRoomPhysics;
+      const pad = 14 * dpr;
+      const halfW = w * 0.44;
+      const rightX = halfW + pad;
+      const rightW = w - rightX - pad;
+
+      // --- 左側: 平面図 (無響室ウェッジ or ホール寸法・臨界距離・マイク位置・水平4壁反射線) ---
+      const mapW = halfW - pad * 2;
+      const mapH = h - pad * 2;
+      const scalePx = Math.min(mapW / phys.W, mapH / phys.L) * 0.90;
+      const drawW = phys.W * scalePx;
+      const drawL = phys.L * scalePx;
+      const ox = pad + (mapW - drawW) * 0.5;
+      const oy = pad + (mapH - drawL) * 0.5;
+      const toPxX = (x) => ox + (x + phys.W * 0.5) * scalePx;
+      const toPxY = (y) => oy + y * scalePx;
+
+      // 部屋境界
+      ctx2d.lineWidth = 1.5 * dpr;
+      if (phys.isAnechoic) {
+        ctx2d.setLineDash([4 * dpr, 4 * dpr]);
+        ctx2d.strokeStyle = 'rgba(15, 23, 42, 0.45)';
+        ctx2d.strokeRect(ox, oy, drawW, drawL);
+        ctx2d.setLineDash([]);
+      } else {
+        ctx2d.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx2d.fillRect(ox, oy, drawW, drawL);
+        ctx2d.strokeStyle = 'rgba(37, 99, 235, 0.55)';
+        ctx2d.strokeRect(ox, oy, drawW, drawL);
+
+        // ステージ境界ライン
+        const stageY = oy + Math.min(drawL * 0.32, phys.src[1] * 2.1 * scalePx);
+        ctx2d.strokeStyle = 'rgba(100, 116, 139, 0.35)';
+        ctx2d.beginPath();
+        ctx2d.moveTo(ox, stageY);
+        ctx2d.lineTo(ox + drawW, stageY);
+        ctx2d.stroke();
+      }
+
+      const sx = toPxX(phys.src[0]);
+      const sy = toPxY(phys.src[1]);
+      const mx = toPxX(phys.mic[0]);
+      const my = toPxY(phys.mic[1]);
+
+      // 臨界距離 dc 円 (ホール時)
+      if (!phys.isAnechoic && isFinite(phys.dc)) {
+        const rDc = phys.dc * scalePx;
+        ctx2d.save();
+        ctx2d.beginPath();
+        ctx2d.rect(ox, oy, drawW, drawL);
+        ctx2d.clip();
+        ctx2d.setLineDash([3 * dpr, 3 * dpr]);
+        ctx2d.strokeStyle = 'rgba(37, 99, 235, 0.40)';
+        ctx2d.beginPath();
+        ctx2d.arc(sx, sy, rDc, 0, Math.PI * 2);
+        ctx2d.stroke();
+        ctx2d.restore();
+      }
+
+      // 水平壁反射経路の描画
+      if (!phys.isAnechoic) {
+        ctx2d.lineWidth = 1 * dpr;
+        ctx2d.strokeStyle = 'rgba(59, 130, 246, 0.28)';
+        const wallBounces = [
+          [sx, oy], [ox, (sy + my) * 0.5], [ox + drawW, (sy + my) * 0.5], [sx, oy + drawL]
+        ];
+        wallBounces.forEach(([bx, by]) => {
+          ctx2d.beginPath();
+          ctx2d.moveTo(sx, sy);
+          ctx2d.lineTo(bx, by);
+          ctx2d.lineTo(mx, my);
+          ctx2d.stroke();
+        });
+      }
+
+      // 直接音パス
+      ctx2d.strokeStyle = 'rgba(225, 29, 72, 0.75)';
+      ctx2d.lineWidth = 1.6 * dpr;
+      ctx2d.beginPath();
+      ctx2d.moveTo(sx, sy);
+      ctx2d.lineTo(mx, my);
+      ctx2d.stroke();
+
+      // チェレスタ音源 & マイク位置アイコン
+      ctx2d.fillStyle = '#0F172A';
+      ctx2d.fillRect(sx - 5 * dpr, sy - 3 * dpr, 10 * dpr, 6 * dpr);
+      ctx2d.fillStyle = '#2563EB';
+      ctx2d.beginPath();
+      ctx2d.arc(mx, my, 4.5 * dpr, 0, Math.PI * 2);
+      ctx2d.fill();
+
+      ctx2d.font = `600 ${Math.round(10.5 * dpr)}px sans-serif`;
+      ctx2d.fillStyle = '#0F172A';
+      ctx2d.fillText(phys.isAnechoic ? 'Anechoic (Zero Wall Reflection)' : `Floorplan ${phys.W.toFixed(0)}m × ${phys.L.toFixed(0)}m`, ox, oy - 4 * dpr);
+
+      // --- 右側: 無響室「板の二段階残留振動カーブ」 / ホール「初期反射インパルス応答 + L/R位相差」 ---
+      const baseLineY = h - pad * 1.4;
+      const graphH = h - pad * 2.8;
+
+      ctx2d.strokeStyle = 'rgba(100, 116, 139, 0.35)';
+      ctx2d.lineWidth = 1 * dpr;
+      ctx2d.beginPath();
+      ctx2d.moveTo(rightX, baseLineY);
+      ctx2d.lineTo(rightX + rightW, baseLineY);
+      ctx2d.stroke();
+
+      ctx2d.font = `600 ${Math.round(10.5 * dpr)}px sans-serif`;
+      ctx2d.fillStyle = '#0F172A';
+
+      if (phys.isAnechoic) {
+        ctx2d.fillText('Plate Two-Stage Decay & Post-Damper Residual (0 – 4.0s)', rightX, pad + 4 * dpr);
+
+        // 速い第1段減衰 vs 遅い第2段残留減衰カーブ
+        const tauFast = 0.75;
+        const tauSlow = 1.6 + 2.8 * engine.params.residualTail;
+        const resWeight = 0.08 + 0.24 * engine.params.residualTail;
+
+        ctx2d.beginPath();
+        for (let i = 0; i <= 80; i++) {
+          const t = (i / 80) * 4.0;
+          const totalAmp = Math.min(1, 0.78 * Math.exp(-t / tauFast) + resWeight * Math.exp(-t / tauSlow));
+          const px = rightX + (i / 80) * rightW;
+          const py = baseLineY - totalAmp * graphH * 0.88;
+          if (i === 0) ctx2d.moveTo(px, py);
+          else ctx2d.lineTo(px, py);
+        }
+        ctx2d.strokeStyle = '#2563EB';
+        ctx2d.lineWidth = 2 * dpr;
+        ctx2d.stroke();
+
+        // 残留成分のみの破線
+        ctx2d.setLineDash([4 * dpr, 3 * dpr]);
+        ctx2d.beginPath();
+        for (let i = 0; i <= 80; i++) {
+          const t = (i / 80) * 4.0;
+          const slowAmp = resWeight * Math.exp(-t / tauSlow);
+          const px = rightX + (i / 80) * rightW;
+          const py = baseLineY - slowAmp * graphH * 0.88;
+          if (i === 0) ctx2d.moveTo(px, py);
+          else ctx2d.lineTo(px, py);
+        }
+        ctx2d.strokeStyle = 'rgba(225, 29, 72, 0.75)';
+        ctx2d.lineWidth = 1.5 * dpr;
+        ctx2d.stroke();
+        ctx2d.setLineDash([]);
+      } else {
+        const maxMs = Math.max(160, Math.ceil(Math.max(...phys.reflections.map(r => Math.max(r.tauL, r.tauR) * 1000)) / 50) * 50 + 20);
+        ctx2d.fillText(`Early Reflections & L/R Phase ITD (0 – ${maxMs} ms)`, rightX, pad + 4 * dpr);
+
+        // 後期残響エンベロープ
+        ctx2d.beginPath();
+        ctx2d.moveTo(rightX, baseLineY);
+        for (let i = 0; i <= 60; i++) {
+          const ms = (i / 60) * maxMs;
+          const env = phys.gReverb * 0.45 * Math.exp((-3 * (ms / 1000)) / phys.t60);
+          ctx2d.lineTo(rightX + (i / 60) * rightW, baseLineY - env * graphH * 0.85);
+        }
+        ctx2d.lineTo(rightX + rightW, baseLineY);
+        ctx2d.closePath();
+        ctx2d.fillStyle = 'rgba(136, 187, 255, 0.25)';
+        ctx2d.fill();
+
+        // 直接音バー
+        ctx2d.strokeStyle = '#E11D48';
+        ctx2d.lineWidth = 2.5 * dpr;
+        ctx2d.beginPath();
+        ctx2d.moveTo(rightX + 2 * dpr, baseLineY);
+        ctx2d.lineTo(rightX + 2 * dpr, baseLineY - phys.gDirect * graphH * 0.85);
+        ctx2d.stroke();
+
+        // 各壁面L/R反射スパイク (位相反転した床は下方向または色違いで表示)
+        phys.reflections.forEach((ref, idx) => {
+          const xL = rightX + ((ref.tauL * 1000) / maxMs) * rightW;
+          const xR = rightX + ((ref.tauR * 1000) / maxMs) * rightW;
+          const magL = Math.abs(ref.gainL) * Math.max(0.25, phys.gReverb);
+          const magR = Math.abs(ref.gainR) * Math.max(0.25, phys.gReverb);
+
+          ctx2d.lineWidth = 1.8 * dpr;
+          ctx2d.strokeStyle = ref.gainL < 0 ? '#0F172A' : '#2563EB';
+          ctx2d.beginPath();
+          ctx2d.moveTo(xL, baseLineY);
+          ctx2d.lineTo(xL, baseLineY - magL * graphH * 0.75);
+          ctx2d.stroke();
+
+          ctx2d.strokeStyle = 'rgba(30, 64, 175, 0.55)';
+          ctx2d.beginPath();
+          ctx2d.moveTo(xR, baseLineY);
+          ctx2d.lineTo(xR, baseLineY - magR * graphH * 0.75);
+          ctx2d.stroke();
+
+          ctx2d.font = `600 ${Math.round(9.2 * dpr)}px sans-serif`;
+          ctx2d.fillStyle = '#334155';
+          const staggerY = (idx % 2) * 11 * dpr;
+          const labelY = Math.max(pad + 16 * dpr, baseLineY - Math.max(magL, magR) * graphH * 0.75 - 4 * dpr - staggerY);
+          ctx2d.fillText(`${ref.label.split(' ')[0]} ${Math.round(ref.tauL * 1000)}ms`, Math.min(xL, rightX + rightW - 46 * dpr), labelY);
+        });
+      }
+    }
+
     function drawVisualizer() {
-      requestAnimationFrame(drawVisualizer);
+      visRafId = 0;
       const w = canvas.width;
       const h = canvas.height;
-
+      const dpr = window.devicePixelRatio || 1;
       ctx2d.clearRect(0, 0, w, h);
 
+      if (currentViewMode === 'space') {
+        drawSpaceAndPhaseIr(w, h, dpr);
+        return; // Spaceビューは静止図なのでパラメータ変更時のみ再描画しCPU負荷ゼロ
+      }
+
+      ctx2d.lineWidth = 1 * dpr;
+      ctx2d.strokeStyle = 'rgba(136, 187, 255, 0.24)';
+      ctx2d.beginPath();
+      for (let i = 0; i < engine.lspCenters.length; i++) {
+        const px = freqToLogX(engine.lspCenters[i], w);
+        ctx2d.moveTo(px, h);
+        ctx2d.lineTo(px, h * 0.24);
+      }
+      ctx2d.stroke();
+
       if (!engine.analyser) {
-        ctx2d.strokeStyle = 'rgba(100, 116, 139, 0.12)';
-        ctx2d.lineWidth = 1;
+        ctx2d.strokeStyle = 'rgba(100, 116, 139, 0.20)';
         ctx2d.beginPath();
-        ctx2d.moveTo(0, h * 0.75);
-        ctx2d.lineTo(w, h * 0.75);
+        ctx2d.moveTo(0, h * 0.84);
+        ctx2d.lineTo(w, h * 0.84);
         ctx2d.stroke();
         return;
       }
 
-      const freqData = new Uint8Array(engine.analyser.frequencyBinCount);
-      engine.analyser.getByteFrequencyData(freqData);
-
-      // 50次 LSP キャビネット共振対ガイド線
-      ctx2d.lineWidth = 1 * window.devicePixelRatio;
-      for (let i = 0; i < 25; i++) {
-        const fc = engine.lspCenters[i];
-        const logX = (Math.log10(fc) - Math.log10(80)) / (Math.log10(10000) - Math.log10(80));
-        const px = logX * w;
-        if (px >= 0 && px <= w) {
-          ctx2d.strokeStyle = 'rgba(136, 187, 255, 0.16)';
-          ctx2d.beginPath();
-          ctx2d.moveTo(px, h);
-          ctx2d.lineTo(px, h * 0.35);
-          ctx2d.stroke();
-        }
+      if (!freqBuf || freqBuf.length !== engine.analyser.frequencyBinCount) {
+        freqBuf = new Uint8Array(engine.analyser.frequencyBinCount);
       }
+      engine.analyser.getByteFrequencyData(freqBuf);
 
-      // スペクトル波形
-      ctx2d.lineWidth = 2 * window.devicePixelRatio;
-      const sliceWidth = w / (freqData.length * 0.55);
+      const binHz = engine.ctx.sampleRate / engine.analyser.fftSize;
+      let frameMax = 0;
 
-      const grad = ctx2d.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, 'rgba(96, 165, 250, 0.75)');
-      grad.addColorStop(1, 'rgba(191, 219, 254, 0.08)');
+      for (let s = 0; s <= VIS_STEPS; s++) {
+        const ratio = s / VIS_STEPS;
+        const freq = 80 * Math.pow(10000 / 80, ratio);
+        const binCenter = freq / binHz;
+        const binSpan = Math.max(1, (freq * 0.04) / binHz);
+        const lo = Math.max(1, Math.floor(binCenter - binSpan * 0.5));
+        const hi = Math.min(freqBuf.length - 1, Math.ceil(binCenter + binSpan * 0.5));
+
+        let peak = 0;
+        for (let b = lo; b <= hi; b++) {
+          if (freqBuf[b] > peak) peak = freqBuf[b];
+        }
+        if (peak > frameMax) frameMax = peak;
+        const norm = peak / 255.0;
+        visPtsX[s] = ratio * w;
+        visPtsY[s] = h - (norm * h * 0.80) - (h * 0.05);
+      }
 
       ctx2d.beginPath();
-      let x = 0;
-      for (let i = 0; i < freqData.length * 0.55; i++) {
-        const v = freqData[i] / 255.0;
-        const y = h - (v * (h * 0.82)) - (h * 0.08);
-
-        if (i === 0) ctx2d.moveTo(x, y);
-        else ctx2d.lineTo(x, y);
-        x += sliceWidth;
-      }
+      ctx2d.moveTo(0, h);
+      for (let s = 0; s <= VIS_STEPS; s++) ctx2d.lineTo(visPtsX[s], visPtsY[s]);
       ctx2d.lineTo(w, h);
-      ctx2d.lineTo(0, h);
-      ctx2d.fillStyle = grad;
+      ctx2d.closePath();
+      ctx2d.fillStyle = cachedGrad || 'rgba(37, 99, 235, 0.28)';
       ctx2d.fill();
 
       ctx2d.beginPath();
-      x = 0;
-      for (let i = 0; i < freqData.length * 0.55; i++) {
-        const v = freqData[i] / 255.0;
-        const y = h - (v * (h * 0.82)) - (h * 0.08);
-        if (i === 0) ctx2d.moveTo(x, y);
-        else ctx2d.lineTo(x, y);
-        x += sliceWidth;
+      for (let s = 0; s <= VIS_STEPS; s++) {
+        if (s === 0) ctx2d.moveTo(visPtsX[s], visPtsY[s]);
+        else ctx2d.lineTo(visPtsX[s], visPtsY[s]);
       }
-      ctx2d.strokeStyle = 'rgba(59, 130, 246, 0.85)';
+      ctx2d.lineWidth = 2 * dpr;
+      ctx2d.strokeStyle = 'rgba(37, 99, 235, 0.85)';
       ctx2d.stroke();
+
+      if (engine.soundingNotes.size > 0) {
+        ctx2d.strokeStyle = 'rgba(225, 29, 72, 0.55)';
+        ctx2d.lineWidth = 1.5 * dpr;
+        ctx2d.beginPath();
+        engine.soundingNotes.forEach(midi => {
+          const px1 = freqToLogX(engine.midiToFreq(midi), w);
+          ctx2d.moveTo(px1, h * 0.14);
+          ctx2d.lineTo(px1, h * 0.94);
+        });
+        ctx2d.stroke();
+      }
+
+      if (frameMax === 0 && engine.soundingNotes.size === 0) {
+        silentFrames++;
+      } else {
+        silentFrames = 0;
+      }
+
+      // 無音状態が約1.5秒続いたら描画ループを休止しCPUを解放
+      if (silentFrames < 90) {
+        visRafId = requestAnimationFrame(drawVisualizer);
+      }
     }
+
+    const prewarmAudio = () => {
+      if (!engine.ctx) engine.init();
+      if (engine.ctx.state === 'suspended') engine.ctx.resume();
+    };
+    window.addEventListener('pointerdown', prewarmAudio, { once: true, capture: true, passive: true });
+    window.addEventListener('keydown', prewarmAudio, { once: true, capture: true, passive: true });
 
     window.addEventListener('DOMContentLoaded', () => {
       resizeCanvas();
       buildFullCompassKeyboard();
       bindKeyboardEvents();
+      visReady = true;
       drawVisualizer();
+      syncSpaceAndHud();
 
-      setTimeout(() => {
-        const c5Key = keyData.find(k => k.midi === 72);
-        if (c5Key && c5Key.element) {
-          keyboardCase.scrollTo({ left: c5Key.element.offsetLeft - 100, behavior: 'instant' });
-          updateSliderThumb();
+      requestAnimationFrame(() => {
+        resizeCanvas();
+        const c4Key = keyByMidi.get(60);
+        if (c4Key) {
+          keyboardCase.scrollLeft = Math.max(0, c4Key.element.offsetLeft - 40);
         }
-      }, 50);
+        updateSliderThumb();
+      });
     });
   </script>
 </body>
